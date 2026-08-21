@@ -1,7 +1,21 @@
 import { describe, it, expect } from "vitest";
 import { PLAN_LIMITS, config } from "@/lib/config";
+import { PRODUCT, PRODUCT_NAME } from "@/lib/product";
 import { templates, getTemplateList } from "@/lib/templates";
 import { createCollabToken } from "@/lib/collab-token";
+
+describe("product branding", () => {
+  it("exposes a single PRODUCT_NAME constant", () => {
+    expect(PRODUCT_NAME).toBeTruthy();
+    expect(PRODUCT.name).toBe(PRODUCT_NAME);
+  });
+
+  it("derives metadata from product name", () => {
+    expect(PRODUCT.pageTitle).toContain(PRODUCT_NAME);
+    expect(PRODUCT.pageTitle).toContain(PRODUCT.tagline);
+    expect(PRODUCT.aiAssistantName).toBe(`${PRODUCT_NAME} AI`);
+  });
+});
 
 describe("config", () => {
   it("has plan limits defined", () => {

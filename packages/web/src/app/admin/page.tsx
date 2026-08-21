@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Nav } from "@/components/nav";
+import { PRODUCT } from "@/lib/product";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -71,7 +72,7 @@ export default function AdminPage() {
       <Nav />
       <main className="max-w-2xl mx-auto px-4 py-8">
         <h1 className="font-serif text-2xl font-semibold mb-2">Organization Admin</h1>
-        <p className="text-sm text-ink-muted mb-8">Configure your self-hosted Quire instance.</p>
+        <p className="text-sm text-ink-muted mb-8">{PRODUCT.adminSubtitle}</p>
 
         <form onSubmit={save} className="space-y-6">
           <section className="border border-border rounded-lg p-6 bg-surface space-y-4">

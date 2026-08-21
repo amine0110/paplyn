@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Newsreader, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
+import { PRODUCT } from "@/lib/product";
 import "./globals.css";
 
 const newsreader = Newsreader({
@@ -23,8 +24,12 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Quire — Collaborative LaTeX",
-  description: "Modern LaTeX workspace for researchers and students. Write, compile, and collaborate.",
+  title: PRODUCT.pageTitle,
+  description: PRODUCT.metaDescription,
+  openGraph: {
+    title: PRODUCT.pageTitle,
+    description: PRODUCT.metaDescription,
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -1,5 +1,9 @@
 # Quire
 
+> **Working title.** Public product name, tagline, and UI metadata live in
+> [`packages/web/src/lib/product.ts`](packages/web/src/lib/product.ts) (`PRODUCT_NAME`).
+> Change that file (or set `PRODUCT_NAME` / `NEXT_PUBLIC_PRODUCT_NAME`) when the final name is chosen.
+
 Collaborative LaTeX for researchers and students. Write, compile, and share documents in real time — hosted as SaaS or self-hosted on your infrastructure.
 
 ## Features
@@ -13,7 +17,7 @@ Collaborative LaTeX for researchers and students. Write, compile, and share docu
 
 ## Quick start (Docker)
 
-The fastest way to run Quire:
+The fastest way to run the app:
 
 ```bash
 cp .env.example .env

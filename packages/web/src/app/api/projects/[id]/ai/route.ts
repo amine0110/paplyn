@@ -7,6 +7,7 @@ import { projectFile, organization } from "@/lib/schema";
 import { getSession } from "@/lib/session";
 import { getProjectAccess } from "@/lib/project-access";
 import { config } from "@/lib/config";
+import { PRODUCT } from "@/lib/product";
 import { checkAiLimit, incrementAiUsage } from "@/lib/usage";
 import { z } from "zod";
 
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .map((f) => `--- ${f.path} ---\n${f.content}`)
     .join("\n\n");
 
-  let systemPrompt = `You are Quire AI, a helpful LaTeX assistant for academic writing. 
+  let systemPrompt = `You are ${PRODUCT.aiAssistantName}, a helpful LaTeX assistant for academic writing.
 You help researchers write, edit, and debug LaTeX documents.
 Be concise and precise. When suggesting LaTeX code, use proper syntax.
 Current project files:\n${fileContext}`;
