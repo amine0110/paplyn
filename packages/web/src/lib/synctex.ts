@@ -280,8 +280,10 @@ export function findSynctexSource(
   const blocks = index.pageBlocks[page];
   if (!blocks?.length) return null;
 
-  const x0 = x - index.offset.x;
-  const y0 = y - index.offset.y;
+  // Click coordinates from viewportClickToSynctexPoint are already in the same
+  // absolute page space as block geometry from TeX Live; do not subtract offset.
+  const x0 = x;
+  const y0 = y;
 
   let bestContaining: {
     filePath: string;

@@ -32,10 +32,10 @@ function sp(points: number): number {
 
 /**
  * IEEE-style 1-page fixture with SyncTeX top-left Y-down block geometry.
- * Coordinates are offset-relative (findSynctexSource subtracts the 72pt offset).
+ * Block coordinates match TeX Live absolute page space (same as converted clicks).
  */
 function ieeeSynctexFixture(): string {
-  const left = 0;
+  const left = sp(72);
   const blockWidth = sp(200);
   const blockHeight = sp(24);
 
@@ -55,12 +55,12 @@ function ieeeSynctexFixture(): string {
     `X Offset:${SYNCTEX_OFFSET_SP}`,
     `Y Offset:${SYNCTEX_OFFSET_SP}`,
     "{1",
-    ...block(12, 108),
-    ...block(29, 178),
-    ...block(37, 248),
-    ...block(41, 348),
-    ...block(53, 370),
-    ...block(58, 628),
+    ...block(12, 180),
+    ...block(29, 250),
+    ...block(37, 320),
+    ...block(41, 420),
+    ...block(53, 442),
+    ...block(58, 700),
     "}1",
   ].join("\n");
 }

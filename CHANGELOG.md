@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- SyncTeX reverse lookup: stop subtracting the 72pt Y offset in `findSynctexSource` after click coordinates are already converted to the same absolute page space as TeX Live block geometry, which caused one-section-early jumps on IEEE layouts.
 - SyncTeX reverse lookup: convert PDF clicks to SyncTeX's top-left Y-down coordinate system (matching LaTeX-Workshop's `getPagePoint` flip) instead of passing pdf.js bottom-left Y-up coordinates, which collapsed distinct clicks onto the bibliography on IEEE layouts. Nearest-box fallback now fails closed when no block contains the click and the closest match is farther than 72pt.
 - Version history timestamps now serialize as UTC ISO strings and display in the viewer's local timezone via `Intl.DateTimeFormat`, instead of showing server-local wall clock times. Revision `created_at` is stored as `timestamptz` going forward.
 
