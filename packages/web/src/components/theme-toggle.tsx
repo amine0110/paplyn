@@ -1,33 +1,49 @@
 "use client";
 
+import { Monitor, Moon, Sun } from "lucide-react";
+import { cn } from "@/components/ui/cn";
 import { useTheme } from "@/components/theme-provider";
 import type { ThemePreference } from "@/lib/theme";
-import { cn } from "@/components/ui/cn";
 
-const OPTIONS: { value: ThemePreference; label: string }[] = [
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-  { value: "system", label: "System" },
+const OPTIONS: { value: ThemePreference; label: string; icon: typeof Sun }[] = [
+  { value: "light", label: "Light", icon: Sun },
+  { value: "dark", label: "Dark", icon: Moon },
+  { value: "system", label: "System", icon: Monitor },
 ];
 
-export function ThemeToggle({ className }: { className?: string }) {
+interface ThemeToggleProps {
+  compact?: boolean;
+  className?: string;
+}
+
+export function ThemeToggle({ compact = false, className }: ThemeToggleProps) {
   const { theme, setTheme } = useTheme();
 
   return (
-    <div className={cn("inline-flex rounded-md border border-border p-0.5 bg-canvas-dark", className)}>
-      {OPTIONS.map(({ value, label }) => (
+    <div
+      className={cn(
+        "inline-flex items-center rounded-sm border border-border bg-paper p-0.5",
+        className
+      )}
+      role="group"
+      aria-label="Theme"
+    >
+      {OPTIONS.map(({ value, label, icon: Icon }) => (
         <button
           key={value}
           type="button"
           onClick={() => setTheme(value)}
           className={cn(
-            "px-3 py-1.5 text-sm rounded transition-colors",
+            "inline-flex items-center justify-center gap-1 rounded-sm px-2 py-1 text-xs transition-colors",
             theme === value
-              ? "bg-surface text-ink shadow-sm"
-              : "text-ink-muted hover:text-ink"
+              ? "bg-accent text-white"
+              : "text-ink-muted hover:bg-canvas-dark hover:text-ink"
           )}
+          aria-pressed={theme === value}
+          title={label}
         >
-          {label}
+          <Icon className="h-3.5 w-3.5" />
+          {!compact && <span>{label}</span>}
         </button>
       ))}
     </div>

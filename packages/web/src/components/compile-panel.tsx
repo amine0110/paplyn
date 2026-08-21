@@ -24,7 +24,7 @@ export function CompilePanel({ log, errors, onJumpToLine, showLog, onToggleLog }
   if (errors.length === 0 && !showLog) return null;
 
   return (
-    <div className="border-t border-border bg-surface max-h-48 flex flex-col">
+    <div className="border-t border-border bg-paper/90 max-h-48 flex flex-col shrink-0">
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-border text-sm">
         <div className="flex items-center gap-3">
           {errorList.length > 0 && (
