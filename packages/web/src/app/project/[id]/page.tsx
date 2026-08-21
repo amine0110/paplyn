@@ -27,6 +27,7 @@ import {
 } from "@/lib/project-files";
 import { CompilePanel } from "@/components/compile-panel";
 import { AiSidebar } from "@/components/ai-sidebar";
+import { EditorStatusBar, EditorToolbar } from "@/components/editor-toolbar";
 import { LayoutModeSwitcher } from "@/components/layout-mode-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,8 @@ import {
 } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 import type { Project } from "@/lib/schema";
+import type { DocumentStats } from "@/lib/document-stats";
+import { countDocumentStats } from "@/lib/document-stats";
 import { PRODUCT } from "@/lib/product";
 import {
   layoutShowsProof,
@@ -82,6 +85,10 @@ export default function ProjectPage() {
   const [compileErrors, setCompileErrors] = useState<CompileError[]>([]);
   const [showLog, setShowLog] = useState(false);
   const [jumpToLine, setJumpToLine] = useState<number | null>(null);
+  const [documentStats, setDocumentStats] = useState<DocumentStats>({
+    words: 0,
+    characters: 0,
+  });
 
   const [showOutline, setShowOutline] = useState(true);
   const [layoutMode, setLayoutMode] = useState<WorkspaceLayoutMode>("editor");
@@ -93,6 +100,7 @@ export default function ProjectPage() {
   const [shareRole, setShareRole] = useState<"editor" | "viewer">("editor");
 
   const editorViewRef = useRef<EditorView | null>(null);
+  const [editorView, setEditorView] = useState<EditorView | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -371,9 +379,32 @@ export default function ProjectPage() {
     setTimeout(() => setJumpToLine(null), 100);
   }
 
+  function handleGoToLine(line: number) {
+    handleJumpToLine(line);
+  }
+
   const activeFileNode = files.find((f) => f.path === activeFile);
   const activeFileContent = activeFileNode?.content || "";
   const showingProof = layoutShowsProof(layoutMode);
+  const isTextEditorFile =
+    !!activeFile &&
+    !isFolderPlaceholder(activeFile) &&
+    (isTextSourceFile(activeFile) || !activeFileNode?.isBinary);
+
+  useEffect(() => {
+    if (!isTextEditorFile || !activeFile) {
+      setDocumentStats({ words: 0, characters: 0 });
+      return;
+    }
+    setDocumentStats(countDocumentStats(activeFileContent));
+  }, [activeFile, activeFileContent, isTextEditorFile]);
+
+  useEffect(() => {
+    if (!isTextEditorFile) {
+      editorViewRef.current = null;
+      setEditorView(null);
+    }
+  }, [isTextEditorFile, activeFile]);
 
   function renderActiveFileViewer() {
     if (!activeFile || isFolderPlaceholder(activeFile)) {
@@ -408,7 +439,9 @@ export default function ProjectPage() {
           onChange={handleEditorChange}
           onEditorReady={(view) => {
             editorViewRef.current = view;
+            setEditorView(view);
           }}
+          onStatsChange={setDocumentStats}
           jumpToLine={jumpToLine}
         />
       );
@@ -426,7 +459,17 @@ export default function ProjectPage() {
       {activeFile && !isFolderPlaceholder(activeFile) ? (
         <>
           <div className="workspace-pane-header">{activeFile}</div>
+          {isTextEditorFile && (
+            <EditorToolbar editorView={editorView} onGoToLine={handleGoToLine} />
+          )}
           <div className="flex-1 min-h-0 overflow-hidden">{renderActiveFileViewer()}</div>
+          {isTextEditorFile && (
+            <EditorStatusBar
+              filePath={activeFile}
+              wordCount={documentStats.words}
+              characterCount={documentStats.characters}
+            />
+          )}
         </>
       ) : (
         <div className="flex items-center justify-center h-full text-ink-muted font-serif">
