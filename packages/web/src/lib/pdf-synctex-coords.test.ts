@@ -11,6 +11,7 @@ import { findSynctexSource, parseSynctex } from "./synctex";
 /** Letter-size view box used by pdf.js for many LaTeX PDFs. */
 const LETTER_VIEW = [0, 0, 612, 792] as const;
 const PAGE_HEIGHT = LETTER_VIEW[3] - LETTER_VIEW[1];
+const SYNCTEX_Y_OFFSET_SP = 4736287;
 
 /** Minimal viewport matching pdf.js rotation=0 transform for tests. */
 function letterViewport(scale: number): PdfViewportLike {
@@ -23,6 +24,37 @@ function letterViewport(scale: number): PdfViewportLike {
       return [LETTER_VIEW[0] + x / scale, LETTER_VIEW[3] - y / scale];
     },
   };
+}
+
+function sp(points: number): number {
+  return Math.round(points * 65781.76);
+}
+
+/** IEEE-style 1-page fixture: abstract, intro, and conclusion blocks on page 1. */
+function ieeeSynctexFixture(): string {
+  const left = sp(72);
+  const abstractBottom = sp(300);
+  const introBottom = sp(400);
+  const conclusionBottom = sp(120);
+
+  return [
+    "SyncTeX version:1",
+    "Input:1:main.tex",
+    "Output:pdf",
+    `X Offset:${SYNCTEX_Y_OFFSET_SP}`,
+    `Y Offset:${SYNCTEX_Y_OFFSET_SP}`,
+    "{1",
+    `[1,29:${left},${abstractBottom}:1000000,1200000,0`,
+    `x1,29:${left},${abstractBottom}`,
+    "]",
+    `[1,37:${left},${introBottom}:1000000,1200000,0`,
+    `x1,37:${left},${introBottom}`,
+    "]",
+    `[1,53:${left},${conclusionBottom}:1000000,1200000,0`,
+    `x1,53:${left},${conclusionBottom}`,
+    "]",
+    "}1",
+  ].join("\n");
 }
 
 describe("getPdfPageHeight", () => {
@@ -38,28 +70,28 @@ describe("domClickOffset", () => {
 });
 
 describe("viewportClickToSynctexPoint", () => {
-  it("flips pdf.js bottom-left Y into SyncTeX top-left Y", () => {
+  it("returns pdf.js PDF user-space coordinates without flipping Y", () => {
     const viewport = letterViewport(1);
-    const pageHeight = getPdfPageHeight({ view: [...LETTER_VIEW] });
 
-    const topClick = viewportClickToSynctexPoint(100, 0, viewport, pageHeight);
-    const bottomClick = viewportClickToSynctexPoint(100, viewport.height, viewport, pageHeight);
+    const topClick = viewportClickToSynctexPoint(100, 0, viewport);
+    const bottomClick = viewportClickToSynctexPoint(100, viewport.height, viewport);
 
-    expect(topClick[1]).toBeLessThan(bottomClick[1]);
-    expect(topClick[1]).toBeCloseTo(0, 0);
-    expect(bottomClick[1]).toBeCloseTo(pageHeight, 0);
+    expect(topClick[1]).toBeGreaterThan(bottomClick[1]);
+    expect(topClick[1]).toBeCloseTo(PAGE_HEIGHT, 0);
+    expect(bottomClick[1]).toBeCloseTo(0, 0);
   });
 
-  it("preserves X from convertToPdfPoint", () => {
+  it("preserves X and Y from convertToPdfPoint", () => {
     const viewport = letterViewport(0.95);
-    const [pdfX] = viewport.convertToPdfPoint(120, 40);
-    const [synctexX] = viewportClickToSynctexPoint(120, 40, viewport, PAGE_HEIGHT);
+    const [pdfX, pdfY] = viewport.convertToPdfPoint(120, 40);
+    const [synctexX, synctexY] = viewportClickToSynctexPoint(120, 40, viewport);
     expect(synctexX).toBeCloseTo(pdfX, 5);
+    expect(synctexY).toBeCloseTo(pdfY, 5);
   });
 
   it("scales with viewport zoom", () => {
     const viewport = letterViewport(1.5);
-    const [x, y] = viewportClickToSynctexPoint(viewport.width / 2, viewport.height / 2, viewport, PAGE_HEIGHT);
+    const [x, y] = viewportClickToSynctexPoint(viewport.width / 2, viewport.height / 2, viewport);
     expect(x).toBeCloseTo(LETTER_VIEW[2] / 2, 0);
     expect(y).toBeCloseTo(PAGE_HEIGHT / 2, 0);
   });
@@ -74,15 +106,13 @@ describe("clientClickToSynctexPoint", () => {
       canvasRect.left + 72,
       canvasRect.top + 50,
       canvasRect,
-      viewport,
-      PAGE_HEIGHT
+      viewport
     );
     const fromWrapper = clientClickToSynctexPoint(
       canvasRect.left + 72,
       canvasRect.top + 50,
       { left: 0, top: 40 },
-      viewport,
-      PAGE_HEIGHT
+      viewport
     );
 
     expect(fromCanvas[0]).toBeCloseTo(72, 5);
@@ -91,32 +121,41 @@ describe("clientClickToSynctexPoint", () => {
 });
 
 describe("synctex lookup with converted click coordinates", () => {
-  it("finds the body line only after flipping Y into SyncTeX space", () => {
-    const fixture = [
-      "SyncTeX version:1",
-      "Input:1:main.tex",
-      "Output:pdf",
-      "{1",
-      "[1,8:4736287,1315635:1000000,2000000,0",
-      "x1,8:4736287,1315635",
-      "]",
-      "[1,37:4736287,52556352:1000000,2000000,0",
-      "x1,37:4736287,52556352",
-      "]",
-      "}1",
-    ].join("\n");
-    const index = parseSynctex(fixture)!;
+  it("clicking introduction body must not resolve to abstract (IEEE 1-page regression)", () => {
+    const index = parseSynctex(ieeeSynctexFixture())!;
     const viewport = letterViewport(1);
 
-    const bodyClickY = 666;
-    const [pdfX, pdfY] = viewport.convertToPdfPoint(72, bodyClickY);
-    const wrong = findSynctexSource(index, 1, pdfX, pdfY, ["main.tex"]);
-
-    const [synctexX, synctexY] = viewportClickToSynctexPoint(72, bodyClickY, viewport, PAGE_HEIGHT);
+    const introClickY = 320;
+    const [synctexX, synctexY] = viewportClickToSynctexPoint(72, introClickY, viewport);
     const hit = findSynctexSource(index, 1, synctexX, synctexY, ["main.tex"]);
 
-    expect(synctexY).toBeCloseTo(666, 0);
+    expect(synctexY).toBeCloseTo(PAGE_HEIGHT - introClickY, 0);
     expect(hit).toEqual({ line: 37, file: "main.tex" });
-    expect(wrong).toEqual({ line: 8, file: "main.tex" });
+    expect(hit?.line).not.toBe(29);
+  });
+
+  it("clicking conclusion body resolves to conclusion, not related work", () => {
+    const index = parseSynctex(ieeeSynctexFixture())!;
+    const viewport = letterViewport(1);
+
+    const conclusionClickY = 650;
+    const [synctexX, synctexY] = viewportClickToSynctexPoint(72, conclusionClickY, viewport);
+    const hit = findSynctexSource(index, 1, synctexX, synctexY, ["main.tex"]);
+
+    expect(hit).toEqual({ line: 53, file: "main.tex" });
+    expect(hit?.line).not.toBe(37);
+  });
+
+  it("pageHeight - pdfY flip systematically picks the section above the click", () => {
+    const index = parseSynctex(ieeeSynctexFixture())!;
+    const viewport = letterViewport(1);
+    const introClickY = 320;
+
+    const [pdfX, pdfY] = viewport.convertToPdfPoint(72, introClickY);
+    const flippedY = PAGE_HEIGHT - pdfY;
+    const wrong = findSynctexSource(index, 1, pdfX, flippedY, ["main.tex"]);
+
+    expect(flippedY).toBeCloseTo(introClickY, 0);
+    expect(wrong).toEqual({ line: 29, file: "main.tex" });
   });
 });

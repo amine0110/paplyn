@@ -5,10 +5,7 @@ import { Document, Page, pdfjs } from "react-pdf";
 import { ChevronLeft, ChevronRight, Download, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { downloadPdfBase64 } from "@/lib/project-files";
-import {
-  clientClickToSynctexPoint,
-  getPdfPageHeight,
-} from "@/lib/pdf-synctex-coords";
+import { clientClickToSynctexPoint } from "@/lib/pdf-synctex-coords";
 import { synctexLookupFromBase64 } from "@/lib/synctex";
 
 /** Minimal pdf.js page handle used for SyncTeX reverse lookup (react-pdf onRenderSuccess). */
@@ -76,8 +73,7 @@ export function PdfPreview({
         event.clientX,
         event.clientY,
         canvas.getBoundingClientRect(),
-        viewport,
-        getPdfPageHeight(pageProxy)
+        viewport
       );
 
       const location = await synctexLookupFromBase64(
