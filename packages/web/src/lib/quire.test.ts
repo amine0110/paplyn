@@ -105,12 +105,37 @@ describe("url resolution", () => {
     ]);
   });
 
-  it("uses explicit collab URL when configured", () => {
+  it("uses explicit non-localhost collab URL when configured", () => {
     process.env.COLLAB_URL = "wss://collab.example.com";
     const request = new Request("https://plicum.com/api/projects/1/collab", {
       headers: { host: "plicum.com" },
     });
     expect(resolveCollabUrl(request)).toBe("wss://collab.example.com");
+  });
+
+  it("ignores localhost explicit collab URL on a public host", () => {
+    process.env.COLLAB_URL = "ws://localhost:1234";
+    const request = new Request("https://plicum.com/api/projects/1/collab", {
+      headers: {
+        host: "plicum.com",
+        "x-forwarded-proto": "https",
+      },
+    });
+    expect(resolveCollabUrl(request)).toBe("wss://plicum.com");
+    expect(getCollabWsUrl("proj-1", "token-abc", request)).toBe(
+      "wss://plicum.com/proj-1?token=token-abc"
+    );
+  });
+
+  it("ignores NEXT_PUBLIC localhost collab URL on a public host", () => {
+    process.env.NEXT_PUBLIC_COLLAB_URL = "ws://localhost:1234";
+    const request = new Request("https://plicum.com/api/projects/1/collab", {
+      headers: {
+        host: "plicum.com",
+        "x-forwarded-proto": "https",
+      },
+    });
+    expect(resolveCollabUrl(request)).toBe("wss://plicum.com");
   });
 
   it("derives local collab websocket on localhost dev", () => {
@@ -121,6 +146,19 @@ describe("url resolution", () => {
     expect(getCollabWsUrl("proj-1", "token-abc", request)).toBe(
       "ws://localhost:1234/proj-1?token=token-abc"
     );
+  });
+
+  it("keeps localhost explicit collab URL for localhost requests", () => {
+    process.env.COLLAB_URL = "ws://localhost:1234";
+    const request = new Request("http://localhost:3000/api/projects/1/collab", {
+      headers: { host: "localhost:3000" },
+    });
+    expect(resolveCollabUrl(request)).toBe("ws://localhost:1234");
+  });
+
+  it("falls back to localhost collab URL without request context", () => {
+    process.env.COLLAB_URL = "ws://localhost:1234";
+    expect(resolveCollabUrl()).toBe("ws://localhost:1234");
   });
 
   it("derives same-host wss collab URL in self-host production", () => {
