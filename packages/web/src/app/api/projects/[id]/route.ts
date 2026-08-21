@@ -1,17 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { project } from "@/lib/schema";
+import { project, projectFile } from "@/lib/schema";
 import { getSession } from "@/lib/session";
 import { getProjectAccess } from "@/lib/project-access";
-import { z } from "zod";
-
-const updateSchema = z.object({
-  name: z.string().min(1).max(200).optional(),
-  mainFile: z.string().optional(),
-  compiler: z.enum(["pdflatex", "xelatex"]).optional(),
-  archived: z.boolean().optional(),
-});
+import { listTexFiles, validateProjectSettingsUpdate } from "@/lib/project-ops";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -41,14 +34,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const body = await req.json();
-  const parsed = updateSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  const files = await db.select({ path: projectFile.path }).from(projectFile).where(eq(projectFile.projectId, id));
+  const validated = validateProjectSettingsUpdate(body, listTexFiles(files.map((f) => f.path)));
+
+  if (!validated.ok) {
+    return NextResponse.json({ error: validated.error }, { status: 400 });
   }
 
   const [updated] = await db
     .update(project)
-    .set({ ...parsed.data, updatedAt: new Date() })
+    .set({ ...validated.data, updatedAt: new Date() })
     .where(eq(project.id, id))
     .returning();
 

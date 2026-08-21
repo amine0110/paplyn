@@ -222,10 +222,9 @@ describe("auth validation", () => {
 });
 
 describe("compile request validation", () => {
-  it("accepts pdflatex and xelatex engines", () => {
-    const engines = ["pdflatex", "xelatex"];
-    expect(engines).toContain("pdflatex");
-    expect(engines).toContain("xelatex");
-    expect(engines).not.toContain("lualatex");
+  it("accepts pdflatex and xelatex engines", async () => {
+    const { SUPPORTED_COMPILERS } = await import("@/lib/project-ops");
+    expect(SUPPORTED_COMPILERS).toEqual(["pdflatex", "xelatex"]);
+    expect(SUPPORTED_COMPILERS).not.toContain("lualatex");
   });
 });
