@@ -3,20 +3,24 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --color-canvas: #faf9f7;
-  --color-canvas-dark: #f5f3ef;
-  --color-ink: #1a1a2e;
-  --color-ink-muted: #4a4a5e;
-  --color-ink-faint: #8a8a9e;
-  --color-navy: #1e3a5f;
-  --color-navy-light: #2d5a8a;
-  --color-navy-dark: #0f2744;
-  --color-accent: #c45c26;
-  --color-accent-light: #e07a3f;
-  --color-border: #e8e6e1;
-  --color-surface: #ffffff;
-  --color-error: #b91c1c;
-  --color-success: #15803d;
+  /* Manuscript studio palette — warm paper, ink, verdigris accent */
+  --color-canvas: #f0ebe3;
+  --color-canvas-dark: #e6dfd4;
+  --color-paper: #fdfbf7;
+  --color-ink: #1c1917;
+  --color-ink-muted: #57534e;
+  --color-ink-faint: #a8a29e;
+  --color-navy: #2d6a6a;
+  --color-navy-light: #3d8585;
+  --color-navy-dark: #1f4a4a;
+  --color-accent: #2d6a6a;
+  --color-accent-light: #3d8585;
+  --color-accent-warm: #6b2d3a;
+  --color-border: #ddd6c8;
+  --color-border-light: #ebe5da;
+  --color-surface: #fdfbf7;
+  --color-error: #991b1b;
+  --color-success: #166534;
 
   --font-serif: "Newsreader", "Source Serif 4", Georgia, serif;
   --font-sans: "IBM Plex Sans", "Geist", system-ui, sans-serif;
@@ -32,6 +36,7 @@
     color-scheme: dark;
     --color-canvas: #0f0e0d;
     --color-canvas-dark: #1a1917;
+    --color-paper: #1c1a18;
     --color-ink: #f5f2eb;
     --color-ink-muted: #a8a29e;
     --color-ink-faint: #78716c;
@@ -40,7 +45,9 @@
     --color-navy-dark: #2d6a6a;
     --color-accent: #3d8585;
     --color-accent-light: #4f9a9a;
+    --color-accent-warm: #c46b7a;
     --color-border: #2e2b28;
+    --color-border-light: #252220;
     --color-surface: #1c1a18;
     --color-error: #f87171;
     --color-success: #4ade80;
@@ -65,16 +72,72 @@
   }
 }
 
+/* CodeMirror workspace editor */
 .cm-editor {
   height: 100%;
+  width: 100%;
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 1.65;
 }
 .cm-editor .cm-scroller {
   overflow: auto;
 }
 .cm-editor.cm-focused {
   outline: none;
+}
+
+/* Autocomplete popup */
+.cm-tooltip-autocomplete {
+  font-family: var(--font-mono) !important;
+  font-size: 13px !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 6px !important;
+  background: var(--color-paper) !important;
+  box-shadow: 0 4px 16px rgba(28, 25, 23, 0.08) !important;
+}
+html.dark .cm-tooltip-autocomplete {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35) !important;
+}
+.cm-tooltip-autocomplete ul li[aria-selected] {
+  background: rgba(45, 106, 106, 0.12) !important;
+  color: var(--color-ink) !important;
+}
+
+/* Resizable workspace panes */
+.workspace-pane {
+  @apply flex flex-col min-h-0 min-w-0 h-full bg-paper;
+}
+
+.workspace-pane-header {
+  @apply flex items-center px-3 py-1.5 border-b border-border-light text-xs text-ink-faint font-mono shrink-0 bg-paper;
+}
+
+.panel-resize-handle {
+  @apply shrink-0 bg-border transition-colors;
+}
+.panel-resize-handle[data-panel-group-direction="horizontal"] {
+  @apply w-1 cursor-col-resize;
+}
+.panel-resize-handle[data-panel-group-direction="vertical"] {
+  @apply h-1 cursor-row-resize;
+}
+.panel-resize-handle:hover,
+.panel-resize-handle[data-resize-handle-active] {
+  @apply bg-accent/50;
+}
+
+/* Proof pane — rendered PDF page */
+.proof-page {
+  background: white;
+  box-shadow:
+    0 2px 8px rgba(28, 25, 23, 0.12),
+    0 8px 24px rgba(28, 25, 23, 0.08);
+}
+html.dark .proof-page {
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.4),
+    0 8px 24px rgba(0, 0, 0, 0.25);
 }
 
 .react-pdf__Page__canvas {
