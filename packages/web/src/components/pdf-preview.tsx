@@ -10,11 +10,18 @@ import "react-pdf/dist/Page/TextLayer.css";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
+interface CompileError {
+  message: string;
+  severity: "error" | "warning";
+}
+
 interface PdfPreviewProps {
   pdfData: string | null;
   loading?: boolean;
   downloadFilename?: string;
   showDownload?: boolean;
+  compileFailed?: boolean;
+  compileErrors?: CompileError[];
 }
 
 export function PdfPreview({
@@ -22,6 +29,8 @@ export function PdfPreview({
   loading,
   downloadFilename,
   showDownload = false,
+  compileFailed,
+  compileErrors = [],
 }: PdfPreviewProps) {
   const [numPages, setNumPages] = useState(0);
   const [page, setPage] = useState(1);
@@ -36,10 +45,25 @@ export function PdfPreview({
   }
 
   if (!pdfData) {
+    const failureMessage =
+      compileErrors.find((e) => e.severity === "error")?.message ||
+      (compileFailed ? "Compilation failed — see errors below the editor" : null);
+
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-ink-muted text-sm font-serif px-6 text-center gap-2">
-        <p>Compile to see your proof.</p>
-        <p className="text-xs text-ink-faint">The rendered page will appear here, like a printed draft on your desk.</p>
+        {failureMessage ? (
+          <>
+            <p className="text-error text-sm font-medium">Compilation failed</p>
+            <p className="text-ink-muted text-sm">{failureMessage}</p>
+          </>
+        ) : (
+          <>
+            <p>Compile to see your proof.</p>
+            <p className="text-xs text-ink-faint">
+              The rendered page will appear here, like a printed draft on your desk.
+            </p>
+          </>
+        )}
       </div>
     );
   }

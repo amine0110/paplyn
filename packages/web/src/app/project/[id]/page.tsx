@@ -195,19 +195,37 @@ export default function ProjectPage() {
     setCompiling(true);
     setCompileErrors([]);
     openProof();
+    setShowLog(false);
     try {
       const res = await fetch(`/api/projects/${projectId}/compile`, { method: "POST" });
       const result = await res.json();
       if (result.error) {
+        setCompileLog("");
         setCompileErrors([{ message: result.error, severity: "error" }]);
       } else {
         setCompileLog(result.log || "");
-        setCompileErrors(result.errors || []);
+        let errors: CompileError[] = result.errors || [];
+        if (!result.success && !errors.some((e) => e.severity === "error")) {
+          errors = [
+            ...errors,
+            {
+              message: result.log?.trim()
+                ? "Compilation failed — see log for details"
+                : "Compilation failed",
+              severity: "error",
+            },
+          ];
+        }
+        setCompileErrors(errors);
+        if (!result.success && result.log?.trim()) {
+          setShowLog(true);
+        }
         if (result.success && result.pdf) {
           setPdfData(result.pdf);
         }
       }
     } catch {
+      setCompileLog("");
       setCompileErrors([{ message: "Failed to compile", severity: "error" }]);
     } finally {
       setCompiling(false);
@@ -359,6 +377,8 @@ export default function ProjectPage() {
         loading={compiling}
         showDownload
         downloadFilename={project?.name ?? "manuscript"}
+        compileFailed={compileErrors.some((e) => e.severity === "error")}
+        compileErrors={compileErrors}
       />
     </div>
   );
