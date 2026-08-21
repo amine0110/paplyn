@@ -8,7 +8,8 @@
     "lint": "pnpm -r lint",
     "db:generate": "pnpm --filter @quire/web db:generate",
     "db:migrate": "pnpm --filter @quire/web db:migrate",
-    "db:push": "pnpm --filter @quire/web db:push"
+    "db:push": "pnpm --filter @quire/web db:push",
+    "db:init": "pnpm --filter @quire/web db:init"
   },
   "engines": {
     "node": ">=22"

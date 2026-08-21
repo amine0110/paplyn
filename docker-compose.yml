@@ -96,5 +96,23 @@ services:
     ports:
       - "3000:3000"
 
+  migrate:
+    build:
+      context: .
+      dockerfile: packages/web/Dockerfile
+      args:
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+        NEXT_PUBLIC_COLLAB_URL: ${NEXT_PUBLIC_COLLAB_URL:-ws://localhost:1234}
+        NEXT_PUBLIC_DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-selfhosted}
+    entrypoint: ["node", "--experimental-strip-types", "scripts/migrate.ts"]
+    environment:
+      DATABASE_URL: postgresql://quire:quire@postgres:5432/quire
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - migrate
+    restart: "no"
+
 volumes:
   postgres_data:
