@@ -1,7 +1,7 @@
 import type { Project, ProjectFile } from "./schema";
 import { isFolderPlaceholder } from "./project-files";
 
-export const SUPPORTED_COMPILERS = ["pdflatex", "xelatex"] as const;
+export const SUPPORTED_COMPILERS = ["pdflatex", "xelatex", "lualatex"] as const;
 export type SupportedCompiler = (typeof SUPPORTED_COMPILERS)[number];
 
 export interface ProjectSettingsInput {

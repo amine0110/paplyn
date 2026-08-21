@@ -1,5 +1,5 @@
 import express from "express";
-import { compileProject } from "./compile.js";
+import { compileProject, isLatexEngine } from "./compile.js";
 import type { CompileRequest } from "./types.js";
 
 const app = express();
@@ -30,15 +30,15 @@ app.post("/compile", async (req, res) => {
     }
 
     const engine = body.engine || "pdflatex";
-    if (!["pdflatex", "xelatex"].includes(engine)) {
-      res.status(400).json({ error: "engine must be pdflatex or xelatex" });
+    if (!isLatexEngine(engine)) {
+      res.status(400).json({ error: "engine must be pdflatex, xelatex, or lualatex" });
       return;
     }
 
     const result = await compileProject({
       mainFile: body.mainFile,
       files: body.files,
-      engine: engine as "pdflatex" | "xelatex",
+      engine,
       timeoutMs: TIMEOUT_MS,
     });
 

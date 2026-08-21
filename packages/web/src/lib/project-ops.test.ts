@@ -16,10 +16,11 @@ describe("project ops helpers", () => {
   });
 
   it("accepts supported compilers only", () => {
-    expect(SUPPORTED_COMPILERS).toEqual(["pdflatex", "xelatex"]);
+    expect(SUPPORTED_COMPILERS).toEqual(["pdflatex", "xelatex", "lualatex"]);
     expect(isSupportedCompiler("pdflatex")).toBe(true);
     expect(isSupportedCompiler("xelatex")).toBe(true);
-    expect(isSupportedCompiler("lualatex")).toBe(false);
+    expect(isSupportedCompiler("lualatex")).toBe(true);
+    expect(isSupportedCompiler("latexmk")).toBe(false);
   });
 
   it("validates project settings updates", () => {
@@ -46,8 +47,13 @@ describe("project ops helpers", () => {
     });
 
     expect(validateProjectSettingsUpdate({ compiler: "lualatex" }, texFiles)).toEqual({
+      ok: true,
+      data: { compiler: "lualatex" },
+    });
+
+    expect(validateProjectSettingsUpdate({ compiler: "latexmk" }, texFiles)).toEqual({
       ok: false,
-      error: "Compiler must be one of: pdflatex, xelatex",
+      error: "Compiler must be one of: pdflatex, xelatex, lualatex",
     });
 
     expect(validateProjectSettingsUpdate({ description: null }, texFiles)).toEqual({
@@ -97,7 +103,7 @@ describe("project ops helpers", () => {
     });
   });
 
-  it("falls back to pdflatex when source compiler is unsupported", () => {
+  it("preserves lualatex when duplicating supported compiler settings", () => {
     const seed = buildDuplicateProjectSeed({
       newProjectId: "new-id",
       ownerId: "user-1",
@@ -106,6 +112,23 @@ describe("project ops helpers", () => {
         description: null,
         mainFile: "main.tex",
         compiler: "lualatex",
+        template: null,
+      },
+      sourceFiles: [],
+    });
+
+    expect(seed.project.compiler).toBe("lualatex");
+  });
+
+  it("falls back to pdflatex when source compiler is unsupported", () => {
+    const seed = buildDuplicateProjectSeed({
+      newProjectId: "new-id",
+      ownerId: "user-1",
+      sourceProject: {
+        name: "Paper",
+        description: null,
+        mainFile: "main.tex",
+        compiler: "latexmk",
         template: null,
       },
       sourceFiles: [],

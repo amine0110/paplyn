@@ -6,7 +6,7 @@ export interface ProjectFile {
 export interface CompileRequest {
   mainFile: string;
   files: ProjectFile[];
-  engine?: "pdflatex" | "xelatex";
+  engine?: "pdflatex" | "xelatex" | "lualatex";
 }
 
 export interface CompileError {
