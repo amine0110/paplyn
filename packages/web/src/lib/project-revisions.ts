@@ -1,3 +1,4 @@
+import { toUtcIsoString } from "./format-date";
 import type { Project, ProjectFile } from "./schema";
 
 export const DEFAULT_MAX_REVISIONS = 20;
@@ -124,7 +125,7 @@ export function toRevisionListItem(revision: {
   id: string;
   label: string | null;
   source: string;
-  createdAt: Date;
+  createdAt: Date | string;
   userId: string;
   mainFile: string;
   compiler: string;
@@ -139,7 +140,7 @@ export function toRevisionListItem(revision: {
       revision.label
     ),
     source: revision.source === "manual" ? "manual" : "compile",
-    createdAt: revision.createdAt.toISOString(),
+    createdAt: toUtcIsoString(revision.createdAt),
     userId: revision.userId,
     mainFile: revision.mainFile,
     compiler: revision.compiler,

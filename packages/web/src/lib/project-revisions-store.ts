@@ -53,6 +53,7 @@ export async function createProjectRevision({
     compiler: snapshot.compiler,
     files: snapshot.files,
     pdf: snapshot.pdf ?? null,
+    createdAt: new Date(),
   });
 
   await pruneProjectRevisions(projectId);

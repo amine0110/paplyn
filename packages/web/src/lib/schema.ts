@@ -193,7 +193,7 @@ export const projectRevision = pgTable("project_revision", {
   compiler: text("compiler").notNull(),
   files: jsonb("files").notNull(),
   pdf: text("pdf"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export type User = typeof user.$inferSelect;
