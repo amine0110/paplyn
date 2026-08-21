@@ -178,8 +178,27 @@ export const collabRoom = pgTable("collab_room", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+/** Point-in-time snapshot of project files (and optional compiled PDF). */
+export const projectRevision = pgTable("project_revision", {
+  id: text("id").primaryKey(),
+  projectId: text("project_id")
+    .notNull()
+    .references(() => project.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  label: text("label"),
+  source: text("source").notNull().default("compile"),
+  mainFile: text("main_file").notNull(),
+  compiler: text("compiler").notNull(),
+  files: jsonb("files").notNull(),
+  pdf: text("pdf"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export type User = typeof user.$inferSelect;
 export type Project = typeof project.$inferSelect;
 export type ProjectFile = typeof projectFile.$inferSelect;
 export type ProjectMember = typeof projectMember.$inferSelect;
 export type CollabRoom = typeof collabRoom.$inferSelect;
+export type ProjectRevision = typeof projectRevision.$inferSelect;

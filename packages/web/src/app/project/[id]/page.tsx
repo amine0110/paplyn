@@ -28,6 +28,7 @@ import {
 import { CompilePanel } from "@/components/compile-panel";
 import { ProjectSettingsDialog } from "@/components/project-settings-dialog";
 import { ShareDialog } from "@/components/share-dialog";
+import { HistoryDialog } from "@/components/history-dialog";
 import { CollabPresence } from "@/components/collab-presence";
 import { AiSidebar } from "@/components/ai-sidebar";
 import { EditorStatusBar, EditorToolbar } from "@/components/editor-toolbar";
@@ -43,6 +44,7 @@ import {
   PanelLeftOpen,
   BookOpen,
   Settings,
+  History,
   X,
 } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
@@ -99,6 +101,7 @@ export default function ProjectPage() {
   const [showAi, setShowAi] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const editorViewRef = useRef<EditorView | null>(null);
   const [editorView, setEditorView] = useState<EditorView | null>(null);
@@ -583,6 +586,12 @@ export default function ProjectPage() {
             <span className="hidden sm:inline">AI</span>
           </Button>
           {canEdit && (
+            <Button variant="ghost" size="sm" onClick={() => setShowHistory(true)}>
+              <History className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">History</span>
+            </Button>
+          )}
+          {canEdit && (
             <Button variant="ghost" size="sm" onClick={() => setShowSettings(true)}>
               <Settings className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Settings</span>
@@ -713,6 +722,34 @@ export default function ProjectPage() {
             setProject(updated);
             if (updated.mainFile !== activeFile && files.some((f) => f.path === updated.mainFile)) {
               setActiveFile(updated.mainFile);
+            }
+          }}
+        />
+      )}
+
+      {showHistory && project && (
+        <HistoryDialog
+          open={showHistory}
+          projectId={projectId}
+          canEdit={canEdit}
+          onClose={() => setShowHistory(false)}
+          onRestored={({ project: restoredProject, files: restoredFiles, pdf }) => {
+            setProject(restoredProject);
+            setFiles(
+              restoredFiles.map((file) => ({
+                path: file.path,
+                content: file.content,
+                isBinary: file.isBinary,
+              }))
+            );
+            if (
+              activeFile &&
+              !restoredFiles.some((file) => file.path === activeFile)
+            ) {
+              setActiveFile(restoredProject.mainFile);
+            }
+            if (pdf) {
+              setPdfData(pdf);
             }
           }}
         />
