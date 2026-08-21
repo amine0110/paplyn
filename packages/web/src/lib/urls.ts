@@ -4,6 +4,41 @@ function isSelfHostedMode(): boolean {
   return (process.env.NEXT_PUBLIC_DEPLOYMENT_MODE || process.env.DEPLOYMENT_MODE || "selfhosted") !== "saas";
 }
 
+function isLocalHost(hostname: string): boolean {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname.endsWith(".localhost")
+  );
+}
+
+function isLocalCollabUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "ws:" && parsed.protocol !== "wss:") {
+      return false;
+    }
+    return isLocalHost(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function deriveCollabUrlFromRequest(request: Request): string | null {
+  const origin = getRequestOrigin(request);
+  if (!origin) {
+    return null;
+  }
+
+  const url = new URL(origin);
+  if (isLocalHost(url.hostname)) {
+    return `ws://${url.hostname}:${LOCAL_COLLAB_PORT}`;
+  }
+
+  const wsProto = url.protocol === "https:" ? "wss" : "ws";
+  return `${wsProto}://${url.host}`;
+}
+
 /** Server-side canonical app URL — prefers runtime env over build-time NEXT_PUBLIC. */
 export function getServerAppUrl(): string {
   return (
@@ -67,25 +102,27 @@ export function getSelfHostedTrustedOrigins(request?: Request): string[] {
  */
 export function resolveCollabUrl(request?: Request): string {
   const explicit = process.env.COLLAB_URL || process.env.NEXT_PUBLIC_COLLAB_URL;
+
   if (explicit) {
-    return explicit.replace(/\/$/, "");
+    const normalized = explicit.replace(/\/$/, "");
+
+    if (isSelfHostedMode() && request && isLocalCollabUrl(normalized)) {
+      const origin = getRequestOrigin(request);
+      if (origin && !isLocalHost(new URL(origin).hostname)) {
+        const derived = deriveCollabUrlFromRequest(request);
+        if (derived) {
+          return derived;
+        }
+      }
+    }
+
+    return normalized;
   }
 
   if (isSelfHostedMode() && request) {
-    const origin = getRequestOrigin(request);
-    if (origin) {
-      const url = new URL(origin);
-      const isLocal =
-        url.hostname === "localhost" ||
-        url.hostname === "127.0.0.1" ||
-        url.hostname.endsWith(".localhost");
-
-      if (isLocal) {
-        return `ws://${url.hostname}:${LOCAL_COLLAB_PORT}`;
-      }
-
-      const wsProto = url.protocol === "https:" ? "wss" : "ws";
-      return `${wsProto}://${url.host}`;
+    const derived = deriveCollabUrlFromRequest(request);
+    if (derived) {
+      return derived;
     }
   }
 
