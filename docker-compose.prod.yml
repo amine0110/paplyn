@@ -1,0 +1,31 @@
+# Production overlay: bind services to localhost only.
+# Use with the base compose file:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+#
+# Set secrets and public URLs in your shell or a local .env file (do not commit .env).
+
+services:
+  postgres:
+    ports: !override
+      - "127.0.0.1:5432:5432"
+
+  compiler:
+    ports: !override
+      - "127.0.0.1:3001:3001"
+
+  collab:
+    ports: !override
+      - "127.0.0.1:1234:1234"
+
+  web:
+    ports: !override
+      - "127.0.0.1:3000:3000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://quire:quire@postgres:5432/quire}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+      NEXT_PUBLIC_COLLAB_URL: ${NEXT_PUBLIC_COLLAB_URL}
+      DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-selfhosted}
+      NEXT_PUBLIC_DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-selfhosted}
+      PRODUCT_NAME: ${PRODUCT_NAME:-Plicum}
+      NEXT_PUBLIC_PRODUCT_NAME: ${PRODUCT_NAME:-Plicum}

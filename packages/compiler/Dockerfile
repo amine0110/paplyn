@@ -27,6 +27,7 @@ WORKDIR /app
 COPY --from=builder /app/packages/compiler/dist ./dist
 COPY --from=builder /app/packages/compiler/package.json ./
 COPY --from=deps /app/packages/compiler/node_modules ./node_modules
+COPY --from=deps /app/node_modules /node_modules
 
 ENV COMPILER_PORT=3001
 EXPOSE 3001
