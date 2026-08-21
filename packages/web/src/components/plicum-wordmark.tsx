@@ -1,11 +1,14 @@
 import Image from "next/image";
 import { cn } from "@/components/ui/cn";
 
-/** Public paths for theme-specific wordmarks (see packages/web/public/brand/). */
+/** Public paths for brand assets (see packages/web/public/brand/). */
 export const BRAND = {
   wordmarkLight: "/brand/plicum-wordmark-light.png",
   wordmarkDark: "/brand/plicum-wordmark-dark.png",
-  favicon: "/brand/favicon.png",
+  /** Square folded-P mark — favicon / app icon only, not for headers. */
+  iconFoldedP: "/brand/plicum-icon-folded-p.png",
+  favicon: "/brand/favicon.ico",
+  appleTouchIcon: "/brand/apple-touch-icon.png",
 } as const;
 
 type PlicumWordmarkProps = {

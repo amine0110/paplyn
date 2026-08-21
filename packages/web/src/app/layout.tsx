@@ -31,12 +31,13 @@ export const metadata: Metadata = {
   description: PRODUCT.metaDescription,
   icons: {
     icon: [
+      { url: BRAND.favicon, sizes: "any" },
       { url: "/brand/favicon-16.png", sizes: "16x16", type: "image/png" },
       { url: "/brand/favicon-32.png", sizes: "32x32", type: "image/png" },
       { url: "/brand/favicon-48.png", sizes: "48x48", type: "image/png" },
     ],
-    apple: [{ url: "/brand/favicon-180.png", sizes: "180x180", type: "image/png" }],
-    shortcut: BRAND.favicon,
+    apple: [{ url: BRAND.appleTouchIcon, sizes: "180x180", type: "image/png" }],
+    shortcut: "/brand/favicon.png",
   },
   openGraph: {
     title: PRODUCT.pageTitle,
