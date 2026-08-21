@@ -47,6 +47,11 @@ describe("findSynctexSource", () => {
     const index = parseSynctex(SAMPLE_SYNCTEX)!;
     expect(findSynctexSource(index, 2, 72, 742, ["main.tex"])).toBeNull();
   });
+
+  it("returns null when the nearest block is beyond the distance threshold", () => {
+    const index = parseSynctex(SAMPLE_SYNCTEX)!;
+    expect(findSynctexSource(index, 1, 0, 0, ["main.tex"], 1)).toBeNull();
+  });
 });
 
 describe("resolveSynctexFilePath", () => {

@@ -7,6 +7,9 @@
 const SYNCTEX_UNIT = 65781.76;
 const GZIP_MAGIC = [0x1f, 0x8b];
 
+/** Reject nearest-box fallback when the click is farther than this (pt). */
+export const SYNCTEX_MAX_LOOKUP_DISTANCE_PT = 72;
+
 export interface SynctexBlock {
   type: string;
   fileNumber: number;
@@ -57,6 +60,15 @@ class Rectangle {
     const cx = (this.left + this.right) / 2;
     const cy = (this.bottom + this.top) / 2;
     return Math.hypot(cx - x, cy - y);
+  }
+
+  containsPoint(x: number, y: number, epsilon = 1): boolean {
+    return (
+      x >= this.left - epsilon &&
+      x <= this.right + epsilon &&
+      y >= this.top - epsilon &&
+      y <= this.bottom + epsilon
+    );
   }
 }
 
@@ -256,13 +268,14 @@ export function resolveSynctexFilePath(
   return undefined;
 }
 
-/** Reverse SyncTeX: PDF page + point (pt, origin bottom-left) → nearest source line. */
+/** Reverse SyncTeX: PDF page + point (pt, SyncTeX top-left Y-down) → nearest source line. */
 export function findSynctexSource(
   index: SynctexIndex,
   page: number,
   x: number,
   y: number,
-  projectFiles: string[] = []
+  projectFiles: string[] = [],
+  maxDistancePt: number = SYNCTEX_MAX_LOOKUP_DISTANCE_PT
 ): SynctexSourceLocation | null {
   const blocks = index.pageBlocks[page];
   if (!blocks?.length) return null;
@@ -270,7 +283,14 @@ export function findSynctexSource(
   const x0 = x - index.offset.x;
   const y0 = y - index.offset.y;
 
-  let best: {
+  let bestContaining: {
+    filePath: string;
+    line: number;
+    distanceFromCenter: number;
+    rect: Rectangle;
+  } | null = null;
+
+  let bestNearest: {
     filePath: string;
     line: number;
     distanceFromCenter: number;
@@ -282,22 +302,37 @@ export function findSynctexSource(
 
     const rect = blockToRect(block);
     const distFromCenter = rect.distanceFromCenter(x0, y0);
+    const candidate = {
+      filePath: block.filePath,
+      line: block.line,
+      distanceFromCenter: distFromCenter,
+      rect,
+    };
+
+    if (rect.containsPoint(x0, y0)) {
+      if (
+        !bestContaining ||
+        rect.includes(bestContaining.rect) ||
+        (distFromCenter < bestContaining.distanceFromCenter &&
+          !rect.includes(bestContaining.rect))
+      ) {
+        bestContaining = candidate;
+      }
+      continue;
+    }
 
     if (
-      !best ||
-      rect.includes(best.rect) ||
-      (distFromCenter < best.distanceFromCenter && !rect.includes(best.rect))
+      !bestNearest ||
+      rect.includes(bestNearest.rect) ||
+      (distFromCenter < bestNearest.distanceFromCenter && !rect.includes(bestNearest.rect))
     ) {
-      best = {
-        filePath: block.filePath,
-        line: block.line,
-        distanceFromCenter: distFromCenter,
-        rect,
-      };
+      bestNearest = candidate;
     }
   }
 
+  const best = bestContaining ?? bestNearest;
   if (!best) return null;
+  if (!bestContaining && best.distanceFromCenter > maxDistancePt) return null;
 
   const file = projectFiles.length
     ? resolveSynctexFilePath(best.filePath, projectFiles)
