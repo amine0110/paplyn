@@ -1,0 +1,91 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: quire
+      POSTGRES_PASSWORD: quire
+      POSTGRES_DB: quire
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quire"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5432:5432"
+
+  compiler:
+    build:
+      context: .
+      dockerfile: packages/compiler/Dockerfile
+    environment:
+      COMPILER_PORT: 3001
+      COMPILE_TIMEOUT_MS: ${COMPILE_TIMEOUT_MS:-60000}
+      COMPILE_MAX_FILE_SIZE_MB: ${COMPILE_MAX_FILE_SIZE_MB:-10}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    ports:
+      - "3001:3001"
+
+  collab:
+    build:
+      context: .
+      dockerfile: packages/collab/Dockerfile
+    environment:
+      COLLAB_PORT: 1234
+      COLLAB_SECRET: ${COLLAB_SECRET:-change-me-collab-secret}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:1234/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    ports:
+      - "1234:1234"
+
+  web:
+    build:
+      context: .
+      dockerfile: packages/web/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://quire:quire@postgres:5432/quire
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-change-me-to-a-random-32-char-string}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      NEXT_PUBLIC_COLLAB_URL: ${NEXT_PUBLIC_COLLAB_URL:-ws://localhost:1234}
+      NEXT_PUBLIC_DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-selfhosted}
+      DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-selfhosted}
+      COMPILER_URL: http://compiler:3001
+      COLLAB_SECRET: ${COLLAB_SECRET:-change-me-collab-secret}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      ORG_NAME: ${ORG_NAME:-My Organization}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICE_STUDENT: ${STRIPE_PRICE_STUDENT:-}
+      STRIPE_PRICE_RESEARCHER: ${STRIPE_PRICE_RESEARCHER:-}
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      compiler:
+        condition: service_healthy
+      collab:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:

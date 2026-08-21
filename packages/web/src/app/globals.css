@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@theme {
+  --color-canvas: #faf9f7;
+  --color-canvas-dark: #f5f3ef;
+  --color-ink: #1a1a2e;
+  --color-ink-muted: #4a4a5e;
+  --color-ink-faint: #8a8a9e;
+  --color-navy: #1e3a5f;
+  --color-navy-light: #2d5a8a;
+  --color-navy-dark: #0f2744;
+  --color-accent: #c45c26;
+  --color-accent-light: #e07a3f;
+  --color-border: #e8e6e1;
+  --color-surface: #ffffff;
+  --color-error: #b91c1c;
+  --color-success: #15803d;
+
+  --font-serif: "Newsreader", "Source Serif 4", Georgia, serif;
+  --font-sans: "IBM Plex Sans", "Geist", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "Geist Mono", monospace;
+}
+
+@layer base {
+  html {
+    @apply antialiased;
+  }
+
+  body {
+    @apply bg-canvas text-ink font-sans;
+    font-family: var(--font-sans);
+  }
+
+  h1, h2, h3 {
+    font-family: var(--font-serif);
+  }
+}
+
+@layer utilities {
+  .font-serif {
+    font-family: var(--font-serif);
+  }
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+}
+
+.cm-editor {
+  height: 100%;
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+.cm-editor .cm-scroller {
+  overflow: auto;
+}
+.cm-editor.cm-focused {
+  outline: none;
+}
+
+.react-pdf__Page__canvas {
+  margin: 0 auto;
+}

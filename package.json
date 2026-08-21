@@ -1,0 +1,17 @@
+{
+  "name": "quire",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel -r dev",
+    "build": "pnpm -r build",
+    "test": "pnpm --filter @quire/web test",
+    "lint": "pnpm -r lint",
+    "db:generate": "pnpm --filter @quire/web db:generate",
+    "db:migrate": "pnpm --filter @quire/web db:migrate",
+    "db:push": "pnpm --filter @quire/web db:push"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@9.15.0"
+}
