@@ -9,6 +9,7 @@ import { ImagePreview } from "@/components/image-preview";
 import { LatexEditor } from "@/components/latex-editor";
 import { PdfPreview } from "@/components/pdf-preview";
 import {
+  buildRenameMap,
   contentToBase64,
   contentToDataUrl,
   folderPathFromFile,
@@ -20,7 +21,9 @@ import {
   isTextSourceFile,
   joinPath,
   mimeTypeForPath,
+  projectZipFilename,
   readFileAsDataUrl,
+  resolveMainFileAfterRename,
 } from "@/lib/project-files";
 import { CompilePanel } from "@/components/compile-panel";
 import { AiSidebar } from "@/components/ai-sidebar";
@@ -249,8 +252,75 @@ export default function ProjectPage() {
     });
     setFiles((prev) => prev.filter((f) => f.path !== path));
     if (activeFile === path) {
-      setActiveFile(files.find((f) => f.path !== path)?.path || null);
+      setActiveFile(files.find((f) => f.path !== path && !isFolderPlaceholder(f.path))?.path || null);
     }
+  }
+
+  async function deleteFolder(path: string) {
+    if (!confirm(`Delete folder ${path} and all its contents?`)) return;
+    const res = await fetch(
+      `/api/projects/${projectId}/files?path=${encodeURIComponent(path)}&recursive=true`,
+      { method: "DELETE" }
+    );
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.error || "Failed to delete folder");
+      return;
+    }
+    const result = await res.json();
+    const deleted = new Set<string>(result.deleted ?? []);
+    setFiles((prev) => prev.filter((f) => !deleted.has(f.path)));
+    if (activeFile && deleted.has(activeFile)) {
+      setActiveFile(files.find((f) => !deleted.has(f.path) && !isFolderPlaceholder(f.path))?.path || null);
+    }
+  }
+
+  async function renamePath(from: string, to: string) {
+    const res = await fetch(`/api/projects/${projectId}/files`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ from, to }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.error || "Failed to rename");
+      return;
+    }
+
+    const result = await res.json();
+    const renameResult = buildRenameMap(
+      files.map((file) => file.path),
+      from,
+      to
+    );
+    if (!renameResult.ok) return;
+
+    const pathMap = renameResult.map;
+    setFiles((prev) =>
+      prev.map((file) => {
+        const newPath = pathMap.get(file.path);
+        return newPath ? { ...file, path: newPath } : file;
+      })
+    );
+
+    if (activeFile) {
+      setActiveFile(resolveMainFileAfterRename(activeFile, pathMap));
+    }
+
+    if (result.mainFile && project && result.mainFile !== project.mainFile) {
+      setProject({ ...project, mainFile: result.mainFile });
+    }
+  }
+
+  function downloadSource() {
+    const filename = projectZipFilename(project?.name ?? "manuscript");
+    const link = document.createElement("a");
+    link.href = `/api/projects/${projectId}/download`;
+    link.download = filename;
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 
   async function uploadFiles(fileList: FileList) {
@@ -503,8 +573,11 @@ export default function ProjectPage() {
               onSelect={setActiveFile}
               onCreate={createFile}
               onCreateFolder={createFolder}
+              onRename={renamePath}
               onDelete={deleteFile}
+              onDeleteFolder={deleteFolder}
               onUpload={uploadFiles}
+              onDownloadSource={downloadSource}
               canEdit={canEdit}
             />
           </aside>
@@ -537,8 +610,11 @@ export default function ProjectPage() {
               }}
               onCreate={createFile}
               onCreateFolder={createFolder}
+              onRename={renamePath}
               onDelete={deleteFile}
+              onDeleteFolder={deleteFolder}
               onUpload={uploadFiles}
+              onDownloadSource={downloadSource}
               canEdit={canEdit}
             />
           </aside>
