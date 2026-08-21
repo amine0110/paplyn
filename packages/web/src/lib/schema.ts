@@ -171,7 +171,15 @@ export const usageCounter = pgTable(
   (table) => [uniqueIndex("usage_user_month_idx").on(table.userId, table.month)]
 );
 
+/** Live Yjs CRDT state for a collab room (project id). Distinct from project_file HTTP saves. */
+export const collabRoom = pgTable("collab_room", {
+  roomId: text("room_id").primaryKey(),
+  state: text("state").notNull(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export type User = typeof user.$inferSelect;
 export type Project = typeof project.$inferSelect;
 export type ProjectFile = typeof projectFile.$inferSelect;
 export type ProjectMember = typeof projectMember.$inferSelect;
+export type CollabRoom = typeof collabRoom.$inferSelect;
