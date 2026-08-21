@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Nav } from "@/components/nav";
 import { Button } from "@/components/ui/button";
 import { config } from "@/lib/config";
+import { PRODUCT } from "@/lib/product";
 import { FileText, Users, Sparkles, Server } from "lucide-react";
 
 export default function LandingPage() {
@@ -12,11 +13,10 @@ export default function LandingPage() {
       <main>
         <section className="max-w-4xl mx-auto px-4 py-24 text-center">
           <h1 className="font-serif text-5xl md:text-6xl font-semibold text-navy leading-tight mb-6">
-            Write research.<br />Compile with confidence.
+            {PRODUCT.headline}<br />{PRODUCT.headlineLine2}
           </h1>
           <p className="text-lg text-ink-muted max-w-2xl mx-auto mb-10">
-            Quire is a modern LaTeX workspace for researchers and students.
-            Real-time collaboration, instant PDF preview, and AI assistance — hosted or self-hosted.
+            {PRODUCT.name} {PRODUCT.landingLead}
           </p>
           <div className="flex gap-4 justify-center">
             <Link href="/signup">
@@ -49,7 +49,7 @@ export default function LandingPage() {
           <h2 className="font-serif text-3xl font-semibold text-center mb-12">Deployment options</h2>
           <div className="grid md:grid-cols-2 gap-8">
             <div className="border border-border rounded-lg p-6 bg-surface">
-              <h3 className="font-serif text-xl font-medium mb-2">Quire Cloud</h3>
+              <h3 className="font-serif text-xl font-medium mb-2">{PRODUCT.hostedEditionName}</h3>
               <p className="text-sm text-ink-muted mb-4">
                 Fully managed SaaS with subscription plans. Free tier for getting started,
                 student and researcher plans for heavier use.
@@ -63,8 +63,7 @@ export default function LandingPage() {
             <div className="border border-border rounded-lg p-6 bg-surface">
               <h3 className="font-serif text-xl font-medium mb-2">Self-hosted</h3>
               <p className="text-sm text-ink-muted mb-4">
-                Run Quire on your own infrastructure with Docker Compose.
-                Single organization, no billing, full control.
+                {PRODUCT.selfHostBlurb}
               </p>
               <pre className="text-xs bg-canvas-dark rounded p-3 font-mono text-ink-muted overflow-x-auto">
                 docker compose up
@@ -101,7 +100,7 @@ export default function LandingPage() {
       </main>
 
       <footer className="border-t border-border py-8 text-center text-sm text-ink-faint">
-        Quire — Collaborative LaTeX. MIT License.
+        {PRODUCT.footerLine}
       </footer>
     </div>
   );

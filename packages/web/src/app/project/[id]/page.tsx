@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 import type { Project } from "@/lib/schema";
+import { PRODUCT } from "@/lib/product";
 
 interface CompileError {
   line?: number;
@@ -342,7 +343,7 @@ export default function ProjectPage() {
                   value={shareEmail}
                   onChange={(e) => setShareEmail(e.target.value)}
                   required
-                  placeholder="colleague@university.edu"
+                  placeholder={PRODUCT.emails.invitePlaceholder}
                 />
               </div>
               <div className="space-y-2">
