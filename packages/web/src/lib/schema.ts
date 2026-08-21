@@ -134,7 +134,7 @@ export const projectInvite = pgTable("project_invite", {
   projectId: text("project_id")
     .notNull()
     .references(() => project.id, { onDelete: "cascade" }),
-  email: text("email").notNull(),
+  email: text("email"),
   role: inviteRoleEnum("role").notNull().default("editor"),
   invitedBy: text("invited_by")
     .notNull()

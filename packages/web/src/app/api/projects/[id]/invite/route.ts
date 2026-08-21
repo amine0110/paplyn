@@ -1,16 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { projectMember, projectInvite, user } from "@/lib/schema";
 import { getSession } from "@/lib/session";
 import { getProjectAccess } from "@/lib/project-access";
 import { generateId } from "@/lib/utils";
+import { buildInviteUrl } from "@/lib/project-sharing";
+import { getServerAppUrl } from "@/lib/urls";
 import { z } from "zod";
 
 const inviteSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email().optional(),
   role: z.enum(["editor", "viewer"]).default("editor"),
+  linkOnly: z.boolean().optional(),
 });
+
+function inviteLink(inviteId: string) {
+  return buildInviteUrl(getServerAppUrl(), inviteId);
+}
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -36,12 +43,29 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     .innerJoin(user, eq(projectMember.userId, user.id))
     .where(eq(projectMember.projectId, id));
 
+  const [owner] = await db
+    .select({ id: user.id, name: user.name, email: user.email })
+    .from(user)
+    .where(eq(user.id, access.project.ownerId))
+    .limit(1);
+
   const invites = await db
     .select()
     .from(projectInvite)
     .where(eq(projectInvite.projectId, id));
 
-  return NextResponse.json({ members, invites });
+  return NextResponse.json({
+    members,
+    owner,
+    invites: invites
+      .filter((invite) => !invite.accepted)
+      .map((invite) => ({
+        ...invite,
+        link: inviteLink(invite.id),
+      })),
+    canManage: access.role === "owner",
+    role: access.role,
+  });
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -62,28 +86,52 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const [existingUser] = await db
-    .select()
-    .from(user)
-    .where(eq(user.email, parsed.data.email))
-    .limit(1);
+  const { email, role, linkOnly } = parsed.data;
 
-  if (existingUser) {
-    const [existingMember] = await db
+  if (email && !linkOnly) {
+    const [existingUser] = await db
       .select()
-      .from(projectMember)
-      .where(eq(projectMember.userId, existingUser.id))
+      .from(user)
+      .where(eq(user.email, email))
       .limit(1);
 
-    if (!existingMember) {
+    if (existingUser) {
+      const [existingMember] = await db
+        .select()
+        .from(projectMember)
+        .where(
+          and(eq(projectMember.projectId, id), eq(projectMember.userId, existingUser.id))
+        )
+        .limit(1);
+
+      if (existingMember) {
+        return NextResponse.json({ success: true, added: true, alreadyMember: true });
+      }
+
       await db.insert(projectMember).values({
         id: generateId(),
         projectId: id,
         userId: existingUser.id,
-        role: parsed.data.role,
+        role,
       });
+      return NextResponse.json({ success: true, added: true });
     }
-    return NextResponse.json({ success: true, added: true });
+
+    const [invite] = await db
+      .insert(projectInvite)
+      .values({
+        id: generateId(),
+        projectId: id,
+        email,
+        role,
+        invitedBy: session.user.id,
+      })
+      .returning();
+
+    return NextResponse.json(
+      { ...invite, link: inviteLink(invite.id) },
+      { status: 201 }
+    );
   }
 
   const [invite] = await db
@@ -91,11 +139,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .values({
       id: generateId(),
       projectId: id,
-      email: parsed.data.email,
-      role: parsed.data.role,
+      email: null,
+      role,
       invitedBy: session.user.id,
     })
     .returning();
 
-  return NextResponse.json(invite, { status: 201 });
+  return NextResponse.json(
+    { ...invite, link: inviteLink(invite.id) },
+    { status: 201 }
+  );
 }
