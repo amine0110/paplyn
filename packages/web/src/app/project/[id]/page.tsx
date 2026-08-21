@@ -5,8 +5,23 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { FileTree, type FileNode } from "@/components/file-tree";
+import { ImagePreview } from "@/components/image-preview";
 import { LatexEditor } from "@/components/latex-editor";
 import { PdfPreview } from "@/components/pdf-preview";
+import {
+  contentToBase64,
+  contentToDataUrl,
+  folderPathFromFile,
+  folderPlaceholderPath,
+  isBinaryAsset,
+  isFolderPlaceholder,
+  isImageFile,
+  isPdfFile,
+  isTextSourceFile,
+  joinPath,
+  mimeTypeForPath,
+  readFileAsDataUrl,
+} from "@/lib/project-files";
 import { CompilePanel } from "@/components/compile-panel";
 import { AiSidebar } from "@/components/ai-sidebar";
 import { LayoutModeSwitcher } from "@/components/layout-mode-switcher";
@@ -117,7 +132,13 @@ export default function ProjectPage() {
     const collab = await collabRes.json();
 
     setProject(proj);
-    setFiles(fileList);
+    setFiles(
+      fileList.map((f: { path: string; content: string; isBinary?: boolean }) => ({
+        path: f.path,
+        content: f.content,
+        isBinary: f.isBinary ?? isBinaryAsset(f.path),
+      }))
+    );
     setCanEdit(collab.canEdit);
     setCollabToken(collab.token);
 
@@ -126,7 +147,13 @@ export default function ProjectPage() {
     if (match) setCollabBaseUrl(match[1]);
 
     if (!activeFile && fileList.length > 0) {
-      setActiveFile(proj.mainFile || fileList[0].path);
+      const preferred = fileList.find(
+        (f: { path: string }) => f.path === proj.mainFile && !isFolderPlaceholder(f.path)
+      );
+      const firstSelectable = fileList.find(
+        (f: { path: string }) => !isFolderPlaceholder(f.path)
+      );
+      setActiveFile(preferred?.path || firstSelectable?.path || fileList[0].path);
     }
   }, [projectId, router, activeFile]);
 
@@ -135,16 +162,22 @@ export default function ProjectPage() {
   }, [loadProject]);
 
   const saveFile = useCallback(
-    async (path: string, content: string) => {
+    async (path: string, content: string, isBinary = false) => {
       if (!canEdit) return;
       await fetch(`/api/projects/${projectId}/files`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path, content }),
+        body: JSON.stringify({ path, content, isBinary }),
       });
-      setFiles((prev) =>
-        prev.map((f) => (f.path === path ? { ...f, content } : f))
-      );
+      setFiles((prev) => {
+        const existing = prev.find((f) => f.path === path);
+        if (existing) {
+          return prev.map((f) =>
+            f.path === path ? { ...f, content, isBinary } : f
+          );
+        }
+        return [...prev, { path, content, isBinary }];
+      });
     },
     [projectId, canEdit]
   );
@@ -182,9 +215,13 @@ export default function ProjectPage() {
   }
 
   async function createFile(path: string) {
-    await saveFile(path, "");
-    setFiles((prev) => [...prev, { path, content: "" }]);
+    await saveFile(path, "", false);
     setActiveFile(path);
+  }
+
+  async function createFolder(folderName: string) {
+    const path = folderPlaceholderPath(folderName);
+    await saveFile(path, "", false);
   }
 
   async function deleteFile(path: string) {
@@ -199,24 +236,15 @@ export default function ProjectPage() {
   }
 
   async function uploadFiles(fileList: FileList) {
+    const folder = folderPathFromFile(activeFile ?? "");
     for (const file of Array.from(fileList)) {
-      const isBinary = /\.(png|jpg|jpeg|pdf)$/i.test(file.name);
-      let content: string;
-
-      if (isBinary) {
-        const buffer = await file.arrayBuffer();
-        const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
-        content = `data:${file.type};base64,${base64}`;
-      } else {
-        content = await file.text();
+      const path = joinPath(folder, file.name);
+      const isBinary = isBinaryAsset(path);
+      const content = isBinary ? await readFileAsDataUrl(file) : await file.text();
+      await saveFile(path, content, isBinary);
+      if (!activeFile || isFolderPlaceholder(activeFile)) {
+        setActiveFile(path);
       }
-
-      await saveFile(file.name, content);
-      setFiles((prev) => {
-        const existing = prev.find((f) => f.path === file.name);
-        if (existing) return prev.map((f) => (f.path === file.name ? { ...f, content, isBinary } : f));
-        return [...prev, { path: file.name, content, isBinary }];
-      });
     }
   }
 
@@ -255,30 +283,62 @@ export default function ProjectPage() {
     setTimeout(() => setJumpToLine(null), 100);
   }
 
-  const activeFileContent = files.find((f) => f.path === activeFile)?.content || "";
+  const activeFileNode = files.find((f) => f.path === activeFile);
+  const activeFileContent = activeFileNode?.content || "";
   const showingProof = layoutShowsProof(layoutMode);
+
+  function renderActiveFileViewer() {
+    if (!activeFile || isFolderPlaceholder(activeFile)) {
+      return (
+        <div className="flex items-center justify-center h-full text-ink-muted font-serif">
+          Select a file from the outline
+        </div>
+      );
+    }
+
+    if (isImageFile(activeFile)) {
+      const src = activeFileContent.startsWith("data:")
+        ? activeFileContent
+        : contentToDataUrl(activeFileContent, mimeTypeForPath(activeFile));
+      return <ImagePreview src={src} alt={activeFile} />;
+    }
+
+    if (isPdfFile(activeFile) && activeFileNode?.isBinary) {
+      return <PdfPreview pdfData={contentToBase64(activeFileContent)} />;
+    }
+
+    if (isTextSourceFile(activeFile) || !activeFileNode?.isBinary) {
+      return (
+        <LatexEditor
+          key={activeFile}
+          filePath={activeFile}
+          projectId={projectId}
+          initialContent={activeFileContent}
+          collabToken={collabToken}
+          collabBaseUrl={collabBaseUrl}
+          canEdit={canEdit}
+          onChange={handleEditorChange}
+          onEditorReady={(view) => {
+            editorViewRef.current = view;
+          }}
+          jumpToLine={jumpToLine}
+        />
+      );
+    }
+
+    return (
+      <div className="flex items-center justify-center h-full text-ink-muted text-sm px-6 text-center">
+        Preview is not available for this file type.
+      </div>
+    );
+  }
 
   const editorPane = (
     <div className="workspace-pane">
-      {activeFile ? (
+      {activeFile && !isFolderPlaceholder(activeFile) ? (
         <>
           <div className="workspace-pane-header">{activeFile}</div>
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <LatexEditor
-              key={activeFile}
-              filePath={activeFile}
-              projectId={projectId}
-              initialContent={activeFileContent}
-              collabToken={collabToken}
-              collabBaseUrl={collabBaseUrl}
-              canEdit={canEdit}
-              onChange={handleEditorChange}
-              onEditorReady={(view) => {
-                editorViewRef.current = view;
-              }}
-              jumpToLine={jumpToLine}
-            />
-          </div>
+          <div className="flex-1 min-h-0 overflow-hidden">{renderActiveFileViewer()}</div>
         </>
       ) : (
         <div className="flex items-center justify-center h-full text-ink-muted font-serif">
@@ -294,7 +354,12 @@ export default function ProjectPage() {
         <BookOpen className="h-3.5 w-3.5 text-accent" />
         <span>Proof</span>
       </div>
-      <PdfPreview pdfData={pdfData} loading={compiling} />
+      <PdfPreview
+        pdfData={pdfData}
+        loading={compiling}
+        showDownload
+        downloadFilename={project?.name ?? "manuscript"}
+      />
     </div>
   );
 
@@ -417,6 +482,7 @@ export default function ProjectPage() {
               activeFile={activeFile}
               onSelect={setActiveFile}
               onCreate={createFile}
+              onCreateFolder={createFolder}
               onDelete={deleteFile}
               onUpload={uploadFiles}
               canEdit={canEdit}
@@ -450,6 +516,7 @@ export default function ProjectPage() {
                 setShowOutline(false);
               }}
               onCreate={createFile}
+              onCreateFolder={createFolder}
               onDelete={deleteFile}
               onUpload={uploadFiles}
               canEdit={canEdit}
