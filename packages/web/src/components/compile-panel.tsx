@@ -21,7 +21,11 @@ export function CompilePanel({ log, errors, onJumpToLine, showLog, onToggleLog }
   const errorList = errors.filter((e) => e.severity === "error");
   const warnList = errors.filter((e) => e.severity === "warning");
 
-  if (errors.length === 0 && !showLog) return null;
+  const hasErrors = errorList.length > 0;
+  const hasWarnings = warnList.length > 0;
+  const hasLog = log.trim().length > 0;
+
+  if (!hasErrors && !hasWarnings && !showLog && !hasLog) return null;
 
   return (
     <div className="border-t border-border bg-paper/90 max-h-48 flex flex-col shrink-0">

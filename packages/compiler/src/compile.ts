@@ -15,6 +15,19 @@ interface CompileOptions {
   timeoutMs: number;
 }
 
+export function extractToolErrors(log: string): CompileError[] {
+  const errors: CompileError[] = [];
+
+  for (const match of log.matchAll(/spawn (\S+) ENOENT/g)) {
+    errors.push({
+      message: `LaTeX tool "${match[1]}" not found on the compiler service (install TeX Live)`,
+      severity: "error",
+    });
+  }
+
+  return errors;
+}
+
 function parseLog(log: string, mainFile: string): CompileError[] {
   const errors: CompileError[] = [];
   const lines = log.split("\n");
@@ -155,7 +168,15 @@ export async function compileProject(options: CompileOptions): Promise<CompileRe
       // PDF not generated
     }
 
-    const errors = parseLog(fullLog, options.mainFile);
+    const errors = [...parseLog(fullLog, options.mainFile), ...extractToolErrors(fullLog)];
+
+    if (!pdfBase64 && !errors.some((e) => e.severity === "error") && fullLog.trim()) {
+      errors.push({
+        message: "Compilation failed — PDF was not generated",
+        severity: "error",
+      });
+    }
+
     const hasErrors = errors.some((e) => e.severity === "error");
 
     return {

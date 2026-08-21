@@ -2,8 +2,6 @@ FROM node:20-bookworm AS base
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 WORKDIR /app
 
-FROM texlive/texlive:latest AS texlive
-
 FROM base AS deps
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
 COPY packages/compiler/package.json ./packages/compiler/
@@ -17,11 +15,15 @@ COPY package.json pnpm-workspace.yaml ./
 RUN pnpm --filter @quire/compiler build
 
 FROM node:20-bookworm-slim AS runner
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    texlive-latex-base \
+    texlive-latex-recommended \
+    texlive-fonts-recommended \
+    texlive-latex-extra \
+    texlive-publishers \
+    texlive-xetex \
     && rm -rf /var/lib/apt/lists/*
-
-COPY --from=texlive /usr/local/texlive /usr/local/texlive
-ENV PATH="/usr/local/texlive/2024/bin/x86_64-linux:/usr/local/texlive/2023/bin/x86_64-linux:/usr/local/texlive/2022/bin/x86_64-linux:$PATH"
 
 WORKDIR /app
 COPY --from=builder /app/packages/compiler/dist ./dist
