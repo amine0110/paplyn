@@ -1,4 +1,4 @@
--- Quire database schema (generated for initial setup)
+-- Plicum database schema (generated for initial setup)
 -- Run via: pnpm db:push (recommended) or apply manually
 
 CREATE TYPE IF NOT EXISTS plan AS ENUM ('free', 'student', 'researcher');

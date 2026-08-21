@@ -1,8 +1,8 @@
-# Quire
+# Plicum
 
-> **Working title.** Public product name, tagline, and UI metadata live in
-> [`packages/web/src/lib/product.ts`](packages/web/src/lib/product.ts) (`PRODUCT_NAME`).
-> Change that file (or set `PRODUCT_NAME` / `NEXT_PUBLIC_PRODUCT_NAME`) when the final name is chosen.
+Public product name, tagline, and UI metadata live in
+[`packages/web/src/lib/product.ts`](packages/web/src/lib/product.ts) (`PRODUCT_NAME`).
+Override with `PRODUCT_NAME` / `NEXT_PUBLIC_PRODUCT_NAME` if needed.
 
 Collaborative LaTeX for researchers and students. Write, compile, and share documents in real time — hosted as SaaS or self-hosted on your infrastructure.
 

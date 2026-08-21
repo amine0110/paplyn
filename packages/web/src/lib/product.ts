@@ -1,17 +1,17 @@
 /**
  * Product branding — single source of truth for public name, tagline, and metadata.
  *
- * Working title: Quire (final public name TBD). Change PRODUCT_NAME here when ready.
  * Optional env override: PRODUCT_NAME or NEXT_PUBLIC_PRODUCT_NAME (runtime / client).
  *
- * When renaming, also update (called out here so nothing is missed):
+ * Keep in sync when changing the public name:
  * - LICENSE copyright line → PRODUCT.copyrightHolder
- * - package.json "name" / @scope in packages/* → PACKAGE_SCOPE (internal, not user-facing)
  * - README heading (developer docs; references this file)
+ *
+ * Internal npm / Docker scope stays PACKAGE_SCOPE (not user-facing).
  */
 
 export const PRODUCT_NAME =
-  process.env.NEXT_PUBLIC_PRODUCT_NAME || process.env.PRODUCT_NAME || "Quire";
+  process.env.NEXT_PUBLIC_PRODUCT_NAME || process.env.PRODUCT_NAME || "Plicum";
 
 /** Internal npm / Docker scope. Not shown in the UI. */
 export const PACKAGE_SCOPE = "quire";
