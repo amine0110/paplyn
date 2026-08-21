@@ -7,6 +7,7 @@ import { getProjectAccess } from "@/lib/project-access";
 import { config } from "@/lib/config";
 import { checkCompileLimit, incrementCompileUsage } from "@/lib/usage";
 import { generateId } from "@/lib/utils";
+import { createProjectRevision } from "@/lib/project-revisions-store";
 
 interface CompileError {
   line?: number;
@@ -73,6 +74,15 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       durationMs: result.durationMs,
       errorCount: result.errors.filter((e) => e.severity === "error").length,
     });
+
+    if (result.success) {
+      await createProjectRevision({
+        projectId: id,
+        userId: session.user.id,
+        source: "compile",
+        pdf: result.pdf ?? null,
+      });
+    }
 
     return NextResponse.json(result);
   } catch (err) {
