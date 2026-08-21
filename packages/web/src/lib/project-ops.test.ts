@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   SUPPORTED_COMPILERS,
   buildDuplicateProjectSeed,
+  detectMainTexFile,
   duplicateProjectName,
   isSupportedCompiler,
   listTexFiles,
@@ -13,6 +14,13 @@ describe("project ops helpers", () => {
     expect(
       listTexFiles(["main.tex", "refs.bib", "chapters/intro.tex", "figures/.keep"])
     ).toEqual(["chapters/intro.tex", "main.tex"]);
+  });
+
+  it("detects main.tex or falls back to the first .tex file", () => {
+    expect(detectMainTexFile(["appendix.tex", "main.tex"])).toBe("main.tex");
+    expect(detectMainTexFile(["chapters/intro.tex", "chapters/main.tex"])).toBe("chapters/main.tex");
+    expect(detectMainTexFile(["zeta.tex", "alpha.tex"])).toBe("alpha.tex");
+    expect(detectMainTexFile([])).toBeNull();
   });
 
   it("accepts supported compilers only", () => {

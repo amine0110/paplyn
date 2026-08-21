@@ -30,6 +30,22 @@ export function listTexFiles(filePaths: string[]): string[] {
     .sort((a, b) => a.localeCompare(b));
 }
 
+/** Prefer `main.tex` (any folder); otherwise the first .tex path alphabetically. */
+export function detectMainTexFile(texPaths: string[]): string | null {
+  if (texPaths.length === 0) return null;
+
+  const sorted = [...texPaths].sort((a, b) => a.localeCompare(b));
+
+  const main = sorted.find((path) => {
+    const slash = path.lastIndexOf("/");
+    const base = slash === -1 ? path : path.slice(slash + 1);
+    return base === "main.tex";
+  });
+  if (main) return main;
+
+  return sorted[0] ?? null;
+}
+
 export function validateProjectSettingsUpdate(
   input: ProjectSettingsInput,
   texFiles: string[]
