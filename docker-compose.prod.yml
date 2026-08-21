@@ -10,8 +10,17 @@ services:
       - "127.0.0.1:5432:5432"
 
   compiler:
+    # Production uses the VPS-maintained TeX Live 2026 image (plicum-compiler:latest).
+    # Do NOT re-add `build:` here — `docker compose ... up --build` must not rebuild
+    # packages/compiler/Dockerfile or swap TeX Live 2026 for the slim Debian runner.
+    image: plicum-compiler:latest
+    pull_policy: never
+    build: !reset null
     ports: !override
       - "127.0.0.1:3001:3001"
+    environment:
+      # texlive/texlive layout; required so pdflatex/biber/etc. resolve on the prod image.
+      PATH: /usr/local/texlive/2026/bin/x86_64-linux:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
   collab:
     ports: !override
