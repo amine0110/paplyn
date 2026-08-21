@@ -3,6 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "./db";
 import * as schema from "./schema";
 import { config } from "./config";
+import { getSelfHostedTrustedOrigins } from "./urls";
 import { eq, count } from "drizzle-orm";
 
 export const auth = betterAuth({
@@ -32,7 +33,12 @@ export const auth = betterAuth({
   },
   baseURL: config.appUrl,
   secret: process.env.BETTER_AUTH_SECRET || "dev-secret-change-me-in-production",
-  trustedOrigins: [config.appUrl],
+  trustedOrigins: config.isSelfHosted
+    ? (request) => getSelfHostedTrustedOrigins(request)
+    : [config.appUrl],
+  advanced: config.isSelfHosted
+    ? { trustedProxyHeaders: true }
+    : undefined,
   databaseHooks: {
     user: {
       create: {

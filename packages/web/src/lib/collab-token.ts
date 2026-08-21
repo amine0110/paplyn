@@ -1,5 +1,6 @@
 import { createHmac } from "crypto";
 import { config } from "./config";
+import { getCollabWsUrl } from "./urls";
 
 export function createCollabToken(
   room: string,
@@ -20,7 +21,4 @@ export function createCollabToken(
   return `${payloadB64}.${signature}`;
 }
 
-export function getCollabWsUrl(projectId: string, token: string): string {
-  const base = config.collabUrl.replace(/\/$/, "");
-  return `${base}/${projectId}?token=${encodeURIComponent(token)}`;
-}
+export { getCollabWsUrl };

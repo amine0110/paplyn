@@ -13,6 +13,12 @@ COPY --from=deps /app/packages/web/node_modules ./packages/web/node_modules
 COPY packages/web ./packages/web
 COPY package.json pnpm-workspace.yaml ./
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG NEXT_PUBLIC_APP_URL
+ARG NEXT_PUBLIC_COLLAB_URL
+ARG NEXT_PUBLIC_DEPLOYMENT_MODE
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
+ENV NEXT_PUBLIC_COLLAB_URL=$NEXT_PUBLIC_COLLAB_URL
+ENV NEXT_PUBLIC_DEPLOYMENT_MODE=$NEXT_PUBLIC_DEPLOYMENT_MODE
 RUN cd packages/web && pnpm build
 
 FROM node:20-bookworm-slim AS runner
