@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProjectSettingsDialog } from "@/components/project-settings-dialog";
-import { Plus, Archive, FileText, Copy, Settings, Trash2 } from "lucide-react";
+import { Plus, Archive, FileText, Copy, Settings, Trash2, Upload } from "lucide-react";
 import type { Project } from "@/lib/schema";
 
 const TEMPLATES = [
@@ -24,9 +24,13 @@ export default function DashboardPage() {
   const [shared, setShared] = useState<(Project & { memberRole?: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [name, setName] = useState("");
+  const [importName, setImportName] = useState("");
+  const [importZip, setImportZip] = useState<File | null>(null);
   const [template, setTemplate] = useState("blank");
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [settingsProject, setSettingsProject] = useState<Project | null>(null);
 
@@ -62,6 +66,49 @@ export default function DashboardPage() {
       alert(err.error || "Failed to create project");
     }
     setCreating(false);
+  }
+
+  async function importProject(e: React.FormEvent) {
+    e.preventDefault();
+    if (!importZip) {
+      alert("Choose a .zip file to import");
+      return;
+    }
+
+    setImporting(true);
+    const formData = new FormData();
+    formData.append("name", importName);
+    formData.append("zip", importZip);
+
+    const res = await fetch("/api/projects/import", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (res.ok) {
+      const project = await res.json();
+      router.push(`/project/${project.id}`);
+    } else {
+      const err = await res.json();
+      alert(err.error || "Failed to import project");
+    }
+    setImporting(false);
+  }
+
+  function openImportDialog() {
+    setImportName("");
+    setImportZip(null);
+    setShowImport(true);
+  }
+
+  function handleImportZipChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    setImportZip(file);
+    if (file && !importName.trim()) {
+      const base = file.name.replace(/\.zip$/i, "").trim();
+      if (base) setImportName(base);
+    }
+    e.target.value = "";
   }
 
   async function archiveProject(id: string, archived: boolean) {
@@ -123,9 +170,14 @@ export default function DashboardPage() {
       <main className="max-w-4xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
           <h1 className="font-serif text-2xl font-semibold">Projects</h1>
-          <Button onClick={() => setShowCreate(true)}>
-            <Plus className="h-4 w-4" /> New project
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={openImportDialog}>
+              <Upload className="h-4 w-4" /> Import zip
+            </Button>
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus className="h-4 w-4" /> New project
+            </Button>
+          </div>
         </div>
 
         {loading ? (
@@ -198,6 +250,50 @@ export default function DashboardPage() {
           </>
         )}
       </main>
+
+      {showImport && (
+        <div className="fixed inset-0 bg-ink/20 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface rounded-lg border border-border p-6 w-full max-w-md shadow-lg">
+            <h2 className="font-serif text-xl font-semibold mb-4">Import from zip</h2>
+            <p className="text-sm text-ink-muted mb-4">
+              Upload an Overleaf-style zip with .tex, .bib, and image files.
+            </p>
+            <form onSubmit={importProject} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="import-name">Project name</Label>
+                <Input
+                  id="import-name"
+                  value={importName}
+                  onChange={(e) => setImportName(e.target.value)}
+                  required
+                  placeholder="Imported Paper"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="import-zip">Zip archive</Label>
+                <Input
+                  id="import-zip"
+                  type="file"
+                  accept=".zip,application/zip"
+                  onChange={handleImportZipChange}
+                  required
+                />
+                {importZip && (
+                  <p className="text-xs text-ink-faint">{importZip.name}</p>
+                )}
+              </div>
+              <div className="flex gap-2 justify-end pt-2">
+                <Button type="button" variant="ghost" onClick={() => setShowImport(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={importing || !importZip}>
+                  {importing ? "Importing..." : "Import"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {showCreate && (
         <div className="fixed inset-0 bg-ink/20 flex items-center justify-center z-50 p-4">
