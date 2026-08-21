@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Project, ProjectFile } from "@/lib/schema";
+import { formatRevisionTimestamp } from "@/lib/format-date";
 import type { RevisionListItem } from "@/lib/project-revisions";
 
 interface HistoryDialogProps {
@@ -14,17 +15,6 @@ interface HistoryDialogProps {
   canEdit: boolean;
   onClose: () => void;
   onRestored: (payload: { project: Project; files: ProjectFile[]; pdf: string | null }) => void;
-}
-
-function formatRevisionTime(iso: string): string {
-  const date = new Date(iso);
-  return date.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
 }
 
 export function HistoryDialog({
@@ -175,7 +165,7 @@ export function HistoryDialog({
                 <div className="min-w-0">
                   <p className="font-medium text-sm truncate">{revision.label}</p>
                   <p className="text-xs text-ink-muted mt-0.5">
-                    {formatRevisionTime(revision.createdAt)}
+                    {formatRevisionTimestamp(revision.createdAt)}
                   </p>
                   <p className="text-xs text-ink-faint mt-1">
                     {revision.fileCount} file{revision.fileCount === 1 ? "" : "s"}

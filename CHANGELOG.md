@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Version history timestamps now serialize as UTC ISO strings and display in the viewer's local timezone via `Intl.DateTimeFormat`, instead of showing server-local wall clock times. Revision `created_at` is stored as `timestamptz` going forward.
+
 ## [0.1.0] - 2026-08-21
 
 Initial release. Merged work through PR #29.
