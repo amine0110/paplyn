@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-canvas: #faf9f7;
   --color-canvas-dark: #f5f3ef;
@@ -24,6 +26,24 @@
 @layer base {
   html {
     @apply antialiased;
+  }
+
+  html.dark {
+    color-scheme: dark;
+    --color-canvas: #0f0e0d;
+    --color-canvas-dark: #1a1917;
+    --color-ink: #f5f2eb;
+    --color-ink-muted: #a8a29e;
+    --color-ink-faint: #78716c;
+    --color-navy: #3d8585;
+    --color-navy-light: #4f9a9a;
+    --color-navy-dark: #2d6a6a;
+    --color-accent: #3d8585;
+    --color-accent-light: #4f9a9a;
+    --color-border: #2e2b28;
+    --color-surface: #1c1a18;
+    --color-error: #f87171;
+    --color-success: #4ade80;
   }
 
   body {

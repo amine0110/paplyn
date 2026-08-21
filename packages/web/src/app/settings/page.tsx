@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSession } from "@/lib/auth-client";
 import { Nav } from "@/components/nav";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,9 +38,10 @@ export default function SettingsPage() {
 
           <section className="border border-border rounded-lg p-6 bg-surface">
             <h2 className="font-medium mb-4">Appearance</h2>
-            <p className="text-sm text-ink-muted">
+            <p className="text-sm text-ink-muted mb-4">
               {PRODUCT.appearanceNote}
             </p>
+            <ThemeToggle />
           </section>
 
           {config.isSaas && (
