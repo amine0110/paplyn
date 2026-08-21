@@ -1,8 +1,15 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { PLAN_LIMITS, config } from "@/lib/config";
 import { PRODUCT, PRODUCT_NAME } from "@/lib/product";
 import { templates, getTemplateList } from "@/lib/templates";
 import { createCollabToken } from "@/lib/collab-token";
+import {
+  getCollabWsUrl,
+  getRequestOrigin,
+  getSelfHostedTrustedOrigins,
+  getServerAppUrl,
+  resolveCollabUrl,
+} from "@/lib/urls";
 
 describe("product branding", () => {
   it("exposes a single PRODUCT_NAME constant", () => {
@@ -53,6 +60,77 @@ describe("collab token", () => {
     expect(token).toContain(".");
     const parts = token.split(".");
     expect(parts).toHaveLength(2);
+  });
+});
+
+describe("url resolution", () => {
+  const originalEnv = { ...process.env };
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+    delete process.env.BETTER_AUTH_URL;
+    delete process.env.NEXT_PUBLIC_APP_URL;
+    delete process.env.COLLAB_URL;
+    delete process.env.NEXT_PUBLIC_COLLAB_URL;
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  it("prefers BETTER_AUTH_URL over NEXT_PUBLIC_APP_URL on the server", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "http://localhost:3000";
+    process.env.BETTER_AUTH_URL = "https://plicum.com";
+    expect(getServerAppUrl()).toBe("https://plicum.com");
+    expect(config.appUrl).toBe("https://plicum.com");
+  });
+
+  it("derives request origin from proxy headers", () => {
+    const request = new Request("http://internal/api/auth/get-session", {
+      headers: {
+        host: "plicum.com",
+        "x-forwarded-proto": "https",
+      },
+    });
+    expect(getRequestOrigin(request)).toBe("https://plicum.com");
+  });
+
+  it("includes request origin in self-hosted trusted origins", () => {
+    process.env.BETTER_AUTH_URL = "https://plicum.com";
+    const request = new Request("https://plicum.com/api/auth/get-session", {
+      headers: { host: "plicum.com" },
+    });
+    expect(getSelfHostedTrustedOrigins(request)).toEqual([
+      "https://plicum.com",
+    ]);
+  });
+
+  it("uses explicit collab URL when configured", () => {
+    process.env.COLLAB_URL = "wss://collab.example.com";
+    const request = new Request("https://plicum.com/api/projects/1/collab", {
+      headers: { host: "plicum.com" },
+    });
+    expect(resolveCollabUrl(request)).toBe("wss://collab.example.com");
+  });
+
+  it("derives local collab websocket on localhost dev", () => {
+    const request = new Request("http://localhost:3000/api/projects/1/collab", {
+      headers: { host: "localhost:3000" },
+    });
+    expect(resolveCollabUrl(request)).toBe("ws://localhost:1234");
+    expect(getCollabWsUrl("proj-1", "token-abc", request)).toBe(
+      "ws://localhost:1234/proj-1?token=token-abc"
+    );
+  });
+
+  it("derives same-host wss collab URL in self-host production", () => {
+    const request = new Request("https://plicum.com/api/projects/1/collab", {
+      headers: {
+        host: "plicum.com",
+        "x-forwarded-proto": "https",
+      },
+    });
+    expect(resolveCollabUrl(request)).toBe("wss://plicum.com");
   });
 });
 

@@ -1,3 +1,5 @@
+import { getServerAppUrl } from "./urls";
+
 export type DeploymentMode = "saas" | "selfhosted";
 
 export const config = {
@@ -5,8 +7,14 @@ export const config = {
   isSaas: (process.env.NEXT_PUBLIC_DEPLOYMENT_MODE || process.env.DEPLOYMENT_MODE) === "saas",
   isSelfHosted: (process.env.NEXT_PUBLIC_DEPLOYMENT_MODE || process.env.DEPLOYMENT_MODE || "selfhosted") !== "saas",
 
-  appUrl: process.env.NEXT_PUBLIC_APP_URL || process.env.BETTER_AUTH_URL || "http://localhost:3000",
-  collabUrl: process.env.NEXT_PUBLIC_COLLAB_URL || "ws://localhost:1234",
+  /** Server-side canonical URL — prefers runtime BETTER_AUTH_URL over build-time NEXT_PUBLIC. */
+  get appUrl() {
+    return getServerAppUrl();
+  },
+  /** @deprecated Prefer resolveCollabUrl(request) for request-aware resolution. */
+  get collabUrl() {
+    return process.env.COLLAB_URL || process.env.NEXT_PUBLIC_COLLAB_URL || "ws://localhost:1234";
+  },
   compilerUrl: process.env.COMPILER_URL || "http://localhost:3001",
   collabSecret: process.env.COLLAB_SECRET || "dev-collab-secret",
 
