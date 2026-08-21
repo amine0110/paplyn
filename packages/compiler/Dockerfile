@@ -23,6 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     texlive-latex-extra \
     texlive-publishers \
     texlive-xetex \
+    texlive-luatex \
+    biber \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -8,11 +8,92 @@ import type { CompileError, CompileResult, ProjectFile } from "./types.js";
 
 const execFileAsync = promisify(execFile);
 
+export const LATEX_ENGINES = ["pdflatex", "xelatex", "lualatex"] as const;
+export type LatexEngine = (typeof LATEX_ENGINES)[number];
+
 interface CompileOptions {
   mainFile: string;
   files: ProjectFile[];
-  engine: "pdflatex" | "xelatex";
+  engine: LatexEngine;
   timeoutMs: number;
+}
+
+export function isLatexEngine(value: string): value is LatexEngine {
+  return (LATEX_ENGINES as readonly string[]).includes(value);
+}
+
+export function buildEngineArgs(mainPath: string, workDir: string): string[] {
+  return [
+    "-interaction=nonstopmode",
+    "-halt-on-error",
+    "-output-directory",
+    workDir,
+    mainPath,
+  ];
+}
+
+export function getTexBaseName(mainFile: string): string {
+  return mainFile.replace(/\.tex$/, "");
+}
+
+export function hasBibFiles(files: ProjectFile[]): boolean {
+  return files.some((f) => f.path.endsWith(".bib"));
+}
+
+export function logRequestsBibliography(log: string): boolean {
+  const patterns = [
+    /No file .*\.bbl/i,
+    /Rerun (LaTeX|to get (cross-references|outlines|bibliography|citations))/i,
+    /There were undefined citations/i,
+    /Please \(re\)run Biber/i,
+    /Please run (Biber|bibtex)/i,
+    /Package biblatex Warning/i,
+  ];
+  return patterns.some((pattern) => pattern.test(log));
+}
+
+export function detectBibliographyTool(
+  files: ProjectFile[],
+  mainFile: string,
+  options: { log?: string; hasBcf?: boolean; auxContent?: string } = {}
+): "bibtex" | "biber" | null {
+  const texContent = files
+    .filter((f) => f.path.endsWith(".tex"))
+    .map((f) => f.content)
+    .join("\n");
+
+  const usesBiblatex =
+    /\\usepackage(?:\[[^\]]*\])?\{biblatex\}/.test(texContent) ||
+    /\\addbibresource/.test(texContent);
+  const usesLegacyBib =
+    /\\bibliography\{/.test(texContent) || /\\bibliographystyle\{/.test(texContent);
+
+  if (options.hasBcf || usesBiblatex) return "biber";
+  if (usesLegacyBib || hasBibFiles(files)) return "bibtex";
+
+  if (options.auxContent && /\\bibdata\{/.test(options.auxContent)) {
+    return "bibtex";
+  }
+
+  if (options.log && logRequestsBibliography(options.log)) {
+    return /Biber|biblatex/i.test(options.log) ? "biber" : "bibtex";
+  }
+
+  return null;
+}
+
+export function needsBibliographyPass(
+  files: ProjectFile[],
+  log: string,
+  auxContent?: string,
+  hasBcf?: boolean
+): boolean {
+  if (hasBibFiles(files)) return true;
+  if (hasBcf) return true;
+  if (auxContent && (/\\bibdata\{/.test(auxContent) || /\\citation\{/.test(auxContent))) {
+    return true;
+  }
+  return logRequestsBibliography(log);
 }
 
 export function extractToolErrors(log: string): CompileError[] {
@@ -23,6 +104,66 @@ export function extractToolErrors(log: string): CompileError[] {
       message: `LaTeX tool "${match[1]}" not found on the compiler service (install TeX Live)`,
       severity: "error",
     });
+  }
+
+  return errors;
+}
+
+export function parseBibliographyErrors(log: string, tool: "bibtex" | "biber"): CompileError[] {
+  const errors: CompileError[] = [];
+  const marker = `--- ${tool} ---`;
+  const sectionStart = log.indexOf(marker);
+  const section =
+    sectionStart === -1
+      ? log
+      : log.slice(sectionStart + marker.length).split(/\n--- /)[0] ?? "";
+
+  if (tool === "bibtex") {
+    for (const match of section.matchAll(/Warning--(.+)/g)) {
+      errors.push({
+        message: `BibTeX: ${match[1].trim()}`,
+        severity: "warning",
+      });
+    }
+
+    const lines = section.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const lineMatch = lines[i].match(/^---line (\d+) of file ([^-]+?)---$/);
+      if (!lineMatch) continue;
+
+      const message = lines[i + 1]?.trim();
+      if (!message) continue;
+
+      errors.push({
+        message: `BibTeX: ${message}`,
+        file: lineMatch[2].trim(),
+        line: parseInt(lineMatch[1], 10),
+        severity: "error",
+      });
+    }
+
+    for (const match of section.matchAll(/I couldn't open (?:file name )?`([^']+)'/g)) {
+      errors.push({
+        message: `BibTeX: Could not open ${match[1]}`,
+        severity: "error",
+      });
+    }
+  }
+
+  if (tool === "biber") {
+    for (const match of section.matchAll(/ERROR - (.+)/g)) {
+      errors.push({
+        message: `Biber: ${match[1].trim()}`,
+        severity: "error",
+      });
+    }
+
+    for (const match of section.matchAll(/WARN - (.+)/g)) {
+      errors.push({
+        message: `Biber: ${match[1].trim()}`,
+        severity: "warning",
+      });
+    }
   }
 
   return errors;
@@ -99,6 +240,23 @@ async function runCommand(
   }
 }
 
+async function readOptionalFile(path: string): Promise<string | undefined> {
+  try {
+    return await readFile(path, "utf-8");
+  } catch {
+    return undefined;
+  }
+}
+
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await readFile(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function compileProject(options: CompileOptions): Promise<CompileResult> {
   const start = Date.now();
   const workDir = join(tmpdir(), `quire-compile-${randomUUID()}`);
@@ -123,42 +281,45 @@ export async function compileProject(options: CompileOptions): Promise<CompileRe
 
     const mainPath = join(workDir, options.mainFile);
     const engine = options.engine;
-    const engineArgs = [
-      "-interaction=nonstopmode",
-      "-halt-on-error",
-      "-output-directory",
-      workDir,
-      mainPath,
-    ];
+    const engineArgs = buildEngineArgs(mainPath, workDir);
+    const mainBase = getTexBaseName(options.mainFile);
+    const maxRuns = 5;
+    const perRunTimeout = Math.max(1000, Math.floor(options.timeoutMs / maxRuns));
 
-    const perRunTimeout = Math.floor(options.timeoutMs / 4);
+    const appendRun = (label: string, stdout: string, stderr: string) => {
+      fullLog += `\n--- ${label} ---\n${stdout}\n${stderr}`;
+    };
 
-    for (let pass = 0; pass < 2; pass++) {
-      const { stdout, stderr } = await runCommand(engine, engineArgs, workDir, perRunTimeout);
-      fullLog += `\n--- ${engine} pass ${pass + 1} ---\n${stdout}\n${stderr}`;
-    }
+    const engineResult = await runCommand(engine, engineArgs, workDir, perRunTimeout);
+    appendRun(`${engine} pass 1`, engineResult.stdout, engineResult.stderr);
 
-    const hasBib = options.files.some((f) => f.path.endsWith(".bib"));
-    if (hasBib) {
-      const bibFile = options.files.find((f) => f.path.endsWith(".bib"));
-      if (bibFile) {
-        const bibBase = bibFile.path.replace(/\.bib$/, "");
-        const { stdout, stderr } = await runCommand(
-          "bibtex",
-          [bibBase],
-          workDir,
-          perRunTimeout
-        );
-        fullLog += `\n--- bibtex ---\n${stdout}\n${stderr}`;
+    const auxContent = await readOptionalFile(join(workDir, `${mainBase}.aux`));
+    const hasBcf = await fileExists(join(workDir, `${mainBase}.bcf`));
+    const bibNeeded = needsBibliographyPass(options.files, fullLog, auxContent, hasBcf);
+    let bibTool: "bibtex" | "biber" | null = null;
 
-        for (let pass = 0; pass < 2; pass++) {
-          const r = await runCommand(engine, engineArgs, workDir, perRunTimeout);
-          fullLog += `\n--- ${engine} post-bib pass ${pass + 1} ---\n${r.stdout}\n${r.stderr}`;
+    if (bibNeeded) {
+      bibTool = detectBibliographyTool(options.files, options.mainFile, {
+        log: fullLog,
+        hasBcf,
+        auxContent,
+      });
+
+      if (bibTool) {
+        const bibResult = await runCommand(bibTool, [mainBase], workDir, perRunTimeout);
+        appendRun(bibTool, bibResult.stdout, bibResult.stderr);
+
+        for (let pass = 2; pass <= 3; pass++) {
+          const result = await runCommand(engine, engineArgs, workDir, perRunTimeout);
+          appendRun(`${engine} pass ${pass}`, result.stdout, result.stderr);
         }
       }
+    } else {
+      const result = await runCommand(engine, engineArgs, workDir, perRunTimeout);
+      appendRun(`${engine} pass 2`, result.stdout, result.stderr);
     }
 
-    const pdfPath = join(workDir, options.mainFile.replace(/\.tex$/, ".pdf"));
+    const pdfPath = join(workDir, `${mainBase}.pdf`);
     let pdfBase64: string | undefined;
 
     try {
@@ -168,7 +329,11 @@ export async function compileProject(options: CompileOptions): Promise<CompileRe
       // PDF not generated
     }
 
-    const errors = [...parseLog(fullLog, options.mainFile), ...extractToolErrors(fullLog)];
+    const errors = [
+      ...parseLog(fullLog, options.mainFile),
+      ...extractToolErrors(fullLog),
+      ...(bibTool ? parseBibliographyErrors(fullLog, bibTool) : []),
+    ];
 
     if (!pdfBase64 && !errors.some((e) => e.severity === "error") && fullLog.trim()) {
       errors.push({
