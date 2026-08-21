@@ -196,3 +196,172 @@ export function triggerDownload(href: string, filename: string, mimeType?: strin
 export function downloadPdfBase64(base64: string, filename: string): void {
   triggerDownload(pdfDownloadHref(base64), projectPdfFilename(filename));
 }
+
+export function basename(path: string): string {
+  const normalized = normalizePath(path);
+  const slash = normalized.lastIndexOf("/");
+  return slash === -1 ? normalized : normalized.slice(slash + 1);
+}
+
+export function isUnderPrefix(path: string, prefix: string): boolean {
+  const normalized = normalizePath(path);
+  const normalizedPrefix = normalizePath(prefix);
+  if (!normalizedPrefix) return true;
+  return normalized === normalizedPrefix || normalized.startsWith(`${normalizedPrefix}/`);
+}
+
+export function pathsUnderPrefix(allPaths: string[], prefix: string): string[] {
+  return allPaths.filter((path) => isUnderPrefix(path, prefix));
+}
+
+export function rewritePathPrefix(path: string, oldPrefix: string, newPrefix: string): string {
+  const normalized = normalizePath(path);
+  const oldNorm = normalizePath(oldPrefix);
+  const newNorm = normalizePath(newPrefix);
+
+  if (normalized === oldNorm) {
+    return newNorm;
+  }
+
+  if (normalized.startsWith(`${oldNorm}/`)) {
+    const suffix = normalized.slice(oldNorm.length);
+    return newNorm ? `${newNorm}${suffix}` : normalized.slice(oldNorm.length + 1);
+  }
+
+  return normalized;
+}
+
+export type RenameMapResult =
+  | { ok: true; map: Map<string, string> }
+  | { ok: false; error: string };
+
+export function buildRenameMap(allPaths: string[], from: string, to: string): RenameMapResult {
+  const fromNorm = normalizePath(from);
+  const toNorm = normalizePath(to);
+
+  if (!fromNorm) {
+    return { ok: false, error: "Source path is required" };
+  }
+
+  if (fromNorm === toNorm) {
+    return { ok: false, error: "Source and destination are the same" };
+  }
+
+  const isExactFile = allPaths.includes(fromNorm);
+  const children = allPaths.filter((path) => path.startsWith(`${fromNorm}/`));
+  const hasPlaceholder = allPaths.includes(folderPlaceholderPath(fromNorm));
+  const isFolder = children.length > 0 || hasPlaceholder;
+
+  if (isExactFile && !isFolder) {
+    if (allPaths.includes(toNorm)) {
+      return { ok: false, error: "Destination already exists" };
+    }
+    return { ok: true, map: new Map([[fromNorm, toNorm]]) };
+  }
+
+  if (isFolder) {
+    if (toNorm === fromNorm || toNorm.startsWith(`${fromNorm}/`) || fromNorm.startsWith(`${toNorm}/`)) {
+      return { ok: false, error: "Cannot move a folder into itself or a descendant" };
+    }
+
+    const affected = allPaths.filter((path) => path === fromNorm || path.startsWith(`${fromNorm}/`));
+    if (affected.length === 0) {
+      return { ok: false, error: "Path not found" };
+    }
+
+    const map = new Map<string, string>();
+    for (const path of affected) {
+      map.set(path, rewritePathPrefix(path, fromNorm, toNorm));
+    }
+
+    const unchanged = new Set(allPaths.filter((path) => !map.has(path)));
+    const newPaths = new Set<string>();
+    for (const newPath of map.values()) {
+      if (unchanged.has(newPath)) {
+        return { ok: false, error: `Destination already exists: ${newPath}` };
+      }
+      if (newPaths.has(newPath)) {
+        return { ok: false, error: "Rename would create duplicate paths" };
+      }
+      newPaths.add(newPath);
+    }
+
+    return { ok: true, map };
+  }
+
+  if (isExactFile) {
+    if (allPaths.includes(toNorm)) {
+      return { ok: false, error: "Destination already exists" };
+    }
+    return { ok: true, map: new Map([[fromNorm, toNorm]]) };
+  }
+
+  return { ok: false, error: "Path not found" };
+}
+
+export function resolveMainFileAfterRename(mainFile: string, pathMap: Map<string, string>): string {
+  const normalized = normalizePath(mainFile);
+  if (pathMap.has(normalized)) {
+    return pathMap.get(normalized)!;
+  }
+
+  for (const [oldPath, newPath] of pathMap) {
+    if (normalized === oldPath || normalized.startsWith(`${oldPath}/`)) {
+      return rewritePathPrefix(normalized, oldPath, newPath);
+    }
+  }
+
+  return normalized;
+}
+
+export interface ProjectFileEntry {
+  path: string;
+  content: string;
+  isBinary?: boolean;
+}
+
+export interface ZipEntry {
+  path: string;
+  content: string | Uint8Array;
+  isBinary: boolean;
+}
+
+export function decodeBinaryContent(content: string): Uint8Array {
+  const base64 = contentToBase64(content);
+  if (!base64) return new Uint8Array();
+
+  if (typeof Buffer !== "undefined") {
+    return new Uint8Array(Buffer.from(base64, "base64"));
+  }
+
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+export function listZipEntries(files: ProjectFileEntry[]): ZipEntry[] {
+  return files
+    .filter((file) => !isFolderPlaceholder(file.path))
+    .map((file) => {
+      const isBinary = file.isBinary ?? isBinaryAsset(file.path);
+      return {
+        path: file.path,
+        isBinary,
+        content: isBinary ? decodeBinaryContent(file.content) : file.content,
+      };
+    });
+}
+
+export function projectZipFilename(projectName: string): string {
+  const withoutExt = projectName.trim().replace(/\.zip$/i, "");
+  const sanitized = withoutExt
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  const base = sanitized || "manuscript";
+  return `${base}.zip`;
+}
