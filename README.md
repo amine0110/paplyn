@@ -1,36 +1,57 @@
 # Plicum
 
-Public product name, tagline, and UI metadata live in
-[`packages/web/src/lib/product.ts`](packages/web/src/lib/product.ts) (`PRODUCT_NAME`).
-Override with `PRODUCT_NAME` / `NEXT_PUBLIC_PRODUCT_NAME` if needed.
+Collaborative LaTeX for researchers and students. Write, compile, and share documents in real time.
 
-Collaborative LaTeX for researchers and students. Write, compile, and share documents in real time — hosted as SaaS or self-hosted on your infrastructure.
+**Live:** [plicum.com](https://plicum.com)
+
+Product name, tagline, and UI copy are defined in [`packages/web/src/lib/product.ts`](packages/web/src/lib/product.ts). Override the public name with `PRODUCT_NAME` or `NEXT_PUBLIC_PRODUCT_NAME` if needed. Internal npm and Docker identifiers still use the `@quire` scope.
+
+## Deployment
+
+Plicum runs in two modes, controlled by `DEPLOYMENT_MODE` and `NEXT_PUBLIC_DEPLOYMENT_MODE`:
+
+| Mode | Use case |
+|------|----------|
+| **Hosted (SaaS)** | Multi-tenant cloud at [plicum.com](https://plicum.com). Stripe billing, plan limits, managed infrastructure. |
+| **Self-hosted** | Single organization on your own server via Docker Compose. No billing UI; first registered user becomes admin. |
+
+Both modes share the same codebase and feature set. Self-hosting is the supported path for running from this repository.
 
 ## Features
 
-- **Multi-file LaTeX editor** — CodeMirror 6 with syntax highlighting, line numbers, bracket matching
-- **Live PDF preview** — Compile with pdfLaTeX or XeLaTeX, jump to errors from the log
-- **Real-time collaboration** — Yjs-based shared editing with presence (self-hostable, no vendor lock-in)
-- **AI assistant** — OpenAI-compatible chat for explaining errors, tightening prose, adding citations
-- **Project templates** — Blank article, IEEE conference, thesis chapter, Beamer slides (all compile out of the box)
-- **Two deployment modes** — SaaS with Stripe billing, or self-hosted single-organization install
+- **Multi-file LaTeX editor** — CodeMirror 6 with syntax highlighting, autocomplete, search/replace, go-to-line, and word count
+- **PDF compile and preview** — pdfLaTeX, XeLaTeX, or LuaLaTeX; BibTeX and Biber bibliography passes; compile log with jump-to-error
+- **SyncTeX** — Click in the PDF preview to jump to the matching source line
+- **Real-time collaboration** — Yjs shared editing with presence indicators; room state persisted to PostgreSQL
+- **Project files** — Folders, rename/move, image and PDF preview, source zip download, Overleaf-style zip import
+- **Sharing** — Email invites with owner/editor/viewer roles
+- **Version history** — Automatic revisions with restore
+- **Templates** — Blank article, IEEE conference, thesis chapter, Beamer slides
+- **AI assistant** — Optional OpenAI-compatible chat for explaining errors and editing help
+- **Themes** — Light, dark, and system appearance
 
-## Quick start (Docker)
-
-The fastest way to run the app:
+## Self-host quickstart (Docker)
 
 ```bash
+git clone https://github.com/amine0110/plicum.git
+cd plicum
 cp .env.example .env
-# Edit .env — at minimum set BETTER_AUTH_SECRET and COLLAB_SECRET to random strings
+# Set BETTER_AUTH_SECRET and COLLAB_SECRET to random strings (32+ chars)
 
 docker compose up --build
 ```
 
-Open [http://localhost:3000](http://localhost:3000), create an account, and start writing. The first registered user becomes admin in self-hosted mode.
+Open [http://localhost:3000](http://localhost:3000), create an account, and start a project. The first registered user becomes admin in self-hosted mode.
 
-### Production (VPS)
+Database migrations run automatically when the web container starts. To run them manually:
 
-On a server, bind services to localhost only and put a reverse proxy (nginx, Caddy, etc.) in front of the web app. Use the production overlay so Compose replaces default `0.0.0.0` port binds instead of adding duplicate ones:
+```bash
+docker compose --profile migrate run --rm migrate
+```
+
+### Production behind a reverse proxy
+
+Bind services to localhost and put nginx, Caddy, or similar in front of the web app:
 
 ```bash
 cp .env.example .env
@@ -40,22 +61,22 @@ cp .env.example .env
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 ```
 
-`docker-compose.prod.yml` publishes postgres (5432), compiler (3001), collab (1234), and web (3000) on `127.0.0.1` only via Compose `ports: !override`.
+`docker-compose.prod.yml` overrides port bindings to `127.0.0.1` only.
 
 ### Services
 
-| Service   | Port | Description                    |
-|-----------|------|--------------------------------|
-| web       | 3000 | Next.js application            |
-| compiler  | 3001 | LaTeX compile worker (TeX Live)|
-| collab    | 1234 | Yjs WebSocket server           |
-| postgres  | 5432 | PostgreSQL database            |
+| Service | Port | Description |
+|---------|------|-------------|
+| web | 3000 | Next.js application |
+| compiler | 3001 | LaTeX compile worker (TeX Live) |
+| collab | 1234 | Yjs WebSocket server |
+| postgres | 5432 | PostgreSQL 16 |
 
 ## Local development
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22+
 - pnpm 9+
 - PostgreSQL 16+
 - TeX Live (for local compilation) — or run only the compiler service via Docker
@@ -85,7 +106,7 @@ pnpm --filter @quire/web dev
 
 Visit [http://localhost:3000](http://localhost:3000).
 
-### Local compile without TeX Live
+### Compile without local TeX Live
 
 Run only the compiler container:
 
@@ -94,28 +115,6 @@ docker compose up compiler -d
 ```
 
 Set `COMPILER_URL=http://localhost:3001` in `.env`.
-
-### Tectonic fallback (dev)
-
-For a lighter local compile option, install [Tectonic](https://tectonic-typesetting.github.io/) and adapt the compiler service. The Docker setup uses full TeX Live for IEEE/Beamer template support.
-
-## Deployment modes
-
-Set `DEPLOYMENT_MODE` and `NEXT_PUBLIC_DEPLOYMENT_MODE` to control behavior:
-
-### Self-hosted (`DEPLOYMENT_MODE=selfhosted`)
-
-- Single organization, no billing UI
-- First registered user becomes admin
-- Admin page at `/admin` for org name, AI keys, compile timeout
-- No usage limits on compiles or AI
-
-### SaaS (`DEPLOYMENT_MODE=saas`)
-
-- Multi-tenant with plan limits
-- Stripe Checkout + Customer Portal at `/settings/billing`
-- Plans: Free, Student ($9/mo), Researcher ($29/mo)
-- Requires `STRIPE_SECRET_KEY`, price IDs, and webhook secret
 
 ## Environment variables
 
@@ -126,9 +125,13 @@ See [`.env.example`](.env.example) for the full list. Key variables:
 | `DEPLOYMENT_MODE` | `saas` or `selfhosted` |
 | `DATABASE_URL` | PostgreSQL connection string |
 | `BETTER_AUTH_SECRET` | Session signing secret (32+ chars) |
+| `BETTER_AUTH_URL` | Public URL of the web app (required in production) |
+| `NEXT_PUBLIC_APP_URL` | Browser-facing app URL |
+| `NEXT_PUBLIC_COLLAB_URL` | WebSocket URL for collaboration |
 | `COLLAB_SECRET` | Token signing for WebSocket auth |
-| `OPENAI_API_KEY` | Enables AI assistant (optional) |
 | `COMPILER_URL` | Compile service URL |
+| `OPENAI_API_KEY` | Enables AI assistant (optional) |
+| `STRIPE_*` | Stripe keys and price IDs (SaaS mode only) |
 
 ## Testing
 
@@ -136,7 +139,7 @@ See [`.env.example`](.env.example) for the full list. Key variables:
 pnpm test
 ```
 
-Tests cover config, templates, collab tokens, and validation logic. API integration tests require a running database.
+Unit tests cover config, templates, collab tokens, compile logic, and validation. API integration tests require a running database.
 
 ## Architecture
 
@@ -155,16 +158,17 @@ Tests cover config, templates, collab tokens, and validation logic. API integrat
 ```
 
 - **Web** — Next.js App Router, Better Auth, Drizzle ORM, CodeMirror 6
-- **Collab** — y-websocket server, one room per project, HMAC token auth
-- **Compiler** — Isolated worker, sandboxed compiles (timeout, no network, size limits)
+- **Collab** — y-websocket server, one room per project, HMAC token auth, Postgres persistence
+- **Compiler** — Isolated worker with compile timeout, file size limits, and no outbound network
 
-## Known gaps (v1)
+## Known limitations
 
-- Dark mode not yet implemented
-- Stripe webhook handler for subscription sync not included (manual plan assignment works)
-- File rename not yet in UI (create new + delete old)
-- PDF sync for binary uploads uses base64 in DB (fine for v1, not ideal at scale)
-- Collab persistence is in-memory (documents reload from DB on reconnect)
+- Stripe webhook handler for automatic subscription sync is not included; plan changes can be assigned manually in the database
+- Binary project files (images, PDFs) are stored as base64 in PostgreSQL — fine for typical project sizes, not ideal at very large scale
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

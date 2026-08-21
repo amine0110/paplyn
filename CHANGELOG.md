@@ -1,0 +1,54 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.1.0] - 2026-08-21
+
+Initial release. Merged work through PR #29.
+
+### Added
+
+- Collaborative LaTeX web app: multi-file editor, project dashboard, auth, and admin settings
+- Real-time collaboration with Yjs (CodeMirror binding, presence, Postgres room persistence)
+- LaTeX compile service with pdfLaTeX, XeLaTeX, and LuaLaTeX; BibTeX and Biber bibliography passes
+- SyncTeX: compile with `-synctex=1` and PDF click-to-source navigation
+- PDF preview with compile log and error navigation
+- Project file tree: folders, rename/move, image and PDF preview, source zip download
+- Overleaf-style zip project import
+- Project templates: blank article, IEEE conference, thesis chapter, Beamer slides
+- LaTeX editor autocomplete, search/replace, go-to-line, and word count
+- Project sharing via email invites with owner/editor/viewer roles
+- Project version history with restore and retention
+- Project settings, duplicate, and dashboard delete/archive
+- Optional OpenAI-compatible AI assistant sidebar
+- Light, dark, and system themes; configurable workspace layout modes
+- Plicum branding, wordmarks, and favicon
+- Dual deployment modes: SaaS (Stripe billing, plan limits) and self-hosted (single org, no billing)
+- Docker Compose stack: web, compiler, collab, and PostgreSQL
+- Production Compose overlay binding services to localhost
+- Automatic database migrations on web container startup
+
+### Changed
+
+- Renamed public product from Quire to Plicum; centralized branding in `product.ts`
+- Upgraded web Docker image to Node 22
+- Pinned compiler image to TeX Live 2026 base image
+
+### Fixed
+
+- Better Auth signup (`account.issuer` schema)
+- Self-host auth and collab WebSocket URLs on public domains without image rebuild
+- Next.js static assets path in web Docker image
+- Docker production deploy: pnpm store, web CMD, localhost port bindings
+- Silent compile failures; TeX Live installation in compiler image
+- Docker build and PostgreSQL 16 boot migrations
+- SyncTeX reverse lookup Y coordinate mapping
+- Deploy build after SyncTeX integration
+
+[Unreleased]: https://github.com/amine0110/plicum/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/amine0110/plicum/releases/tag/v0.1.0
