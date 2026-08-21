@@ -16,6 +16,8 @@ interface PdfPageProxy {
   view: number[];
   rotate?: number;
   getViewport: (params: { scale: number; rotation?: number }) => {
+    width: number;
+    height: number;
     convertToPdfPoint: (x: number, y: number) => number[];
   };
 }
