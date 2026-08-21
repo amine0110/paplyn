@@ -2,7 +2,13 @@
 
 import { useState, useRef, useCallback } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
-import type { PDFPageProxy } from "pdfjs-dist";
+
+/** Minimal pdf.js page handle used for SyncTeX reverse lookup (react-pdf onRenderSuccess). */
+interface PdfPageProxy {
+  getViewport: (params: { scale: number }) => {
+    convertToPdfPoint: (x: number, y: number) => number[];
+  };
+}
 import { ChevronLeft, ChevronRight, Download, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { downloadPdfBase64 } from "@/lib/project-files";
@@ -43,7 +49,7 @@ export function PdfPreview({
   const [numPages, setNumPages] = useState(0);
   const [page, setPage] = useState(1);
   const [scale, setScale] = useState(0.95);
-  const pageProxyRef = useRef<PDFPageProxy | null>(null);
+  const pageProxyRef = useRef<PdfPageProxy | null>(null);
 
   const handlePageClick = useCallback(
     async (event: React.MouseEvent<HTMLDivElement>) => {

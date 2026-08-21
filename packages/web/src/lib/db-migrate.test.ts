@@ -155,7 +155,8 @@ describe("migration SQL files", () => {
     expect(files.length).toBeGreaterThanOrEqual(3);
 
     const init = await readFile(join(drizzleDir, "0000_init.sql"), "utf8");
-    expect(init).toContain("CREATE TYPE IF NOT EXISTS");
+    expect(init).not.toContain("CREATE TYPE IF NOT EXISTS");
+    expect(init).toContain("WHEN duplicate_object THEN NULL");
     expect(init).toContain("ADD COLUMN IF NOT EXISTS");
     expect(init).toContain("CREATE UNIQUE INDEX IF NOT EXISTS");
 
@@ -164,5 +165,17 @@ describe("migration SQL files", () => {
 
     const invite = await readFile(join(drizzleDir, "0002_invite_email_optional.sql"), "utf8");
     expect(invite).toContain("DROP NOT NULL");
+  });
+
+  it("0000_init.sql enum creation is valid on PostgreSQL 16 (no CREATE TYPE IF NOT EXISTS)", async () => {
+    const { readFile } = await import("fs/promises");
+    const { join } = await import("path");
+    const init = await readFile(join(__dirname, "../../drizzle/0000_init.sql"), "utf8");
+
+    expect(init.match(/DO \$\$ BEGIN/g)?.length).toBe(3);
+    expect(init).toContain("CREATE TYPE plan AS ENUM");
+    expect(init).toContain("CREATE TYPE member_role AS ENUM");
+    expect(init).toContain("CREATE TYPE invite_role AS ENUM");
+    expect(init).toContain("WHEN duplicate_object THEN NULL");
   });
 });
