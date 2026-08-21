@@ -26,6 +26,7 @@ import {
   resolveMainFileAfterRename,
 } from "@/lib/project-files";
 import { CompilePanel } from "@/components/compile-panel";
+import { ProjectSettingsDialog } from "@/components/project-settings-dialog";
 import { AiSidebar } from "@/components/ai-sidebar";
 import { LayoutModeSwitcher } from "@/components/layout-mode-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -41,6 +42,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   BookOpen,
+  Settings,
   X,
 } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
@@ -89,6 +91,7 @@ export default function ProjectPage() {
     useState<ProofLayoutPreference>("columns");
   const [showAi, setShowAi] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [shareEmail, setShareEmail] = useState("");
   const [shareRole, setShareRole] = useState<"editor" | "viewer">("editor");
 
@@ -542,6 +545,12 @@ export default function ProjectPage() {
             <Sparkles className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">AI</span>
           </Button>
+          {canEdit && (
+            <Button variant="ghost" size="sm" onClick={() => setShowSettings(true)}>
+              <Settings className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Settings</span>
+            </Button>
+          )}
           <Button variant="ghost" size="sm" onClick={() => setShowShare(true)}>
             <Share2 className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Share</span>
@@ -687,6 +696,20 @@ export default function ProjectPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {showSettings && project && (
+        <ProjectSettingsDialog
+          project={project}
+          open={showSettings}
+          onClose={() => setShowSettings(false)}
+          onSaved={(updated) => {
+            setProject(updated);
+            if (updated.mainFile !== activeFile && files.some((f) => f.path === updated.mainFile)) {
+              setActiveFile(updated.mainFile);
+            }
+          }}
+        />
       )}
     </div>
   );

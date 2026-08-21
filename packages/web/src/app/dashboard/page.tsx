@@ -7,7 +7,8 @@ import { Nav } from "@/components/nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Archive, FileText } from "lucide-react";
+import { ProjectSettingsDialog } from "@/components/project-settings-dialog";
+import { Plus, Archive, FileText, Copy, Settings, Trash2 } from "lucide-react";
 import type { Project } from "@/lib/schema";
 
 const TEMPLATES = [
@@ -27,6 +28,7 @@ export default function DashboardPage() {
   const [template, setTemplate] = useState("blank");
   const [creating, setCreating] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [settingsProject, setSettingsProject] = useState<Project | null>(null);
 
   const loadProjects = useCallback(async () => {
     const res = await fetch("/api/projects");
@@ -63,12 +65,54 @@ export default function DashboardPage() {
   }
 
   async function archiveProject(id: string, archived: boolean) {
-    await fetch(`/api/projects/${id}`, {
+    const label = archived ? "archive" : "unarchive";
+    if (!confirm(`Are you sure you want to ${label} this project?`)) return;
+
+    const res = await fetch(`/api/projects/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ archived }),
     });
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.error || `Failed to ${label} project`);
+      return;
+    }
     loadProjects();
+  }
+
+  async function duplicateProject(id: string) {
+    const res = await fetch(`/api/projects/${id}/duplicate`, { method: "POST" });
+    if (res.ok) {
+      const project = await res.json();
+      router.push(`/project/${project.id}`);
+      return;
+    }
+    const err = await res.json();
+    alert(err.error || "Failed to duplicate project");
+  }
+
+  async function deleteProject(id: string, projectName: string) {
+    if (
+      !confirm(
+        `Permanently delete "${projectName}"? This removes all files and cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.error || "Failed to delete project");
+      return;
+    }
+    loadProjects();
+  }
+
+  function handleSettingsSaved(updated: Project) {
+    setOwned((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    setSettingsProject(null);
   }
 
   const visibleOwned = owned.filter((p) => showArchived || !p.archived);
@@ -101,7 +145,14 @@ export default function DashboardPage() {
                     <h2 className="text-sm font-medium text-ink-muted mb-3">Your projects</h2>
                     <div className="space-y-2">
                       {visibleOwned.map((p) => (
-                        <ProjectRow key={p.id} project={p} onArchive={archiveProject} />
+                        <ProjectRow
+                          key={p.id}
+                          project={p}
+                          onArchive={archiveProject}
+                          onDuplicate={duplicateProject}
+                          onDelete={deleteProject}
+                          onSettings={setSettingsProject}
+                        />
                       ))}
                     </div>
                   </section>
@@ -120,6 +171,9 @@ export default function DashboardPage() {
                           <div>
                             <span className="font-medium">{p.name}</span>
                             <span className="text-xs text-ink-faint ml-2 capitalize">{p.memberRole}</span>
+                            <span className="text-xs text-ink-faint ml-2">
+                              {p.mainFile} · {p.compiler}
+                            </span>
                           </div>
                           <span className="text-xs text-ink-faint">
                             {new Date(p.updatedAt).toLocaleDateString()}
@@ -182,6 +236,15 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {settingsProject && (
+        <ProjectSettingsDialog
+          project={settingsProject}
+          open={!!settingsProject}
+          onClose={() => setSettingsProject(null)}
+          onSaved={handleSettingsSaved}
+        />
+      )}
     </div>
   );
 }
@@ -189,25 +252,57 @@ export default function DashboardPage() {
 function ProjectRow({
   project,
   onArchive,
+  onDuplicate,
+  onDelete,
+  onSettings,
 }: {
   project: Project;
   onArchive: (id: string, archived: boolean) => void;
+  onDuplicate: (id: string) => void;
+  onDelete: (id: string, name: string) => void;
+  onSettings: (project: Project) => void;
 }) {
   return (
     <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-surface hover:bg-canvas-dark transition-colors group">
-      <Link href={`/project/${project.id}`} className="flex-1">
-        <span className="font-medium">{project.name}</span>
-        {project.archived && <span className="text-xs text-ink-faint ml-2">Archived</span>}
-        <span className="text-xs text-ink-faint ml-2">{project.template}</span>
+      <Link href={`/project/${project.id}`} className="flex-1 min-w-0">
+        <div className="font-medium truncate">{project.name}</div>
+        <div className="text-xs text-ink-faint mt-0.5 truncate">
+          {project.archived && <span className="mr-2">Archived</span>}
+          {project.mainFile} · {project.compiler}
+          {project.description && <span className="ml-2">— {project.description}</span>}
+        </div>
       </Link>
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-ink-faint">{new Date(project.updatedAt).toLocaleDateString()}</span>
+      <div className="flex items-center gap-1 shrink-0 ml-2">
+        <span className="text-xs text-ink-faint hidden sm:inline">
+          {new Date(project.updatedAt).toLocaleDateString()}
+        </span>
+        <button
+          onClick={() => onSettings(project)}
+          className="opacity-0 group-hover:opacity-100 text-ink-faint hover:text-ink p-1"
+          title="Settings"
+        >
+          <Settings className="h-4 w-4" />
+        </button>
+        <button
+          onClick={() => onDuplicate(project.id)}
+          className="opacity-0 group-hover:opacity-100 text-ink-faint hover:text-ink p-1"
+          title="Duplicate"
+        >
+          <Copy className="h-4 w-4" />
+        </button>
         <button
           onClick={() => onArchive(project.id, !project.archived)}
           className="opacity-0 group-hover:opacity-100 text-ink-faint hover:text-ink p-1"
           title={project.archived ? "Unarchive" : "Archive"}
         >
           <Archive className="h-4 w-4" />
+        </button>
+        <button
+          onClick={() => onDelete(project.id, project.name)}
+          className="opacity-0 group-hover:opacity-100 text-ink-faint hover:text-error p-1"
+          title="Delete permanently"
+        >
+          <Trash2 className="h-4 w-4" />
         </button>
       </div>
     </div>
