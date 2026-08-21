@@ -98,7 +98,7 @@ export async function waitForDatabase(
     const client = postgres(databaseUrl, { max: 1, connect_timeout: 5 });
     try {
       await client`SELECT 1`;
-      return client;
+      return client as unknown as SqlClient;
     } catch (error) {
       lastError = error;
       await client.end({ timeout: 1 }).catch(() => {});
