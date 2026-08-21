@@ -83,6 +83,7 @@ export default function ProjectPage() {
 
   const [compiling, setCompiling] = useState(false);
   const [pdfData, setPdfData] = useState<string | null>(null);
+  const [synctexData, setSynctexData] = useState<string | null>(null);
   const [compileLog, setCompileLog] = useState("");
   const [compileErrors, setCompileErrors] = useState<CompileError[]>([]);
   const [showLog, setShowLog] = useState(false);
@@ -235,6 +236,9 @@ export default function ProjectPage() {
         }
         if (result.success && result.pdf) {
           setPdfData(result.pdf);
+          setSynctexData(result.synctex ?? null);
+        } else if (!result.success) {
+          setSynctexData(result.synctex ?? null);
         }
       }
     } catch {
@@ -478,6 +482,9 @@ export default function ProjectPage() {
       </div>
       <PdfPreview
         pdfData={pdfData}
+        synctexData={synctexData}
+        projectFiles={files.map((f) => f.path)}
+        onJumpToLine={handleJumpToLine}
         loading={compiling}
         showDownload
         downloadFilename={project?.name ?? "manuscript"}

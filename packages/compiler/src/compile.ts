@@ -26,6 +26,7 @@ export function buildEngineArgs(mainPath: string, workDir: string): string[] {
   return [
     "-interaction=nonstopmode",
     "-halt-on-error",
+    "-synctex=1",
     "-output-directory",
     workDir,
     mainPath,
@@ -321,12 +322,27 @@ export async function compileProject(options: CompileOptions): Promise<CompileRe
 
     const pdfPath = join(workDir, `${mainBase}.pdf`);
     let pdfBase64: string | undefined;
+    let synctex: string | undefined;
 
     try {
       const pdfBuffer = await readFile(pdfPath);
       pdfBase64 = pdfBuffer.toString("base64");
     } catch {
       // PDF not generated
+    }
+
+    try {
+      const synctexGzPath = join(workDir, `${mainBase}.synctex.gz`);
+      const synctexPath = join(workDir, `${mainBase}.synctex`);
+      let synctexBuffer: Buffer | undefined;
+      try {
+        synctexBuffer = await readFile(synctexGzPath);
+      } catch {
+        synctexBuffer = await readFile(synctexPath);
+      }
+      synctex = synctexBuffer.toString("base64");
+    } catch {
+      // SyncTeX not generated — reverse sync unavailable
     }
 
     const errors = [
@@ -347,6 +363,7 @@ export async function compileProject(options: CompileOptions): Promise<CompileRe
     return {
       success: !hasErrors && !!pdfBase64,
       pdf: pdfBase64,
+      synctex,
       log: fullLog,
       errors,
       durationMs: Date.now() - start,

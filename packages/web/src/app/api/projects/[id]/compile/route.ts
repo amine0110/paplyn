@@ -18,6 +18,7 @@ interface CompileError {
 interface CompileResult {
   success: boolean;
   pdf?: string;
+  synctex?: string;
   log: string;
   errors: CompileError[];
   durationMs: number;

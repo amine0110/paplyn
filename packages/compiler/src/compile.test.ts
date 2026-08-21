@@ -22,10 +22,11 @@ describe("latex engine helpers", () => {
     expect(isLatexEngine("latexmk")).toBe(false);
   });
 
-  it("builds nonstopmode engine args with output directory", () => {
+  it("builds nonstopmode engine args with synctex and output directory", () => {
     expect(buildEngineArgs("/tmp/work/main.tex", "/tmp/work")).toEqual([
       "-interaction=nonstopmode",
       "-halt-on-error",
+      "-synctex=1",
       "-output-directory",
       "/tmp/work",
       "/tmp/work/main.tex",
