@@ -140,6 +140,47 @@ describe("auth validation", () => {
     expect("short".length).toBeLessThan(minLength);
     expect("longenough".length).toBeGreaterThanOrEqual(minLength);
   });
+
+  it("defines better-auth account fields including issuer", async () => {
+    const { getTableColumns } = await import("drizzle-orm");
+    const { account, session, user, verification } = await import("@/lib/schema");
+
+    const accountColumns = Object.keys(getTableColumns(account));
+    const requiredAccountFields = [
+      "id",
+      "accountId",
+      "providerId",
+      "issuer",
+      "userId",
+      "accessToken",
+      "refreshToken",
+      "idToken",
+      "accessTokenExpiresAt",
+      "refreshTokenExpiresAt",
+      "scope",
+      "password",
+      "createdAt",
+      "updatedAt",
+    ];
+    for (const field of requiredAccountFields) {
+      expect(accountColumns, `account.${field}`).toContain(field);
+    }
+
+    const sessionColumns = Object.keys(getTableColumns(session));
+    for (const field of ["id", "expiresAt", "token", "userId", "ipAddress", "userAgent", "createdAt", "updatedAt"]) {
+      expect(sessionColumns, `session.${field}`).toContain(field);
+    }
+
+    const userColumns = Object.keys(getTableColumns(user));
+    for (const field of ["id", "name", "email", "emailVerified", "image", "createdAt", "updatedAt"]) {
+      expect(userColumns, `user.${field}`).toContain(field);
+    }
+
+    const verificationColumns = Object.keys(getTableColumns(verification));
+    for (const field of ["id", "identifier", "value", "expiresAt", "createdAt", "updatedAt"]) {
+      expect(verificationColumns, `verification.${field}`).toContain(field);
+    }
+  });
 });
 
 describe("compile request validation", () => {
