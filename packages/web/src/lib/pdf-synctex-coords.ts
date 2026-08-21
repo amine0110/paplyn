@@ -2,8 +2,10 @@
  * Map PDF viewer click coordinates to SyncTeX lookup coordinates.
  *
  * pdf.js viewports use DOM space (origin top-left). `convertToPdfPoint` returns
- * PDF user space (origin bottom-left, Y up). SyncTeX block geometry uses the same
- * PDF user space; `findSynctexSource` subtracts the file's X/Y offset before matching.
+ * PDF user space (origin bottom-left, Y up). SyncTeX stores geometry with a
+ * top-left origin and Y increasing downward (see SyncTeX README). LaTeX-Workshop
+ * uses `getPagePoint(x, canvasHeight - y)` for reverse sync; the equivalent here
+ * is `convertToPdfPoint(clickX, viewport.height - clickY)`.
  */
 
 export interface PdfViewportLike {
@@ -35,7 +37,7 @@ export function domClickOffset(
 }
 
 /**
- * Convert a click on the rendered PDF page to PDF user-space (x, y) in points.
+ * Convert a click on the rendered PDF page to SyncTeX (x, y) in points.
  * `clickX`/`clickY` must be relative to the page canvas origin (top-left).
  */
 export function viewportClickToSynctexPoint(
@@ -43,8 +45,11 @@ export function viewportClickToSynctexPoint(
   clickY: number,
   viewport: PdfViewportLike
 ): [number, number] {
-  const [pdfX, pdfY] = viewport.convertToPdfPoint(clickX, clickY);
-  return [pdfX, pdfY];
+  const [synctexX, synctexY] = viewport.convertToPdfPoint(
+    clickX,
+    viewport.height - clickY
+  );
+  return [synctexX, synctexY];
 }
 
 /** End-to-end: browser click on the canvas → SyncTeX lookup point. */
