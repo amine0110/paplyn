@@ -1,4 +1,5 @@
 import { execSync } from "child_process";
+import { existsSync } from "fs";
 import { readdir, readFile } from "fs/promises";
 import { join } from "path";
 import postgres from "postgres";
@@ -6,7 +7,7 @@ import postgres from "postgres";
 const MIGRATION_TABLE = "_sql_migrations";
 
 export interface SqlClient {
-  unsafe: (query: string) => Promise<unknown>;
+  unsafe: (query: string, params?: unknown[]) => Promise<unknown>;
   end: (options?: { timeout?: number }) => Promise<void>;
 }
 
@@ -115,8 +116,29 @@ export async function waitForDatabase(
   );
 }
 
+export function drizzleKitPath(cwd: string): string {
+  return join(cwd, "node_modules", ".bin", "drizzle-kit");
+}
+
+export function drizzleKitAvailable(
+  cwd: string,
+  exists: (path: string) => boolean = existsSync
+): boolean {
+  return exists(drizzleKitPath(cwd));
+}
+
+/** Optional drizzle-kit push when SKIP_DB_PUSH is unset and the binary exists. */
+export function shouldRunDrizzlePush(options: {
+  cwd: string;
+  skipDbPush?: string;
+  exists?: (path: string) => boolean;
+}): boolean {
+  if (options.skipDbPush === "1") return false;
+  return drizzleKitAvailable(options.cwd, options.exists);
+}
+
 export function pushSchema(options: { cwd: string; databaseUrl: string }): void {
-  const drizzleKit = join(options.cwd, "node_modules", ".bin", "drizzle-kit");
+  const drizzleKit = drizzleKitPath(options.cwd);
   execSync(`${drizzleKit} push --force`, {
     cwd: options.cwd,
     env: { ...process.env, DATABASE_URL: options.databaseUrl },
@@ -129,7 +151,7 @@ export async function runDatabaseMigrations(options: MigrationOptions): Promise<
     databaseUrl,
     drizzleDir,
     cwd,
-    skipPush = false,
+    skipPush = true,
     skipSql = false,
     maxAttempts = 30,
     delayMs = 2000,
@@ -140,8 +162,12 @@ export async function runDatabaseMigrations(options: MigrationOptions): Promise<
 
   try {
     if (!skipPush) {
-      console.log("Pushing schema via drizzle-kit…");
-      pushSchema({ cwd, databaseUrl });
+      if (!drizzleKitAvailable(cwd)) {
+        console.log("drizzle-kit not found, skipping schema push.");
+      } else {
+        console.log("Pushing schema via drizzle-kit…");
+        pushSchema({ cwd, databaseUrl });
+      }
     }
 
     if (!skipSql) {

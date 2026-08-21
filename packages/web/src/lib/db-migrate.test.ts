@@ -6,6 +6,8 @@ import {
   getAppliedMigrations,
   applyPendingSqlMigrations,
   recordMigration,
+  shouldRunDrizzlePush,
+  drizzleKitAvailable,
   type SqlClient,
 } from "./db-migrate";
 import { mkdtemp, writeFile, rm } from "fs/promises";
@@ -98,6 +100,48 @@ describe("SQL migration runner", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("shouldRunDrizzlePush", () => {
+  it("skips push when SKIP_DB_PUSH=1", () => {
+    expect(
+      shouldRunDrizzlePush({
+        cwd: "/app",
+        skipDbPush: "1",
+        exists: () => true,
+      })
+    ).toBe(false);
+  });
+
+  it("skips push when drizzle-kit is missing", () => {
+    expect(
+      shouldRunDrizzlePush({
+        cwd: "/app",
+        exists: () => false,
+      })
+    ).toBe(false);
+  });
+
+  it("runs push only when SKIP_DB_PUSH is unset and drizzle-kit exists", () => {
+    expect(
+      shouldRunDrizzlePush({
+        cwd: "/app",
+        exists: (path) => path.endsWith("drizzle-kit"),
+      })
+    ).toBe(true);
+  });
+});
+
+describe("drizzleKitAvailable", () => {
+  it("checks the drizzle-kit binary path under node_modules", () => {
+    const cwd = "/app";
+    const seen: string[] = [];
+    drizzleKitAvailable(cwd, (path) => {
+      seen.push(path);
+      return path === "/app/node_modules/.bin/drizzle-kit";
+    });
+    expect(seen).toEqual(["/app/node_modules/.bin/drizzle-kit"]);
   });
 });
 
