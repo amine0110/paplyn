@@ -18,5 +18,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const token = createCollabToken(id, session.user.id, session.user.name);
   const wsUrl = getCollabWsUrl(id, token, req);
 
-  return NextResponse.json({ token, wsUrl, canEdit: access.canEdit });
+  return NextResponse.json({
+    token,
+    wsUrl,
+    canEdit: access.canEdit,
+    role: access.role,
+  });
 }

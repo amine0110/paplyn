@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,8 +10,11 @@ import { Label } from "@/components/ui/label";
 import { Nav } from "@/components/nav";
 import { PRODUCT } from "@/lib/product";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = searchParams.get("next") || "/dashboard";
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -27,7 +30,7 @@ export default function LoginPage() {
       if (result.error) {
         setError(result.error.message || "Invalid credentials");
       } else {
-        router.push("/dashboard");
+        router.push(nextPath.startsWith("/") ? nextPath : "/dashboard");
       }
     } catch {
       setError("Something went wrong");
@@ -61,5 +64,13 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-ink-muted">Loading…</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -27,19 +27,18 @@ import {
 } from "@/lib/project-files";
 import { CompilePanel } from "@/components/compile-panel";
 import { ProjectSettingsDialog } from "@/components/project-settings-dialog";
+import { ShareDialog } from "@/components/share-dialog";
+import { CollabPresence } from "@/components/collab-presence";
 import { AiSidebar } from "@/components/ai-sidebar";
 import { EditorStatusBar, EditorToolbar } from "@/components/editor-toolbar";
 import { LayoutModeSwitcher } from "@/components/layout-mode-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Play,
   Sparkles,
   Share2,
   ChevronLeft,
-  Users,
   PanelLeftClose,
   PanelLeftOpen,
   BookOpen,
@@ -50,7 +49,7 @@ import type { EditorView } from "@codemirror/view";
 import type { Project } from "@/lib/schema";
 import type { DocumentStats } from "@/lib/document-stats";
 import { countDocumentStats } from "@/lib/document-stats";
-import { PRODUCT } from "@/lib/product";
+import { canManageSharing, type ProjectRole } from "@/lib/project-sharing";
 import {
   layoutShowsProof,
   openProofLayout,
@@ -78,6 +77,7 @@ export default function ProjectPage() {
   const [files, setFiles] = useState<FileNode[]>([]);
   const [activeFile, setActiveFile] = useState<string | null>(null);
   const [canEdit, setCanEdit] = useState(false);
+  const [userRole, setUserRole] = useState<ProjectRole>("viewer");
   const [collabToken, setCollabToken] = useState<string | null>(null);
   const [collabBaseUrl, setCollabBaseUrl] = useState("ws://localhost:1234");
 
@@ -99,8 +99,6 @@ export default function ProjectPage() {
   const [showAi, setShowAi] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [shareEmail, setShareEmail] = useState("");
-  const [shareRole, setShareRole] = useState<"editor" | "viewer">("editor");
 
   const editorViewRef = useRef<EditorView | null>(null);
   const [editorView, setEditorView] = useState<EditorView | null>(null);
@@ -154,6 +152,7 @@ export default function ProjectPage() {
       }))
     );
     setCanEdit(collab.canEdit);
+    setUserRole(collab.role ?? "viewer");
     setCollabToken(collab.token);
 
     const wsUrl = collab.wsUrl || "";
@@ -247,16 +246,19 @@ export default function ProjectPage() {
   }
 
   async function createFile(path: string) {
+    if (!canEdit) return;
     await saveFile(path, "", false);
     setActiveFile(path);
   }
 
   async function createFolder(folderName: string) {
+    if (!canEdit) return;
     const path = folderPlaceholderPath(folderName);
     await saveFile(path, "", false);
   }
 
   async function deleteFile(path: string) {
+    if (!canEdit) return;
     if (!confirm(`Delete ${path}?`)) return;
     await fetch(`/api/projects/${projectId}/files?path=${encodeURIComponent(path)}`, {
       method: "DELETE",
@@ -268,6 +270,7 @@ export default function ProjectPage() {
   }
 
   async function deleteFolder(path: string) {
+    if (!canEdit) return;
     if (!confirm(`Delete folder ${path} and all its contents?`)) return;
     const res = await fetch(
       `/api/projects/${projectId}/files?path=${encodeURIComponent(path)}&recursive=true`,
@@ -287,6 +290,7 @@ export default function ProjectPage() {
   }
 
   async function renamePath(from: string, to: string) {
+    if (!canEdit) return;
     const res = await fetch(`/api/projects/${projectId}/files`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -335,6 +339,7 @@ export default function ProjectPage() {
   }
 
   async function uploadFiles(fileList: FileList) {
+    if (!canEdit) return;
     const folder = folderPathFromFile(activeFile ?? "");
     for (const file of Array.from(fileList)) {
       const path = joinPath(folder, file.name);
@@ -344,23 +349,6 @@ export default function ProjectPage() {
       if (!activeFile || isFolderPlaceholder(activeFile)) {
         setActiveFile(path);
       }
-    }
-  }
-
-  async function shareProject(e: React.FormEvent) {
-    e.preventDefault();
-    const res = await fetch(`/api/projects/${projectId}/invite`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: shareEmail, role: shareRole }),
-    });
-    if (res.ok) {
-      alert("Invitation sent!");
-      setShowShare(false);
-      setShareEmail("");
-    } else {
-      const err = await res.json();
-      alert(err.error || "Failed to invite");
     }
   }
 
@@ -567,6 +555,12 @@ export default function ProjectPage() {
           </button>
           <div className="h-4 w-px bg-border hidden sm:block" />
           <h1 className="font-serif text-base font-medium truncate">{project.name}</h1>
+          <CollabPresence
+            projectId={projectId}
+            collabToken={collabToken}
+            collabBaseUrl={collabBaseUrl}
+            className="hidden md:flex items-center gap-2 min-w-0"
+          />
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
@@ -700,45 +694,14 @@ export default function ProjectPage() {
         )}
       </div>
 
-      {showShare && (
-        <div className="fixed inset-0 bg-ink/20 flex items-center justify-center z-50 p-4">
-          <div className="bg-paper rounded-lg border border-border p-6 w-full max-w-md shadow-lg">
-            <div className="flex items-center gap-2 mb-4">
-              <Users className="h-5 w-5 text-accent" />
-              <h2 className="font-serif text-xl font-semibold">Share manuscript</h2>
-            </div>
-            <form onSubmit={shareProject} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="share-email">Email address</Label>
-                <Input
-                  id="share-email"
-                  type="email"
-                  value={shareEmail}
-                  onChange={(e) => setShareEmail(e.target.value)}
-                  required
-                  placeholder={PRODUCT.emails.invitePlaceholder}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Permission</Label>
-                <select
-                  value={shareRole}
-                  onChange={(e) => setShareRole(e.target.value as "editor" | "viewer")}
-                  className="w-full h-9 rounded-md border border-border px-3 text-sm bg-paper text-ink"
-                >
-                  <option value="editor">Can edit</option>
-                  <option value="viewer">Can view</option>
-                </select>
-              </div>
-              <div className="flex gap-2 justify-end">
-                <Button type="button" variant="ghost" onClick={() => setShowShare(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit">Send invite</Button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {showShare && project && (
+        <ShareDialog
+          open={showShare}
+          projectId={projectId}
+          projectName={project.name}
+          canManage={canManageSharing(userRole)}
+          onClose={() => setShowShare(false)}
+        />
       )}
 
       {showSettings && project && (

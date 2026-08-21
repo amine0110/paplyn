@@ -15,6 +15,7 @@ import { yCollab } from "y-codemirror.next";
 import { useTheme } from "@/components/theme-provider";
 import { latexCompletionSource } from "@/lib/latex-completion";
 import { countDocumentStats, type DocumentStats } from "@/lib/document-stats";
+import { colorForUserId, parseCollabToken } from "@/lib/project-sharing";
 
 const latexHighlightLight = HighlightStyle.define([
   { tag: t.keyword, color: "#2d6a6a" },
@@ -91,6 +92,14 @@ export function LatexEditor({
       provider = new WebsocketProvider(collabBaseUrl, projectId, ydoc, {
         params: { token: collabToken },
       });
+      const payload = parseCollabToken(collabToken);
+      if (payload) {
+        provider.awareness.setLocalStateField("user", {
+          userId: payload.userId,
+          name: payload.userName,
+          color: colorForUserId(payload.userId),
+        });
+      }
       provider.on("sync", () => {
         if (ytext.length === 0 && initialContent) {
           ytext.insert(0, initialContent);
