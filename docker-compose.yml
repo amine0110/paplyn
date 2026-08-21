@@ -40,6 +40,10 @@ services:
     environment:
       COLLAB_PORT: 1234
       COLLAB_SECRET: ${COLLAB_SECRET:-change-me-collab-secret}
+      DATABASE_URL: postgresql://quire:quire@postgres:5432/quire
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:1234/health"]
       interval: 10s
