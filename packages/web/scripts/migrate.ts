@@ -1,6 +1,6 @@
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
-import { runDatabaseMigrations, shouldRunDrizzlePush } from "../src/lib/db-migrate";
+import { runDatabaseMigrations, shouldRunDrizzlePush } from "../src/lib/db-migrate.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, "..");
