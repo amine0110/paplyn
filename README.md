@@ -28,6 +28,20 @@ docker compose up --build
 
 Open [http://localhost:3000](http://localhost:3000), create an account, and start writing. The first registered user becomes admin in self-hosted mode.
 
+### Production (VPS)
+
+On a server, bind services to localhost only and put a reverse proxy (nginx, Caddy, etc.) in front of the web app. Use the production overlay so Compose replaces default `0.0.0.0` port binds instead of adding duplicate ones:
+
+```bash
+cp .env.example .env
+# Set BETTER_AUTH_SECRET, COLLAB_SECRET, BETTER_AUTH_URL, NEXT_PUBLIC_APP_URL,
+# NEXT_PUBLIC_COLLAB_URL, and other values for your domain (do not commit .env)
+
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+```
+
+`docker-compose.prod.yml` publishes postgres (5432), compiler (3001), collab (1234), and web (3000) on `127.0.0.1` only via Compose `ports: !override`.
+
 ### Services
 
 | Service   | Port | Description                    |

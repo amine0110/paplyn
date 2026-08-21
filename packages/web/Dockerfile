@@ -29,10 +29,11 @@ COPY --from=builder /app/packages/web/public ./public
 COPY --from=builder /app/packages/web/templates ./templates
 COPY --from=builder --chown=nextjs:nodejs /app/packages/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/packages/web/.next/static ./packages/web/.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules /node_modules
 
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["node", "packages/web/server.js"]
+CMD ["node", "server.js"]

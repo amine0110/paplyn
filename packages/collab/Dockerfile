@@ -21,6 +21,7 @@ WORKDIR /app
 COPY --from=builder /app/packages/collab/dist ./dist
 COPY --from=builder /app/packages/collab/package.json ./
 COPY --from=deps /app/packages/collab/node_modules ./node_modules
+COPY --from=deps /app/node_modules /node_modules
 
 ENV COLLAB_PORT=1234
 EXPOSE 1234
