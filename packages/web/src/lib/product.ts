@@ -39,11 +39,11 @@ export const PRODUCT = {
   metaDescription: SHORT_DESCRIPTION,
 
   /** Landing hero */
-  headline: "Write research.",
-  headlineLine2: "Compile with confidence.",
+  headline: "A manuscript studio",
+  headlineLine2: "for research writing.",
 
   /** Sentence fragment after product name: "{name} is a modern LaTeX workspace..." */
-  landingLead: `is a modern LaTeX workspace for researchers and students. Real-time collaboration, instant PDF preview, and AI assistance — hosted or self-hosted.`,
+  landingLead: `is a calm workspace for LaTeX manuscripts — real-time collaboration, proof preview, and AI assistance. Hosted or on your own servers.`,
 
   /** SaaS offering label on landing */
   get hostedEditionName() {

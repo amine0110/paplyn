@@ -39,9 +39,11 @@ export default function SignupPage() {
   return (
     <div className="min-h-screen">
       <Nav />
-      <div className="max-w-sm mx-auto px-4 py-20">
-        <h1 className="font-serif text-2xl font-semibold text-center mb-8">Create your account</h1>
-        <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="max-w-sm mx-auto px-4 py-16 md:py-24">
+        <div className="bg-paper border border-border rounded-sm p-8 shadow-sm">
+          <h1 className="font-serif text-2xl font-medium text-center mb-2">Create your account</h1>
+          <p className="text-sm text-ink-faint text-center mb-8">Start writing your first manuscript.</p>
+          <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
             <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
@@ -61,8 +63,9 @@ export default function SignupPage() {
         </form>
         <p className="text-sm text-ink-muted text-center mt-6">
           Already have an account?{" "}
-          <Link href="/login" className="text-navy hover:underline">Sign in</Link>
+          <Link href="/login" className="text-accent hover:underline">Sign in</Link>
         </p>
+        </div>
       </div>
     </div>
   );

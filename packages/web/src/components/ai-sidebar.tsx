@@ -89,10 +89,10 @@ export function AiSidebar({
   ];
 
   return (
-    <div className="flex flex-col h-full border-l border-border bg-surface">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <Sparkles className="h-4 w-4 text-navy" />
+    <div className="flex flex-col h-full border-l border-border bg-paper">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-light">
+        <div className="flex items-center gap-2 text-sm font-medium font-serif">
+          <Sparkles className="h-4 w-4 text-accent" />
           AI Assistant
         </div>
         <Button variant="ghost" size="icon" onClick={onClose}>
@@ -129,8 +129,8 @@ export function AiSidebar({
         {messages.map((msg, i) => (
           <div
             key={i}
-            className={`text-sm rounded-lg p-3 ${
-              msg.role === "user" ? "bg-navy/5 ml-4" : "bg-canvas-dark mr-4"
+            className={`text-sm rounded-sm p-3 ${
+              msg.role === "user" ? "bg-accent/5 ml-4" : "bg-canvas-dark mr-4"
             }`}
           >
             <div className="whitespace-pre-wrap">{msg.content}</div>

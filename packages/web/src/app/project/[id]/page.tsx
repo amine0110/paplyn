@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { FileTree, type FileNode } from "@/components/file-tree";
 import { LatexEditor } from "@/components/latex-editor";
 import { PdfPreview } from "@/components/pdf-preview";
@@ -17,8 +16,11 @@ import {
   Sparkles,
   Share2,
   ChevronLeft,
-  Settings,
   Users,
+  PanelLeftClose,
+  PanelLeftOpen,
+  BookOpen,
+  X,
 } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 import type { Project } from "@/lib/schema";
@@ -50,6 +52,8 @@ export default function ProjectPage() {
   const [showLog, setShowLog] = useState(false);
   const [jumpToLine, setJumpToLine] = useState<number | null>(null);
 
+  const [showOutline, setShowOutline] = useState(true);
+  const [showProof, setShowProof] = useState(false);
   const [showAi, setShowAi] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [shareEmail, setShareEmail] = useState("");
@@ -123,6 +127,7 @@ export default function ProjectPage() {
   async function compile() {
     setCompiling(true);
     setCompileErrors([]);
+    setShowProof(true);
     try {
       const res = await fetch(`/api/projects/${projectId}/compile`, { method: "POST" });
       const result = await res.json();
@@ -219,58 +224,120 @@ export default function ProjectPage() {
   const activeFileContent = files.find((f) => f.path === activeFile)?.content || "";
 
   if (!project) {
-    return <div className="flex items-center justify-center h-screen text-ink-muted">Loading...</div>;
+    return (
+      <div className="flex items-center justify-center h-screen text-ink-muted font-serif">
+        Loading manuscript…
+      </div>
+    );
   }
 
   return (
-    <div className="h-screen flex flex-col">
-      <header className="h-12 border-b border-border bg-surface flex items-center justify-between px-3 shrink-0">
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="text-ink-muted hover:text-ink">
+    <div className="h-screen flex flex-col bg-canvas">
+      {/* Thin manuscript bar */}
+      <header className="h-11 shrink-0 flex items-center justify-between px-4 border-b border-border bg-paper/90 backdrop-blur-sm">
+        <div className="flex items-center gap-3 min-w-0">
+          <Link href="/dashboard" className="text-ink-faint hover:text-ink transition-colors" title="Back to manuscripts">
             <ChevronLeft className="h-4 w-4" />
           </Link>
-          <h1 className="font-serif font-medium truncate max-w-xs">{project.name}</h1>
+          <button
+            onClick={() => setShowOutline(!showOutline)}
+            className="text-ink-faint hover:text-ink transition-colors lg:hidden"
+            title={showOutline ? "Hide outline" : "Show outline"}
+          >
+            {showOutline ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+          </button>
+          <div className="h-4 w-px bg-border hidden sm:block" />
+          <h1 className="font-serif text-base font-medium truncate">{project.name}</h1>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={compile} disabled={compiling}>
+
+        <div className="flex items-center gap-1.5">
+          <Button variant="default" size="sm" onClick={compile} disabled={compiling}>
             <Play className="h-3.5 w-3.5" />
-            {compiling ? "Compiling..." : "Compile"}
+            {compiling ? "Typesetting…" : "Compile"}
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setShowAi(!showAi)}>
+          <Button
+            variant={showProof ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setShowProof(!showProof)}
+          >
+            <BookOpen className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Proof</span>
+          </Button>
+          <Button variant={showAi ? "secondary" : "ghost"} size="sm" onClick={() => setShowAi(!showAi)}>
             <Sparkles className="h-3.5 w-3.5" />
-            AI
+            <span className="hidden sm:inline">AI</span>
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setShowShare(true)}>
             <Share2 className="h-3.5 w-3.5" />
-            Share
+            <span className="hidden sm:inline">Share</span>
           </Button>
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden">
-        <PanelGroup direction="horizontal" className="flex-1">
-          <Panel defaultSize={18} minSize={12} maxSize={30}>
-            <div className="h-full border-r border-border bg-canvas-dark">
-              <div className="px-3 py-2 text-xs font-medium text-ink-muted border-b border-border">Files</div>
-              <FileTree
-                files={files}
-                activeFile={activeFile}
-                onSelect={setActiveFile}
-                onCreate={createFile}
-                onDelete={deleteFile}
-                onUpload={uploadFiles}
-                canEdit={canEdit}
-              />
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Collapsible outline sidebar */}
+        {showOutline && (
+          <aside className="w-52 shrink-0 border-r border-border bg-paper flex flex-col hidden lg:flex">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-border-light">
+              <span className="text-xs font-medium tracking-wide uppercase text-ink-faint">Outline</span>
+              <button
+                onClick={() => setShowOutline(false)}
+                className="text-ink-faint hover:text-ink p-0.5"
+                title="Collapse outline"
+              >
+                <PanelLeftClose className="h-3.5 w-3.5" />
+              </button>
             </div>
-          </Panel>
+            <FileTree
+              files={files}
+              activeFile={activeFile}
+              onSelect={setActiveFile}
+              onCreate={createFile}
+              onDelete={deleteFile}
+              onUpload={uploadFiles}
+              canEdit={canEdit}
+            />
+          </aside>
+        )}
 
-          <PanelResizeHandle className="w-1 bg-border hover:bg-navy/30 transition-colors" />
+        {!showOutline && (
+          <button
+            onClick={() => setShowOutline(true)}
+            className="hidden lg:flex absolute left-0 top-3 z-10 ml-1 p-1.5 rounded-r-md bg-paper border border-l-0 border-border text-ink-faint hover:text-ink shadow-sm"
+            title="Show outline"
+          >
+            <PanelLeftOpen className="h-3.5 w-3.5" />
+          </button>
+        )}
 
-          <Panel defaultSize={showAi ? 42 : 52} minSize={25}>
-            <div className="h-full flex flex-col">
+        {/* Mobile outline overlay */}
+        {showOutline && (
+          <aside className="lg:hidden absolute inset-y-0 left-0 w-64 z-30 bg-paper border-r border-border shadow-lg flex flex-col">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-border-light">
+              <span className="text-xs font-medium tracking-wide uppercase text-ink-faint">Outline</span>
+              <button onClick={() => setShowOutline(false)} className="text-ink-faint hover:text-ink p-0.5">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <FileTree
+              files={files}
+              activeFile={activeFile}
+              onSelect={(path) => { setActiveFile(path); setShowOutline(false); }}
+              onCreate={createFile}
+              onDelete={deleteFile}
+              onUpload={uploadFiles}
+              canEdit={canEdit}
+            />
+          </aside>
+        )}
+
+        {/* Manuscript editor — warm paper sheet */}
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <div className="flex-1 overflow-auto px-4 py-6 md:px-8 md:py-8">
+            <div className="max-w-3xl mx-auto h-full min-h-[480px] manuscript-sheet rounded-sm flex flex-col">
               {activeFile ? (
                 <>
-                  <div className="px-3 py-1.5 text-xs text-ink-faint border-b border-border bg-surface font-mono">
+                  <div className="px-5 py-2 border-b border-border-light text-xs text-ink-faint font-mono shrink-0">
                     {activeFile}
                   </div>
                   <div className="flex-1 overflow-hidden">
@@ -289,50 +356,67 @@ export default function ProjectPage() {
                   </div>
                 </>
               ) : (
-                <div className="flex items-center justify-center h-full text-ink-muted">
-                  Select a file to edit
+                <div className="flex items-center justify-center h-full text-ink-muted font-serif">
+                  Select a file from the outline
                 </div>
               )}
-              <CompilePanel
-                log={compileLog}
-                errors={compileErrors}
-                onJumpToLine={handleJumpToLine}
-                showLog={showLog}
-                onToggleLog={() => setShowLog(!showLog)}
-              />
             </div>
-          </Panel>
+          </div>
+          <CompilePanel
+            log={compileLog}
+            errors={compileErrors}
+            onJumpToLine={handleJumpToLine}
+            showLog={showLog}
+            onToggleLog={() => setShowLog(!showLog)}
+          />
+        </main>
 
-          <PanelResizeHandle className="w-1 bg-border hover:bg-navy/30 transition-colors" />
+        {/* Proof drawer — printed page on desk */}
+        {showProof && (
+          <>
+            <div
+              className="absolute inset-0 bg-ink/10 z-20 lg:bg-transparent lg:pointer-events-none"
+              onClick={() => setShowProof(false)}
+            />
+            <aside className="absolute right-0 top-0 bottom-0 w-full sm:w-[420px] lg:w-[440px] z-30 flex flex-col shadow-2xl border-l border-border proof-desk">
+              <div className="flex items-center justify-between px-4 py-2.5 bg-paper/80 backdrop-blur-sm border-b border-border shrink-0">
+                <div className="flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-accent" />
+                  <span className="font-serif text-sm font-medium">Proof</span>
+                </div>
+                <button onClick={() => setShowProof(false)} className="text-ink-faint hover:text-ink p-1">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <PdfPreview pdfData={pdfData} loading={compiling} />
+            </aside>
+          </>
+        )}
 
-          <Panel defaultSize={showAi ? 25 : 30} minSize={20}>
-            <PdfPreview pdfData={pdfData} loading={compiling} />
-          </Panel>
-
-          {showAi && (
-            <>
-              <PanelResizeHandle className="w-1 bg-border hover:bg-navy/30 transition-colors" />
-              <Panel defaultSize={15} minSize={12} maxSize={25}>
-                <AiSidebar
-                  projectId={projectId}
-                  activeFile={activeFile}
-                  selectedText=""
-                  compileErrors={compileErrors.map((e) => e.message)}
-                  onInsert={handleInsertAtCursor}
-                  onClose={() => setShowAi(false)}
-                />
-              </Panel>
-            </>
-          )}
-        </PanelGroup>
+        {/* AI drawer */}
+        {showAi && (
+          <>
+            <div className="absolute inset-0 bg-ink/10 z-20" onClick={() => setShowAi(false)} />
+            <aside className="absolute right-0 top-0 bottom-0 w-full sm:w-[380px] z-30 shadow-2xl">
+              <AiSidebar
+                projectId={projectId}
+                activeFile={activeFile}
+                selectedText=""
+                compileErrors={compileErrors.map((e) => e.message)}
+                onInsert={handleInsertAtCursor}
+                onClose={() => setShowAi(false)}
+              />
+            </aside>
+          </>
+        )}
       </div>
 
       {showShare && (
         <div className="fixed inset-0 bg-ink/20 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface rounded-lg border border-border p-6 w-full max-w-md shadow-lg">
+          <div className="bg-paper rounded-lg border border-border p-6 w-full max-w-md shadow-lg">
             <div className="flex items-center gap-2 mb-4">
-              <Users className="h-5 w-5 text-navy" />
-              <h2 className="font-serif text-xl font-semibold">Share project</h2>
+              <Users className="h-5 w-5 text-accent" />
+              <h2 className="font-serif text-xl font-semibold">Share manuscript</h2>
             </div>
             <form onSubmit={shareProject} className="space-y-4">
               <div className="space-y-2">
@@ -351,7 +435,7 @@ export default function ProjectPage() {
                 <select
                   value={shareRole}
                   onChange={(e) => setShareRole(e.target.value as "editor" | "viewer")}
-                  className="w-full h-9 rounded-md border border-border px-3 text-sm"
+                  className="w-full h-9 rounded-md border border-border px-3 text-sm bg-paper"
                 >
                   <option value="editor">Can edit</option>
                   <option value="viewer">Can view</option>

@@ -39,9 +39,11 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen">
       <Nav />
-      <div className="max-w-sm mx-auto px-4 py-20">
-        <h1 className="font-serif text-2xl font-semibold text-center mb-8">{PRODUCT.signInHeading}</h1>
-        <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="max-w-sm mx-auto px-4 py-16 md:py-24">
+        <div className="bg-paper border border-border rounded-sm p-8 shadow-sm">
+          <h1 className="font-serif text-2xl font-medium text-center mb-2">{PRODUCT.signInHeading}</h1>
+          <p className="text-sm text-ink-faint text-center mb-8">Return to your manuscripts.</p>
+          <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
@@ -57,8 +59,9 @@ export default function LoginPage() {
         </form>
         <p className="text-sm text-ink-muted text-center mt-6">
           No account?{" "}
-          <Link href="/signup" className="text-navy hover:underline">Create one</Link>
+          <Link href="/signup" className="text-accent hover:underline">Create one</Link>
         </p>
+        </div>
       </div>
     </div>
   );

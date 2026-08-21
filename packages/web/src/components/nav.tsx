@@ -10,23 +10,25 @@ export function Nav() {
   const { data: session } = useSession();
 
   return (
-    <header className="border-b border-border bg-surface/80 backdrop-blur-sm sticky top-0 z-50">
-      <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="font-serif text-xl font-semibold text-navy">{PRODUCT.name}</span>
+    <header className="border-b border-border bg-paper/70 backdrop-blur-sm sticky top-0 z-50">
+      <div className="max-w-5xl mx-auto px-4 h-12 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-2 group">
+          <span className="font-serif text-lg font-medium text-ink group-hover:text-accent transition-colors">
+            {PRODUCT.name}
+          </span>
         </Link>
 
-        <nav className="flex items-center gap-3">
+        <nav className="flex items-center gap-2">
           {session?.user ? (
             <>
-              <Link href="/dashboard" className="text-sm text-ink-muted hover:text-ink">
-                Projects
+              <Link href="/dashboard" className="text-sm text-ink-muted hover:text-ink px-2 py-1">
+                Manuscripts
               </Link>
-              <Link href="/settings" className="text-sm text-ink-muted hover:text-ink">
+              <Link href="/settings" className="text-sm text-ink-muted hover:text-ink px-2 py-1">
                 Settings
               </Link>
               {config.isSelfHosted && (session.user as { role?: string }).role === "admin" && (
-                <Link href="/admin" className="text-sm text-ink-muted hover:text-ink">
+                <Link href="/admin" className="text-sm text-ink-muted hover:text-ink px-2 py-1">
                   Admin
                 </Link>
               )}

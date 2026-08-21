@@ -1,20 +1,24 @@
 @import "tailwindcss";
 
 @theme {
-  --color-canvas: #faf9f7;
-  --color-canvas-dark: #f5f3ef;
-  --color-ink: #1a1a2e;
-  --color-ink-muted: #4a4a5e;
-  --color-ink-faint: #8a8a9e;
-  --color-navy: #1e3a5f;
-  --color-navy-light: #2d5a8a;
-  --color-navy-dark: #0f2744;
-  --color-accent: #c45c26;
-  --color-accent-light: #e07a3f;
-  --color-border: #e8e6e1;
-  --color-surface: #ffffff;
-  --color-error: #b91c1c;
-  --color-success: #15803d;
+  /* Manuscript studio palette — warm paper, ink, verdigris accent */
+  --color-canvas: #f0ebe3;
+  --color-canvas-dark: #e6dfd4;
+  --color-paper: #fdfbf7;
+  --color-ink: #1c1917;
+  --color-ink-muted: #57534e;
+  --color-ink-faint: #a8a29e;
+  --color-navy: #2d6a6a;
+  --color-navy-light: #3d8585;
+  --color-navy-dark: #1f4a4a;
+  --color-accent: #2d6a6a;
+  --color-accent-light: #3d8585;
+  --color-accent-warm: #6b2d3a;
+  --color-border: #ddd6c8;
+  --color-border-light: #ebe5da;
+  --color-surface: #fdfbf7;
+  --color-error: #991b1b;
+  --color-success: #166534;
 
   --font-serif: "Newsreader", "Source Serif 4", Georgia, serif;
   --font-sans: "IBM Plex Sans", "Geist", system-ui, sans-serif;
@@ -45,16 +49,51 @@
   }
 }
 
+/* CodeMirror manuscript sheet */
 .cm-editor {
   height: 100%;
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 1.65;
 }
 .cm-editor .cm-scroller {
   overflow: auto;
 }
 .cm-editor.cm-focused {
   outline: none;
+}
+
+/* Autocomplete popup */
+.cm-tooltip-autocomplete {
+  font-family: var(--font-mono) !important;
+  font-size: 13px !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 6px !important;
+  background: var(--color-paper) !important;
+  box-shadow: 0 4px 16px rgba(28, 25, 23, 0.08) !important;
+}
+.cm-tooltip-autocomplete ul li[aria-selected] {
+  background: rgba(45, 106, 106, 0.12) !important;
+  color: var(--color-ink) !important;
+}
+
+/* Manuscript editor wrapper */
+.manuscript-sheet {
+  background: var(--color-paper);
+  box-shadow:
+    0 1px 3px rgba(28, 25, 23, 0.04),
+    0 0 0 1px var(--color-border-light);
+}
+
+/* Proof drawer — printed page on desk */
+.proof-desk {
+  background: linear-gradient(180deg, #e6dfd4 0%, #ddd6c8 100%);
+}
+.proof-page {
+  background: white;
+  box-shadow:
+    0 2px 8px rgba(28, 25, 23, 0.12),
+    0 8px 24px rgba(28, 25, 23, 0.08);
 }
 
 .react-pdf__Page__canvas {
