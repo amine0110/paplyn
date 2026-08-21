@@ -2,17 +2,23 @@
 
 import { useState, useRef, useCallback } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
-
-/** Minimal pdf.js page handle used for SyncTeX reverse lookup (react-pdf onRenderSuccess). */
-interface PdfPageProxy {
-  getViewport: (params: { scale: number }) => {
-    convertToPdfPoint: (x: number, y: number) => number[];
-  };
-}
 import { ChevronLeft, ChevronRight, Download, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { downloadPdfBase64 } from "@/lib/project-files";
+import {
+  clientClickToSynctexPoint,
+  getPdfPageHeight,
+} from "@/lib/pdf-synctex-coords";
 import { synctexLookupFromBase64 } from "@/lib/synctex";
+
+/** Minimal pdf.js page handle used for SyncTeX reverse lookup (react-pdf onRenderSuccess). */
+interface PdfPageProxy {
+  view: number[];
+  rotate?: number;
+  getViewport: (params: { scale: number; rotation?: number }) => {
+    convertToPdfPoint: (x: number, y: number) => number[];
+  };
+}
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 
@@ -50,23 +56,33 @@ export function PdfPreview({
   const [page, setPage] = useState(1);
   const [scale, setScale] = useState(0.95);
   const pageProxyRef = useRef<PdfPageProxy | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const handlePageClick = useCallback(
     async (event: React.MouseEvent<HTMLDivElement>) => {
       if (!synctexData || !onJumpToLine || !pageProxyRef.current) return;
 
-      const target = event.currentTarget;
-      const rect = target.getBoundingClientRect();
-      const clickX = event.clientX - rect.left;
-      const clickY = event.clientY - rect.top;
-      const viewport = pageProxyRef.current.getViewport({ scale });
-      const [pdfX, pdfY] = viewport.convertToPdfPoint(clickX, clickY);
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const pageProxy = pageProxyRef.current;
+      const viewport = pageProxy.getViewport({
+        scale,
+        rotation: pageProxy.rotate ?? 0,
+      });
+      const [synctexX, synctexY] = clientClickToSynctexPoint(
+        event.clientX,
+        event.clientY,
+        canvas.getBoundingClientRect(),
+        viewport,
+        getPdfPageHeight(pageProxy)
+      );
 
       const location = await synctexLookupFromBase64(
         synctexData,
         page,
-        pdfX,
-        pdfY,
+        synctexX,
+        synctexY,
         projectFiles
       );
       if (location?.line) {
@@ -162,6 +178,7 @@ export function PdfPreview({
               <Page
                 pageNumber={page}
                 scale={scale}
+                canvasRef={canvasRef}
                 renderTextLayer={false}
                 onRenderSuccess={(pdfPage) => {
                   pageProxyRef.current = pdfPage;
