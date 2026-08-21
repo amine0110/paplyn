@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 import type { Project } from "@/lib/schema";
+import { PlicumWordmark } from "@/components/plicum-wordmark";
 import { PRODUCT } from "@/lib/product";
 
 interface CompileError {
@@ -225,11 +226,15 @@ export default function ProjectPage() {
   return (
     <div className="h-screen flex flex-col">
       <header className="h-12 border-b border-border bg-surface flex items-center justify-between px-3 shrink-0">
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="text-ink-muted hover:text-ink">
+        <div className="flex items-center gap-3 min-w-0">
+          <Link href="/dashboard" className="text-ink-muted hover:text-ink shrink-0">
             <ChevronLeft className="h-4 w-4" />
           </Link>
-          <h1 className="font-serif font-medium truncate max-w-xs">{project.name}</h1>
+          <Link href="/dashboard" className="shrink-0">
+            <PlicumWordmark className="h-7" />
+          </Link>
+          <span className="text-ink-faint hidden sm:inline">/</span>
+          <h1 className="font-serif font-medium truncate min-w-0">{project.name}</h1>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={compile} disabled={compiling}>

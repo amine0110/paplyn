@@ -67,7 +67,7 @@ export const PRODUCT = {
   },
 
   get appearanceNote() {
-    return `${PRODUCT_NAME} uses a calm, paper-white theme optimized for long writing sessions. Dark mode coming in a future release.`;
+    return `${PRODUCT_NAME} uses a calm, paper-inspired theme with light and dark modes for long writing sessions.`;
   },
 
   /** AI system prompt persona name */
