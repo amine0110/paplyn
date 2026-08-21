@@ -19,6 +19,8 @@ export interface CompileError {
 export interface CompileResult {
   success: boolean;
   pdf?: string;
+  /** Base64-encoded `.synctex.gz` or `.synctex` bytes for reverse SyncTeX. */
+  synctex?: string;
   log: string;
   errors: CompileError[];
   durationMs: number;

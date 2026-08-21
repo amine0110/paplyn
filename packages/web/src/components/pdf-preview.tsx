@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
+import type { PDFPageProxy } from "pdfjs-dist";
 import { ChevronLeft, ChevronRight, Download, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { downloadPdfBase64 } from "@/lib/project-files";
+import { synctexLookupFromBase64 } from "@/lib/synctex";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 
@@ -17,6 +19,9 @@ interface CompileError {
 
 interface PdfPreviewProps {
   pdfData: string | null;
+  synctexData?: string | null;
+  projectFiles?: string[];
+  onJumpToLine?: (line: number, file?: string) => void;
   loading?: boolean;
   downloadFilename?: string;
   showDownload?: boolean;
@@ -26,6 +31,9 @@ interface PdfPreviewProps {
 
 export function PdfPreview({
   pdfData,
+  synctexData,
+  projectFiles = [],
+  onJumpToLine,
   loading,
   downloadFilename,
   showDownload = false,
@@ -35,6 +43,32 @@ export function PdfPreview({
   const [numPages, setNumPages] = useState(0);
   const [page, setPage] = useState(1);
   const [scale, setScale] = useState(0.95);
+  const pageProxyRef = useRef<PDFPageProxy | null>(null);
+
+  const handlePageClick = useCallback(
+    async (event: React.MouseEvent<HTMLDivElement>) => {
+      if (!synctexData || !onJumpToLine || !pageProxyRef.current) return;
+
+      const target = event.currentTarget;
+      const rect = target.getBoundingClientRect();
+      const clickX = event.clientX - rect.left;
+      const clickY = event.clientY - rect.top;
+      const viewport = pageProxyRef.current.getViewport({ scale });
+      const [pdfX, pdfY] = viewport.convertToPdfPoint(clickX, clickY);
+
+      const location = await synctexLookupFromBase64(
+        synctexData,
+        page,
+        pdfX,
+        pdfY,
+        projectFiles
+      );
+      if (location?.line) {
+        onJumpToLine(location.line, location.file);
+      }
+    },
+    [synctexData, onJumpToLine, page, scale, projectFiles]
+  );
 
   if (loading) {
     return (
@@ -115,7 +149,19 @@ export function PdfPreview({
             loading={<div className="p-12 text-center text-ink-muted text-sm">Loading page…</div>}
             error={<div className="p-12 text-center text-error text-sm">Could not load proof</div>}
           >
-            <Page pageNumber={page} scale={scale} renderTextLayer={false} />
+            <div
+              onClick={synctexData && onJumpToLine ? handlePageClick : undefined}
+              className={synctexData && onJumpToLine ? "cursor-crosshair" : undefined}
+            >
+              <Page
+                pageNumber={page}
+                scale={scale}
+                renderTextLayer={false}
+                onRenderSuccess={(pdfPage) => {
+                  pageProxyRef.current = pdfPage;
+                }}
+              />
+            </div>
           </Document>
         </div>
       </div>
