@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { downloadPdfBase64 } from "@/lib/project-files";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 
@@ -12,9 +13,16 @@ pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/b
 interface PdfPreviewProps {
   pdfData: string | null;
   loading?: boolean;
+  downloadFilename?: string;
+  showDownload?: boolean;
 }
 
-export function PdfPreview({ pdfData, loading }: PdfPreviewProps) {
+export function PdfPreview({
+  pdfData,
+  loading,
+  downloadFilename,
+  showDownload = false,
+}: PdfPreviewProps) {
   const [numPages, setNumPages] = useState(0);
   const [page, setPage] = useState(1);
   const [scale, setScale] = useState(0.95);
@@ -58,6 +66,21 @@ export function PdfPreview({ pdfData, loading }: PdfPreviewProps) {
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setScale(Math.min(2, scale + 0.1))}>
           <ZoomIn className="h-3.5 w-3.5" />
         </Button>
+        {showDownload && downloadFilename && (
+          <>
+            <div className="w-px h-4 bg-border mx-1" />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => downloadPdfBase64(pdfData, downloadFilename)}
+              title="Download PDF"
+            >
+              <Download className="h-3.5 w-3.5 mr-1" />
+              Download
+            </Button>
+          </>
+        )}
       </div>
 
       <div className="flex-1 overflow-auto px-6 pb-8 pt-2">

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { FilePlus, Trash2, Upload, ChevronRight, ChevronDown, File } from "lucide-react";
+import { FilePlus, FolderPlus, Trash2, Upload, ChevronRight, ChevronDown, File, Folder } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { buildFileTree, normalizePath, type FileTreeNode } from "@/lib/project-files";
 
 export interface FileNode {
   path: string;
@@ -15,15 +16,25 @@ interface FileTreeProps {
   activeFile: string | null;
   onSelect: (path: string) => void;
   onCreate: (path: string) => void;
+  onCreateFolder: (folderName: string) => void;
   onDelete: (path: string) => void;
   onUpload: (files: FileList) => void;
   canEdit: boolean;
 }
 
-export function FileTree({ files, activeFile, onSelect, onCreate, onDelete, onUpload, canEdit }: FileTreeProps) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(["/"]));
+export function FileTree({
+  files,
+  activeFile,
+  onSelect,
+  onCreate,
+  onCreateFolder,
+  onDelete,
+  onUpload,
+  canEdit,
+}: FileTreeProps) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  const tree = buildTree(files.map((f) => f.path));
+  const tree = buildFileTree(files.map((f) => f.path));
 
   function toggleExpand(path: string) {
     const next = new Set(expanded);
@@ -33,8 +44,13 @@ export function FileTree({ files, activeFile, onSelect, onCreate, onDelete, onUp
   }
 
   function handleNewFile() {
-    const name = prompt("File name (e.g. section.tex):");
-    if (name) onCreate(name);
+    const name = prompt("File name (e.g. section.tex or figures/chart.tex):");
+    if (name) onCreate(normalizePath(name));
+  }
+
+  function handleNewFolder() {
+    const name = prompt("Folder name (e.g. figures):");
+    if (name) onCreateFolder(normalizePath(name));
   }
 
   function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -49,6 +65,9 @@ export function FileTree({ files, activeFile, onSelect, onCreate, onDelete, onUp
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleNewFile} title="New file">
             <FilePlus className="h-3.5 w-3.5" />
           </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleNewFolder} title="New folder">
+            <FolderPlus className="h-3.5 w-3.5" />
+          </Button>
           <label>
             <Button variant="ghost" size="icon" className="h-7 w-7" asChild title="Upload">
               <span><Upload className="h-3.5 w-3.5" /></span>
@@ -58,46 +77,18 @@ export function FileTree({ files, activeFile, onSelect, onCreate, onDelete, onUp
         </div>
       )}
       <div className="flex-1 overflow-auto py-1 text-sm">
-        {renderNodes(tree, 0, expanded, toggleExpand, activeFile, onSelect, onDelete, canEdit)}
+        {tree.length === 0 ? (
+          <p className="px-3 py-2 text-xs text-ink-faint">No files yet</p>
+        ) : (
+          renderNodes(tree, 0, expanded, toggleExpand, activeFile, onSelect, onDelete, canEdit)
+        )}
       </div>
     </div>
   );
 }
 
-interface TreeNode {
-  name: string;
-  path: string;
-  isFile: boolean;
-  children: TreeNode[];
-}
-
-function buildTree(paths: string[]): TreeNode[] {
-  const root: TreeNode[] = [];
-
-  for (const path of paths.sort()) {
-    const parts = path.split("/");
-    let current = root;
-    let currentPath = "";
-
-    for (let i = 0; i < parts.length; i++) {
-      currentPath = currentPath ? `${currentPath}/${parts[i]}` : parts[i];
-      const isFile = i === parts.length - 1;
-      let node = current.find((n) => n.name === parts[i]);
-
-      if (!node) {
-        node = { name: parts[i], path: currentPath, isFile, children: [] };
-        current.push(node);
-      }
-
-      if (!isFile) current = node.children;
-    }
-  }
-
-  return root;
-}
-
 function renderNodes(
-  nodes: TreeNode[],
+  nodes: FileTreeNode[],
   indent: number,
   expanded: Set<string>,
   toggle: (p: string) => void,
@@ -142,6 +133,7 @@ function renderNodes(
           onClick={() => toggle(node.path)}
         >
           {isOpen ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
+          <Folder className="h-3 w-3 shrink-0 text-ink-faint" />
           <span className="truncate">{node.name}</span>
         </div>
         {isOpen && renderNodes(node.children, indent + 1, expanded, toggle, active, onSelect, onDelete, canEdit)}
