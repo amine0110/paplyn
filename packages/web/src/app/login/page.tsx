@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Nav } from "@/components/nav";
+import { PRODUCT } from "@/lib/product";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -39,7 +40,7 @@ export default function LoginPage() {
     <div className="min-h-screen">
       <Nav />
       <div className="max-w-sm mx-auto px-4 py-20">
-        <h1 className="font-serif text-2xl font-semibold text-center mb-8">Sign in to Quire</h1>
+        <h1 className="font-serif text-2xl font-semibold text-center mb-8">{PRODUCT.signInHeading}</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>

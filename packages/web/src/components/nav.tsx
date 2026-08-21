@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSession, signOut } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { config } from "@/lib/config";
+import { PRODUCT } from "@/lib/product";
 
 export function Nav() {
   const { data: session } = useSession();
@@ -12,7 +13,7 @@ export function Nav() {
     <header className="border-b border-border bg-surface/80 backdrop-blur-sm sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2">
-          <span className="font-serif text-xl font-semibold text-navy">Quire</span>
+          <span className="font-serif text-xl font-semibold text-navy">{PRODUCT.name}</span>
         </Link>
 
         <nav className="flex items-center gap-3">

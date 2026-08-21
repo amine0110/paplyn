@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { config } from "@/lib/config";
+import { PRODUCT } from "@/lib/product";
 
 export default function SettingsPage() {
   const { data: session } = useSession();
@@ -37,8 +38,7 @@ export default function SettingsPage() {
           <section className="border border-border rounded-lg p-6 bg-surface">
             <h2 className="font-medium mb-4">Appearance</h2>
             <p className="text-sm text-ink-muted">
-              Quire uses a calm, paper-white theme optimized for long writing sessions.
-              Dark mode coming in a future release.
+              {PRODUCT.appearanceNote}
             </p>
           </section>
 
