@@ -14,6 +14,7 @@ import {
   resolveSelfHostedAiConfig,
 } from "@/lib/ai-config";
 import { buildAiFileContext } from "@/lib/ai-file-context";
+import { getPluginActionPrompt, resolveAiPlugins } from "@/lib/ai-plugins";
 import { PRODUCT } from "@/lib/product";
 import { checkAiLimit, incrementAiUsage } from "@/lib/usage";
 import { z } from "zod";
@@ -27,7 +28,7 @@ const chatSchema = z.object({
   ),
   activeFile: z.string().optional(),
   selectedText: z.string().optional(),
-  action: z.enum(["chat", "explain-errors", "tighten", "citation"]).optional(),
+  action: z.enum(["chat", "explain-errors", "tighten", "citation", "find-papers"]).optional(),
   compileErrors: z.array(z.string()).optional(),
 });
 
@@ -103,9 +104,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     activeFile: parsed.data.activeFile,
   });
 
+  const { tools: pluginTools, systemPrompt: pluginSystemPrompt } = resolveAiPlugins();
+
   let systemPrompt = `You are ${PRODUCT.aiAssistantName}, a helpful LaTeX assistant for academic writing.
 You help researchers write, edit, and debug LaTeX documents.
-Be concise and precise. When suggesting LaTeX code, use proper syntax.`;
+Be concise and precise. When suggesting LaTeX code, use proper syntax and fenced \`\`\`latex blocks.
+Format explanatory replies with markdown (headings, lists, tables) when helpful.`;
+
+  if (pluginSystemPrompt) {
+    systemPrompt += `\n${pluginSystemPrompt}`;
+  }
 
   if (fileContext) {
     systemPrompt += `\nCurrent project files:\n${fileContext}`;
@@ -113,6 +121,13 @@ Be concise and precise. When suggesting LaTeX code, use proper syntax.`;
 
   if (parsed.data.action === "explain-errors" && parsed.data.compileErrors) {
     systemPrompt += `\n\nThe user has compile errors:\n${parsed.data.compileErrors.join("\n")}`;
+  }
+
+  if (parsed.data.action) {
+    const actionPrompt = getPluginActionPrompt(parsed.data.action);
+    if (actionPrompt) {
+      systemPrompt += `\n\n${actionPrompt}`;
+    }
   }
 
   if (parsed.data.selectedText) {
@@ -130,6 +145,8 @@ Be concise and precise. When suggesting LaTeX code, use proper syntax.`;
       system: systemPrompt,
       messages: parsed.data.messages,
       maxRetries: 0,
+      maxSteps: 3,
+      tools: pluginTools,
     });
 
     await incrementAiUsage(session.user.id);

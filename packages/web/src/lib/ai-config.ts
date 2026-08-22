@@ -1,3 +1,5 @@
+import type { LandingIntegration } from "@/lib/integrations/types";
+
 export type AiProviderConfig = {
   apiKey: string;
   baseUrl: string;
@@ -138,5 +140,71 @@ export function readAiEnvFromProcess(env: NodeJS.ProcessEnv = process.env): AiEn
     openaiApiKey: env.OPENAI_API_KEY,
     openaiBaseUrl: env.OPENAI_BASE_URL,
     openaiModel: env.OPENAI_MODEL,
+  };
+}
+
+function isGroqBaseUrl(baseUrl: string): boolean {
+  try {
+    return new URL(baseUrl).hostname.toLowerCase().includes("groq.com");
+  } catch {
+    return baseUrl.includes("groq.com");
+  }
+}
+
+/**
+ * Landing-page AI provider label derived from the same resolver used at runtime.
+ * Never advertises xAI/Grok — legacy XAI_* env vars only hold Groq keys (gsk_*).
+ */
+export function resolveAiProviderLanding(options?: {
+  env?: AiEnv;
+  isSelfHosted?: boolean;
+}): LandingIntegration | null {
+  const env = options?.env ?? readAiEnvFromProcess();
+  const isSelfHosted = options?.isSelfHosted ?? false;
+
+  if (isSelfHosted) {
+    return {
+      id: "openai-compatible",
+      name: "OpenAI-compatible AI",
+      category: "ai",
+      href: "https://platform.openai.com/docs/api-reference",
+      wordmark: "OpenAI-compatible",
+      wordmarkClassName: "font-medium",
+      caption: "Bring your own API key",
+    };
+  }
+
+  const hosted = resolveHostedAiConfig(env);
+  if (!hosted || isGroqBaseUrl(hosted.baseUrl)) {
+    return {
+      id: "groq",
+      name: "Groq",
+      category: "ai",
+      href: "https://groq.com",
+      wordmark: "Groq",
+      wordmarkClassName: "font-semibold text-[#F55036]",
+      caption: "Hosted AI inference",
+    };
+  }
+
+  if (isOpenAiHostedBaseUrl(hosted.baseUrl)) {
+    return {
+      id: "openai",
+      name: "OpenAI",
+      category: "ai",
+      href: "https://openai.com",
+      wordmark: "OpenAI",
+      wordmarkClassName: "font-semibold",
+      caption: "Hosted AI inference",
+    };
+  }
+
+  return {
+    id: "openai-compatible",
+    name: "OpenAI-compatible AI",
+    category: "ai",
+    wordmark: "OpenAI-compatible",
+    wordmarkClassName: "font-medium",
+    caption: "Hosted AI inference",
   };
 }
