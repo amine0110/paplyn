@@ -93,6 +93,11 @@ export function findSynctexPageForLine(index: SynctexIndex, line: number): numbe
   return null;
 }
 
+/** Lines from `candidates` that appear in any synctex page block. */
+export function linesWithSynctexBlocks(index: SynctexIndex, candidates: number[]): number[] {
+  return candidates.filter((line) => findSynctexPageForLine(index, line) !== null);
+}
+
 /**
  * Map PDF viewer page → synctex `pageBlocks` key.
  *

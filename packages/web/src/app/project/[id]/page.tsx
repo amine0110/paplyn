@@ -26,6 +26,11 @@ import {
   resolveMainFileAfterRename,
 } from "@/lib/project-files";
 import { CompilePanel } from "@/components/compile-panel";
+import {
+  applyCompileProofResult,
+  applyRestoredRevisionPdf,
+  type ProofArtifacts,
+} from "@/lib/compile-proof-state";
 import { ProjectSettingsDialog } from "@/components/project-settings-dialog";
 import { ShareDialog } from "@/components/share-dialog";
 import { HistoryDialog } from "@/components/history-dialog";
@@ -91,8 +96,9 @@ export default function ProjectPage() {
   const [collabBaseUrl, setCollabBaseUrl] = useState("ws://localhost:1234");
 
   const [compiling, setCompiling] = useState(false);
-  const [pdfData, setPdfData] = useState<string | null>(null);
-  const [synctexData, setSynctexData] = useState<string | null>(null);
+  const [proofArtifacts, setProofArtifacts] = useState<ProofArtifacts | null>(null);
+  const pdfData = proofArtifacts?.pdf ?? null;
+  const synctexData = proofArtifacts?.synctex ?? null;
   const [compileLog, setCompileLog] = useState("");
   const [compileErrors, setCompileErrors] = useState<CompileError[]>([]);
   const [showLog, setShowLog] = useState(false);
@@ -278,10 +284,8 @@ export default function ProjectPage() {
           setShowLog(true);
         }
         if (result.success && result.pdf) {
-          setPdfData(result.pdf);
-          setSynctexData(result.synctex ?? null);
+          setProofArtifacts((prev) => applyCompileProofResult(prev, result));
         }
-        // Do not update synctex without a matching successful PDF — that desyncs page counts.
       }
     } catch {
       setCompileLog("");
@@ -920,7 +924,7 @@ export default function ProjectPage() {
               setActiveFile(restoredProject.mainFile);
             }
             if (pdf) {
-              setPdfData(pdf);
+              setProofArtifacts(applyRestoredRevisionPdf(pdf));
             }
           }}
         />
