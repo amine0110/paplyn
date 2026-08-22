@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useSession, signOut } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { PlicumWordmark } from "@/components/plicum-wordmark";
-import { config } from "@/lib/config";
 
 export function Nav() {
   const { data: session } = useSession();
@@ -25,7 +24,7 @@ export function Nav() {
               <Link href="/settings" className="text-sm text-ink-muted hover:text-ink">
                 Settings
               </Link>
-              {config.isSelfHosted && (session.user as { role?: string }).role === "admin" && (
+              {(session.user as { role?: string }).role === "admin" && (
                 <Link href="/admin" className="text-sm text-ink-muted hover:text-ink">
                   Admin
                 </Link>

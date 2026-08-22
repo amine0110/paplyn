@@ -25,3 +25,26 @@ export async function requireAdmin(): Promise<{ user: User }> {
   }
   return { user };
 }
+
+export type RequireAdminApiResult =
+  | { authorized: true; user: User }
+  | { authorized: false; status: number; error: string };
+
+/** Pure admin guard for API routes (testable without Next request context). */
+export function evaluateRequireAdmin(
+  session: Awaited<ReturnType<typeof getSession>>
+): RequireAdminApiResult {
+  if (!session?.user) {
+    return { authorized: false, status: 401, error: "Unauthorized" };
+  }
+  const currentUser = session.user as User;
+  if (currentUser.role !== "admin") {
+    return { authorized: false, status: 403, error: "Forbidden" };
+  }
+  return { authorized: true, user: currentUser };
+}
+
+/** API-friendly admin guard (JSON errors instead of redirects). */
+export async function requireAdminApi(): Promise<RequireAdminApiResult> {
+  return evaluateRequireAdmin(await getSession());
+}
