@@ -5,6 +5,25 @@ import type { AiPlugin } from "@/lib/ai-plugins/types";
 
 const LITERATURE_TOOL_NAME = "search_literature";
 
+/** Tool call/result shapes for reading generateText output without a concrete ToolSet. */
+type LooseToolCall = { toolName: string };
+type LooseToolResult = { toolName: string; result: unknown };
+type LooseGenerateTextResult = {
+  toolCalls: LooseToolCall[];
+  toolResults: LooseToolResult[];
+  steps: Array<{
+    toolCalls: LooseToolCall[];
+    toolResults: LooseToolResult[];
+  }>;
+};
+
+/** Avoid GenerateTextResult<ToolSet> collapsing toolResults to never[]. */
+function asLooseGenerateTextResult<TOOLS extends ToolSet>(
+  result: GenerateTextResult<TOOLS, unknown>
+): LooseGenerateTextResult {
+  return result as unknown as LooseGenerateTextResult;
+}
+
 function isWhitespaceOnly(text: string): boolean {
   return text.trim().length === 0;
 }
@@ -107,7 +126,7 @@ function dedupePapers(papers: AiPaper[]): AiPaper[] {
   return unique;
 }
 
-function collectLiteraturePayloads(result: GenerateTextResult<ToolSet, unknown>): LiteratureToolPayload[] {
+function collectLiteraturePayloads(result: LooseGenerateTextResult): LiteratureToolPayload[] {
   const payloads: LiteratureToolPayload[] = [];
 
   for (const toolResult of result.toolResults) {
@@ -132,9 +151,7 @@ function sourceFromToolResult(result: unknown): AiUsedPlugin["source"] | undefin
   return result.source;
 }
 
-function collectToolUsages(
-  result: GenerateTextResult<ToolSet, unknown>
-): { toolName: string; toolResult?: unknown }[] {
+function collectToolUsages(result: LooseGenerateTextResult): { toolName: string; toolResult?: unknown }[] {
   const usages: { toolName: string; toolResult?: unknown }[] = [];
 
   for (const call of result.toolCalls) {
@@ -155,13 +172,13 @@ function collectToolUsages(
   return usages;
 }
 
-export function collectUsedPlugins(
-  result: GenerateTextResult<ToolSet, unknown>,
+export function collectUsedPlugins<TOOLS extends ToolSet>(
+  result: GenerateTextResult<TOOLS, unknown>,
   plugins: AiPlugin[]
 ): AiUsedPlugin[] {
   const used = new Map<string, AiUsedPlugin>();
 
-  for (const usage of collectToolUsages(result)) {
+  for (const usage of collectToolUsages(asLooseGenerateTextResult(result))) {
     const plugin = plugins.find((entry) => entry.toolName === usage.toolName) ?? getPluginByToolName(usage.toolName);
     if (!plugin) continue;
 
@@ -177,10 +194,12 @@ export function collectUsedPlugins(
   return [...used.values()];
 }
 
-export function collectPapersFromToolResults(
-  result: GenerateTextResult<ToolSet, unknown>
+export function collectPapersFromToolResults<TOOLS extends ToolSet>(
+  result: GenerateTextResult<TOOLS, unknown>
 ): AiPaper[] {
-  const papers = collectLiteraturePayloads(result).flatMap((payload) => payload.papers);
+  const papers = collectLiteraturePayloads(asLooseGenerateTextResult(result)).flatMap(
+    (payload) => payload.papers
+  );
   return dedupePapers(papers);
 }
 
