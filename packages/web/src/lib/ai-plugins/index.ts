@@ -36,4 +36,18 @@ export function getPluginActionPrompt(action: string): string | undefined {
   return undefined;
 }
 
+export function getPluginByToolName(toolName: string): AiPlugin | undefined {
+  return getEnabledAiPlugins().find((plugin) => plugin.toolName === toolName);
+}
+
+export function pluginDisplayName(
+  plugin: AiPlugin,
+  options?: { source?: "semantic-scholar" | "openalex" }
+): string {
+  if (plugin.id === "semantic-scholar" && options?.source === "openalex") {
+    return "OpenAlex";
+  }
+  return plugin.name;
+}
+
 export type { AiPlugin, ResolvedAiPlugins } from "./types";
