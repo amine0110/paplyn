@@ -24,6 +24,12 @@ export const config = {
     model: process.env.OPENAI_MODEL || "gpt-4o-mini",
   },
 
+  xai: {
+    apiKey: process.env.XAI_API_KEY || "",
+    baseUrl: "https://api.x.ai/v1",
+    model: process.env.OPENAI_MODEL || "grok-4.6",
+  },
+
   stripe: {
     secretKey: process.env.STRIPE_SECRET_KEY || "",
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || "",

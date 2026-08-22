@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sparkles, Send, X } from "lucide-react";
+import { aiUnavailableBannerMessage } from "@/lib/ai-config";
+import { config } from "@/lib/config";
 
 interface Message {
   role: "user" | "assistant";
@@ -60,9 +62,13 @@ export function AiSidebar({
 
       if (res.status === 503) {
         setAvailable(false);
+        const err = await res.json().catch(() => ({}));
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: "AI is not configured. Set OPENAI_API_KEY in your environment or admin settings." },
+          {
+            role: "assistant",
+            content: err.error || aiUnavailableBannerMessage(config.isSelfHosted),
+          },
         ]);
         return;
       }
@@ -102,7 +108,7 @@ export function AiSidebar({
 
       {!available && (
         <div className="px-3 py-2 bg-canvas-dark text-xs text-ink-muted border-b border-border">
-          Configure OPENAI_API_KEY to enable AI features.
+          {aiUnavailableBannerMessage(config.isSelfHosted)}
         </div>
       )}
 
