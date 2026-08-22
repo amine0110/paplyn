@@ -71,7 +71,7 @@ services:
       DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-selfhosted}
       COMPILER_URL: http://compiler:3001
       COLLAB_SECRET: ${COLLAB_SECRET:-change-me-collab-secret}
-      # AI: GROQ_API_KEY for hosted Groq; OPENAI_* for BYO / self-host fallback
+      # AI: GROQ_API_KEY for hosted Groq (default model openai/gpt-oss-120b); OPENAI_* for BYO / self-host
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       XAI_API_KEY: ${XAI_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
