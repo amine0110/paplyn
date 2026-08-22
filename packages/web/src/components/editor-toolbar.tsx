@@ -5,7 +5,12 @@ import type { EditorView } from "@codemirror/view";
 import { openSearchPanel } from "@codemirror/search";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowDownToLine, Search } from "lucide-react";
+import {
+  persistSpellcheckEnabled,
+  readStoredSpellcheckEnabled,
+} from "@/lib/editor-preferences";
+import { setSpellcheckEnabled } from "@/lib/latex-spellcheck";
+import { ArrowDownToLine, Search, SpellCheck } from "lucide-react";
 
 interface EditorToolbarProps {
   editorView: EditorView | null;
@@ -15,6 +20,7 @@ interface EditorToolbarProps {
 export function EditorToolbar({ editorView, onGoToLine }: EditorToolbarProps) {
   const [showGoToLine, setShowGoToLine] = useState(false);
   const [lineInput, setLineInput] = useState("");
+  const [spellcheckEnabled, setSpellcheckEnabledState] = useState(readStoredSpellcheckEnabled);
   const goToInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -56,6 +62,15 @@ export function EditorToolbar({ editorView, onGoToLine }: EditorToolbarProps) {
     onGoToLine(line);
     setShowGoToLine(false);
     setLineInput("");
+  }
+
+  function toggleSpellcheck() {
+    if (!editorView) return;
+    const next = !spellcheckEnabled;
+    setSpellcheckEnabledState(next);
+    persistSpellcheckEnabled(next);
+    setSpellcheckEnabled(editorView, next);
+    editorView.focus();
   }
 
   return (
@@ -102,6 +117,20 @@ export function EditorToolbar({ editorView, onGoToLine }: EditorToolbarProps) {
           </Button>
         </form>
       )}
+
+      <Button
+        type="button"
+        variant={spellcheckEnabled ? "secondary" : "ghost"}
+        size="sm"
+        className="h-7 px-2 text-xs"
+        onClick={toggleSpellcheck}
+        disabled={!editorView}
+        title="Toggle spellcheck"
+        aria-pressed={spellcheckEnabled}
+      >
+        <SpellCheck className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">Spellcheck</span>
+      </Button>
 
       <span className="ml-auto hidden md:inline text-[11px] text-ink-faint font-mono">
         Ctrl+F search · Ctrl+G line

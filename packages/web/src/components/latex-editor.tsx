@@ -16,6 +16,8 @@ import { useTheme } from "@/components/theme-provider";
 import { latexCompletionSource } from "@/lib/latex-completion";
 import { countDocumentStats, type DocumentStats } from "@/lib/document-stats";
 import { colorForUserId, parseCollabToken } from "@/lib/project-sharing";
+import { readStoredSpellcheckEnabled } from "@/lib/editor-preferences";
+import { spellcheckCompartment, spellcheckExtensions } from "@/lib/latex-spellcheck";
 
 const latexHighlightLight = HighlightStyle.define([
   { tag: t.keyword, color: "#2d6a6a" },
@@ -182,7 +184,14 @@ export function LatexEditor({
           backgroundColor: "var(--color-canvas)",
           cursor: "pointer",
         },
+        ".cm-lintRange-warning": {
+          backgroundImage:
+            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='3'%3E%3Cpath d='M0 3 L2 0 L4 3 L6 0' fill='none' stroke='%23b45309' stroke-width='1'/%3E%3C/svg%3E\")",
+          backgroundRepeat: "repeat-x",
+          backgroundPosition: "left bottom",
+        },
       }),
+      spellcheckCompartment.of(spellcheckExtensions(readStoredSpellcheckEnabled())),
     ];
 
     if (provider) {
