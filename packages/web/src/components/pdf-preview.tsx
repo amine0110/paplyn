@@ -5,7 +5,10 @@ import { Document, Page, pdfjs } from "react-pdf";
 import { ChevronLeft, ChevronRight, Download, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { downloadPdfBase64 } from "@/lib/project-files";
-import { clientClickToSynctexPoint } from "@/lib/pdf-synctex-coords";
+import {
+  buildPdfClickDomContext,
+  scrollAwareClickToSynctexPoint,
+} from "@/lib/pdf-synctex-coords";
 import { synctexLookupFromBase64 } from "@/lib/synctex";
 
 /** Minimal pdf.js page handle used for SyncTeX reverse lookup (react-pdf onRenderSuccess). */
@@ -64,6 +67,8 @@ export function PdfPreview({
   const [scale, setScale] = useState(0.95);
   const pageProxyRef = useRef<SyncPageHandle | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const pageElementRef = useRef<HTMLDivElement | null>(null);
   const pageRef = useRef(page);
   const renderGenerationRef = useRef(0);
 
@@ -74,31 +79,29 @@ export function PdfPreview({
     pageProxyRef.current = null;
   }, [page, scale]);
 
-  const handlePageClick = useCallback(
-    async (event: React.MouseEvent<HTMLDivElement>) => {
+  const handleCanvasClick = useCallback(
+    async (event: MouseEvent) => {
       if (!synctexData || !onJumpToLine) return;
 
+      const lookupPage = pageRef.current;
       const handle = pageProxyRef.current;
-      if (!handle || handle.pageNumber !== pageRef.current) return;
+      if (!handle || handle.pageNumber !== lookupPage) return;
 
       const canvas = canvasRef.current;
-      if (!canvas) return;
+      const scrollContainer = scrollContainerRef.current;
+      const pageElement = pageElementRef.current;
+      if (!canvas || !scrollContainer || !pageElement) return;
 
-      const pageRect = canvas.getBoundingClientRect();
       const viewport = handle.proxy.getViewport({
         scale,
         rotation: handle.proxy.rotate ?? 0,
       });
-      const [synctexX, synctexY] = clientClickToSynctexPoint(
-        event.clientX,
-        event.clientY,
-        pageRect,
-        viewport
-      );
+      const dom = buildPdfClickDomContext(event, canvas, pageElement, scrollContainer);
+      const [synctexX, synctexY] = scrollAwareClickToSynctexPoint(event, dom, viewport);
 
       const location = await synctexLookupFromBase64(
         synctexData,
-        handle.pageNumber,
+        lookupPage,
         synctexX,
         synctexY,
         projectFiles
@@ -109,6 +112,14 @@ export function PdfPreview({
     },
     [synctexData, onJumpToLine, scale, projectFiles]
   );
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !synctexData || !onJumpToLine) return;
+
+    canvas.addEventListener("click", handleCanvasClick);
+    return () => canvas.removeEventListener("click", handleCanvasClick);
+  }, [handleCanvasClick, synctexData, onJumpToLine, page, scale]);
 
   if (loading) {
     return (
@@ -181,7 +192,10 @@ export function PdfPreview({
         )}
       </div>
 
-      <div className="flex-1 overflow-auto px-3 sm:px-6 pb-8 pt-2">
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-auto px-3 sm:px-6 pb-8 pt-2"
+      >
         <div className="proof-page rounded-sm mx-auto w-fit">
           <Document
             file={pdfUrl}
@@ -190,7 +204,7 @@ export function PdfPreview({
             error={<div className="p-12 text-center text-error text-sm">Could not load proof</div>}
           >
             <div
-              onClick={synctexData && onJumpToLine ? handlePageClick : undefined}
+              ref={pageElementRef}
               className={synctexData && onJumpToLine ? "cursor-crosshair" : undefined}
             >
               <Page

@@ -7,10 +7,13 @@ import {
   clientClickToSynctexPoint,
   domClickOffset,
   getPdfPageHeight,
+  scrollAwareCanvasClickOffset,
+  scrollAwareClickToSynctexPoint,
+  type PdfClickDomContext,
   type PdfViewportLike,
   viewportClickToSynctexPoint,
 } from "./pdf-synctex-coords";
-import { findSynctexSource, parseSynctex } from "./synctex";
+import { explainSynctexLookup, findSynctexSource, parseSynctex } from "./synctex";
 
 const FIXTURES = join(import.meta.dirname, "__fixtures__");
 
@@ -129,6 +132,48 @@ describe("viewportClickToSynctexPoint", () => {
     const [x, y] = viewportClickToSynctexPoint(viewport.width / 2, h / 2, viewport, h);
     expect(x).toBeCloseTo(LETTER_VIEW[2] / 2, 0);
     expect(y).toBeCloseTo(PAGE_HEIGHT / 2, 0);
+  });
+});
+
+describe("scrollAwareCanvasClickOffset", () => {
+  it("matches LaTeX-Workshop pageX/pageY + scrollTop formula", () => {
+    const dom: PdfClickDomContext = {
+      pageX: 420,
+      pageY: 680,
+      pageOffsetLeft: 48,
+      pageOffsetTop: 120,
+      scrollLeft: 0,
+      scrollTop: 240,
+      canvasOffsetLeft: 12,
+      canvasOffsetTop: 8,
+      canvasOffsetHeight: 752,
+    };
+    const { x, y } = scrollAwareCanvasClickOffset({ pageX: dom.pageX, pageY: dom.pageY }, dom);
+    expect(x).toBe(420 - 48 + 0 - 12);
+    expect(y).toBe(680 - 120 + 240 - 8);
+  });
+
+  it("differs from clientX/rect when the proof pane is scrolled", () => {
+    const viewport = letterViewport(0.95);
+    const dom: PdfClickDomContext = {
+      pageX: 300,
+      pageY: 500,
+      pageOffsetLeft: 40,
+      pageOffsetTop: 100,
+      scrollLeft: 0,
+      scrollTop: 180,
+      canvasOffsetLeft: 0,
+      canvasOffsetTop: 0,
+      canvasOffsetHeight: canvasHeight(viewport),
+    };
+    const scroll = scrollAwareClickToSynctexPoint({ pageX: dom.pageX, pageY: dom.pageY }, dom, viewport);
+    const client = clientClickToSynctexPoint(
+      300,
+      320,
+      { left: 40, top: 320, height: canvasHeight(viewport) },
+      viewport
+    );
+    expect(scroll[1]).not.toBeCloseTo(client[1], 0);
   });
 });
 
@@ -283,77 +328,89 @@ describe("compiled IEEEtran fixture (pdflatex synctex)", () => {
   });
 });
 
-describe("compiled 2-page IEEEtran fixture (non-circular viewport clicks)", () => {
-  const PREAMBLE_LINES = [5, 6, 9];
+describe("production-layout 2-page fixture (page-1 blank, page-2 paper)", () => {
+  const PREAMBLE_LINES = [5, 6, 7, 8, 9, 10, 11];
+  const scale = 0.95;
 
-  async function lookupPage2Click(
-    index: NonNullable<ReturnType<typeof parseSynctex>>,
+  function loadProdIndex() {
+    const synctexText = gunzipSync(
+      readFileSync(join(FIXTURES, "ieee-prod-two-page.synctex.gz"))
+    ).toString("latin1");
+    return parseSynctex(synctexText)!;
+  }
+
+  async function loadProdPage2() {
+    const pdfData = new Uint8Array(readFileSync(join(FIXTURES, "ieee-prod-two-page.pdf")));
+    const pdf = await getDocument({ data: pdfData }).promise;
+    expect(pdf.numPages).toBe(2);
+    return pdf.getPage(2);
+  }
+
+  function synctexPointForCanvasClick(
     pdfPage: Awaited<ReturnType<Awaited<ReturnType<typeof getDocument>>["promise"]["getPage"]>>,
     clickX: number,
     clickY: number
   ) {
-    const scale = 0.95;
     const viewport = pdfPage.getViewport({ scale, rotation: pdfPage.rotate });
-    const [synctexX, synctexY] = viewportClickToSynctexPoint(
-      clickX,
-      clickY,
-      viewport,
-      canvasHeight(viewport)
-    );
-    return findSynctexSource(index, 2, synctexX, synctexY, ["main.tex"]);
+    return viewportClickToSynctexPoint(clickX, clickY, viewport, canvasHeight(viewport));
   }
 
-  it("maps fixed page-2 canvas clicks to section body lines, not preamble", async () => {
-    const synctexText = gunzipSync(
-      readFileSync(join(FIXTURES, "ieee-two-page.synctex.gz"))
-    ).toString("latin1");
-    const index = parseSynctex(synctexText);
-    expect(index).not.toBeNull();
-    expect(index!.pageBlocks[2]?.length).toBeGreaterThan(0);
+  it("documents that preamble lines 7/8/11 exist only on synctex page 1", () => {
+    const index = loadProdIndex();
+    for (const line of [7, 8, 11]) {
+      expect(index.pageBlocks[1]?.some((b) => b.line === line)).toBe(true);
+      expect(index.pageBlocks[2]?.some((b) => b.line === line) ?? false).toBe(false);
+    }
+  });
 
-    const pdfData = new Uint8Array(readFileSync(join(FIXTURES, "ieee-two-page.pdf")));
-    const pdf = await getDocument({ data: pdfData }).promise;
-    expect(pdf.numPages).toBeGreaterThanOrEqual(2);
-    const page2 = await pdf.getPage(2);
+  it("explains production preamble landings with coordinates (page-1 lookup + collapsed Y)", async () => {
+    const index = loadProdIndex();
+    const page2 = await loadProdPage2();
 
-    // Calibrated from pdf.js viewport at scale 0.95 — not derived from synctex blocks.
-    const intro = await lookupPage2Click(index!, page2, 100, 250);
-    expect(intro?.line).toBe(35);
-    expect(PREAMBLE_LINES).not.toContain(intro?.line);
+    const [introX, introY] = synctexPointForCanvasClick(page2, 120, 280);
+    const introOk = explainSynctexLookup(index, 2, introX, introY, ["main.tex"]);
+    expect(introOk.hit?.line).toBe(40);
+    expect(PREAMBLE_LINES).not.toContain(introOk.hit?.line);
 
-    const related = await lookupPage2Click(index!, page2, 100, 300);
-    expect(related?.line).toBe(39);
-    expect(PREAMBLE_LINES).not.toContain(related?.line);
+    const [collapsedX, collapsedY] = synctexPointForCanvasClick(page2, 120, 55);
+    expect(collapsedY).toBeLessThan(80);
 
-    const conclusion = await lookupPage2Click(index!, page2, 100, 450);
-    expect(conclusion?.line).toBe(54);
-    expect(PREAMBLE_LINES).not.toContain(conclusion?.line);
-    expect(conclusion?.line).not.toBe(39);
+    const wrongPage = explainSynctexLookup(index, 1, collapsedX, collapsedY, ["main.tex"]);
+    expect(wrongPage.hit?.line).toBe(10);
+    expect(wrongPage.chosenBlock?.page).toBe(1);
+    expect(wrongPage.chosenBlock?.top).toBeCloseTo(52, 0);
+
+    const relatedBand = explainSynctexLookup(index, 1, 118, collapsedY + 5, ["main.tex"]);
+    expect(relatedBand.hit?.line).toBe(10);
+
+    const rightPageCollapsed = explainSynctexLookup(index, 2, collapsedX, collapsedY, ["main.tex"]);
+    expect(PREAMBLE_LINES).not.toContain(rightPageCollapsed.hit?.line);
+    expect(rightPageCollapsed.hit?.line === 28 || rightPageCollapsed.hit === null).toBe(true);
+  });
+
+  it("maps fixed page-2 intro body click to Introduction, not preamble", async () => {
+    const index = loadProdIndex();
+    const page2 = await loadProdPage2();
+    const [synctexX, synctexY] = synctexPointForCanvasClick(page2, 120, 280);
+    const hit = explainSynctexLookup(index, 2, synctexX, synctexY, ["main.tex"]);
+
+    expect(hit.lookupPage).toBe(2);
+    expect(hit.synctexY).toBeGreaterThan(200);
+    expect(hit.hit?.line).toBe(40);
+    expect(hit.hit?.line).toBeGreaterThanOrEqual(38);
+    expect(PREAMBLE_LINES).not.toContain(hit.hit?.line);
   });
 
   it("does not resolve page-2 body clicks against page-1 preamble blocks", async () => {
-    const synctexText = gunzipSync(
-      readFileSync(join(FIXTURES, "ieee-two-page.synctex.gz"))
-    ).toString("latin1");
-    const index = parseSynctex(synctexText)!;
-
-    const pdfData = new Uint8Array(readFileSync(join(FIXTURES, "ieee-two-page.pdf")));
-    const pdf = await getDocument({ data: pdfData }).promise;
-    const page2 = await pdf.getPage(2);
-    const scale = 0.95;
-    const viewport = page2.getViewport({ scale, rotation: page2.rotate });
-    const [synctexX, synctexY] = viewportClickToSynctexPoint(
-      100,
-      400,
-      viewport,
-      canvasHeight(viewport)
-    );
+    const index = loadProdIndex();
+    const page2 = await loadProdPage2();
+    const [synctexX, synctexY] = synctexPointForCanvasClick(page2, 120, 340);
 
     const wrongPage = findSynctexSource(index, 1, synctexX, synctexY, ["main.tex"]);
     expect(wrongPage).toBeNull();
 
     const correctPage = findSynctexSource(index, 2, synctexX, synctexY, ["main.tex"]);
-    expect(correctPage?.line).toBe(51);
+    expect(correctPage?.line).toBe(48);
     expect(PREAMBLE_LINES).not.toContain(correctPage?.line);
   });
 });
