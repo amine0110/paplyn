@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - User profile settings at `/settings`: edit display name and change password while signed in.
 - Admin user list: instance admins can view registered accounts (email, name, role, join date) with search on `/admin` and `GET /api/admin/users`. Available in SaaS when an instance admin exists; organization settings remain self-hosted only.
+- LaTeX editor spellcheck: English misspellings are underlined in prose while LaTeX commands, comments, math, and citation/reference arguments are skipped. Uses a lightweight `nspell` linter with a lazy-loaded dictionary; toggle via the editor toolbar (persisted in local storage).
 
 ### Fixed
 
