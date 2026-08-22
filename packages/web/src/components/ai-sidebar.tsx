@@ -13,15 +13,40 @@ interface Message {
   content: string;
 }
 
+export interface AiPendingRequest {
+  message: string;
+  action?: string;
+}
+
 interface AiSidebarProps {
   projectId: string;
   activeFile: string | null;
   selectedText: string;
   compileErrors: string[];
   onInsert: (text: string) => void;
+  onReplace?: (text: string) => void;
   onClose: () => void;
   /** Full-pane sheet on mobile; sidebar panel on desktop. */
   variant?: "sidebar" | "sheet";
+  /** Auto-send when opened from the selection bubble. */
+  pendingRequest?: AiPendingRequest | null;
+  onPendingRequestConsumed?: () => void;
+}
+
+function loadingMessageForAction(action?: string, userMessage?: string): string {
+  if (action === "find-papers" || action === "citation") {
+    return "Searching papers…";
+  }
+  const lower = (userMessage ?? "").toLowerCase();
+  if (
+    lower.includes("paper") ||
+    lower.includes("literature") ||
+    lower.includes("citation") ||
+    lower.includes("related work")
+  ) {
+    return "Searching papers…";
+  }
+  return "Thinking…";
 }
 
 export function AiSidebar({
@@ -30,15 +55,21 @@ export function AiSidebar({
   selectedText,
   compileErrors,
   onInsert,
+  onReplace,
   onClose,
   variant = "sidebar",
+  pendingRequest,
+  onPendingRequestConsumed,
 }: AiSidebarProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("Thinking…");
   const [available, setAvailable] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -47,6 +78,7 @@ export function AiSidebar({
   async function sendMessage(content: string, action?: string) {
     if (!content.trim() && !action) return;
     setLoading(true);
+    setLoadingMessage(loadingMessageForAction(action, content));
 
     const userMsg: Message = { role: "user", content: content || action || "" };
     setMessages((prev) => [...prev, userMsg]);
@@ -57,7 +89,7 @@ export function AiSidebar({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: [...messages, userMsg],
+          messages: [...messagesRef.current, userMsg],
           activeFile,
           selectedText: selectedText || undefined,
           action,
@@ -95,7 +127,19 @@ export function AiSidebar({
       }
 
       const data = await res.json();
-      setMessages((prev) => [...prev, { role: "assistant", content: data.content || "" }]);
+      const assistantContent = typeof data.content === "string" ? data.content.trim() : "";
+      if (!assistantContent) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: "The assistant returned an empty response. Please try again.",
+          },
+        ]);
+        return;
+      }
+
+      setMessages((prev) => [...prev, { role: "assistant", content: assistantContent }]);
     } catch {
       setMessages((prev) => [...prev, { role: "assistant", content: "Failed to connect to AI service." }]);
     } finally {
@@ -103,12 +147,22 @@ export function AiSidebar({
     }
   }
 
+  useEffect(() => {
+    if (!pendingRequest) return;
+    void sendMessage(pendingRequest.message, pendingRequest.action);
+    onPendingRequestConsumed?.();
+    // Only fire when a new pending request is supplied.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingRequest]);
+
   const quickActions = [
     { label: "Explain errors", action: "explain-errors", disabled: compileErrors.length === 0 },
     { label: "Tighten selection", action: "tighten", disabled: !selectedText },
     { label: "Add citation", action: "citation", disabled: false },
     { label: "Find papers", action: "find-papers", disabled: false },
   ];
+
+  const canReplace = Boolean(selectedText && onReplace);
 
   return (
     <div
@@ -129,6 +183,13 @@ export function AiSidebar({
       {!available && (
         <div className="shrink-0 border-b border-border bg-canvas-dark px-3 py-2 text-xs text-ink-muted">
           {aiUnavailableBannerMessage(isClientSelfHosted())}
+        </div>
+      )}
+
+      {selectedText && (
+        <div className="shrink-0 border-b border-border bg-canvas-dark/60 px-3 py-2 text-xs text-ink-muted">
+          <span className="font-medium text-ink">Selection:</span>{" "}
+          <span className="line-clamp-2">{selectedText}</span>
         </div>
       )}
 
@@ -171,20 +232,32 @@ export function AiSidebar({
                 <AiMarkdown content={msg.content} />
               )}
               {msg.role === "assistant" && msg.content && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="mt-1 h-7 px-2 text-[11px] text-ink-muted hover:text-ink"
-                  onClick={() => onInsert(extractInsertableContent(msg.content))}
-                >
-                  Insert at cursor
-                </Button>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {canReplace && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-[11px] text-ink-muted hover:text-ink"
+                      onClick={() => onReplace?.(extractInsertableContent(msg.content))}
+                    >
+                      Replace selection
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-[11px] text-ink-muted hover:text-ink"
+                    onClick={() => onInsert(extractInsertableContent(msg.content))}
+                  >
+                    Insert at cursor
+                  </Button>
+                </div>
               )}
             </div>
           ))}
           {loading && (
             <div className="mr-auto max-w-[95%] rounded-xl border border-border bg-paper px-3 py-2.5 text-sm text-ink-muted">
-              Thinking…
+              {loadingMessage}
             </div>
           )}
           <div ref={bottomRef} />
