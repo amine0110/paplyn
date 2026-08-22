@@ -15,6 +15,12 @@ export const semanticScholarPlugin: AiPlugin = {
   description: "Search academic papers via the Semantic Scholar Graph API (OpenAlex fallback).",
   toolName: "search_literature",
   enabled: true,
+  landing: {
+    href: "https://www.semanticscholar.org/",
+    wordmark: "Semantic Scholar",
+    wordmarkClassName: "font-semibold text-[#1857B6]",
+    caption: "Literature search",
+  },
   systemPrompt: SYSTEM_PROMPT,
   actionPrompts: {
     "find-papers":

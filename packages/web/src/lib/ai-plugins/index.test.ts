@@ -33,4 +33,10 @@ describe("ai-plugins registry", () => {
     const enabled = getEnabledAiPlugins();
     expect(enabled.every((p) => p.enabled)).toBe(true);
   });
+
+  it("exposes landing metadata for public integrations strip", () => {
+    const plugin = listAiPlugins().find((p) => p.id === "semantic-scholar");
+    expect(plugin?.landing?.href).toContain("semanticscholar.org");
+    expect(plugin?.landing?.wordmark).toBe("Semantic Scholar");
+  });
 });

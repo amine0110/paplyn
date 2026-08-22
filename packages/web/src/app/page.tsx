@@ -1,11 +1,15 @@
 import Link from "next/link";
 import { Nav } from "@/components/nav";
 import { Button } from "@/components/ui/button";
+import { IntegrationsStrip } from "@/components/integrations-strip";
 import { config } from "@/lib/config";
 import { PRODUCT } from "@/lib/product";
+import { getLandingIntegrations } from "@/lib/integrations";
 import { FileText, Users, Sparkles, Server } from "lucide-react";
 
 export default function LandingPage() {
+  const integrations = getLandingIntegrations({ isSelfHosted: config.isSelfHosted });
+
   return (
     <div className="min-h-screen">
       <Nav />
@@ -27,6 +31,8 @@ export default function LandingPage() {
             </Link>
           </div>
         </section>
+
+        <IntegrationsStrip items={integrations} />
 
         <section className="bg-canvas-dark border-y border-border py-20">
           <div className="max-w-5xl mx-auto px-4 grid md:grid-cols-2 lg:grid-cols-4 gap-8">

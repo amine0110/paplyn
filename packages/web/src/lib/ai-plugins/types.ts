@@ -1,4 +1,5 @@
 import type { Tool } from "ai";
+import type { PluginLanding } from "@/lib/integrations/types";
 
 /** Server-side AI capability plugin (literature search, web search, Zotero, etc.). */
 export interface AiPlugin {
@@ -14,6 +15,8 @@ export interface AiPlugin {
   systemPrompt?: string;
   /** Extra prompt text keyed by chat action (e.g. find-papers). */
   actionPrompts?: Record<string, string>;
+  /** Landing-page "Works with" metadata (same registry as in-app tools). */
+  landing?: PluginLanding;
 }
 
 export interface ResolvedAiPlugins {
