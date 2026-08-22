@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { ChevronLeft, ChevronRight, Download, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { synctexLookupFromBase64 } from "@/lib/synctex";
 
 /** Minimal pdf.js page handle used for SyncTeX reverse lookup (react-pdf onRenderSuccess). */
 interface PdfPageProxy {
+  pageNumber: number;
   view: number[];
   rotate?: number;
   getViewport: (params: { scale: number; rotation?: number }) => {
@@ -18,6 +19,13 @@ interface PdfPageProxy {
     convertToPdfPoint: (x: number, y: number) => number[];
   };
 }
+
+interface SyncPageHandle {
+  pageNumber: number;
+  proxy: PdfPageProxy;
+  generation: number;
+}
+
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 
@@ -54,32 +62,43 @@ export function PdfPreview({
   const [numPages, setNumPages] = useState(0);
   const [page, setPage] = useState(1);
   const [scale, setScale] = useState(0.95);
-  const pageProxyRef = useRef<PdfPageProxy | null>(null);
+  const pageProxyRef = useRef<SyncPageHandle | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const pageRef = useRef(page);
+  const renderGenerationRef = useRef(0);
+
+  pageRef.current = page;
+
+  useEffect(() => {
+    renderGenerationRef.current += 1;
+    pageProxyRef.current = null;
+  }, [page, scale]);
 
   const handlePageClick = useCallback(
     async (event: React.MouseEvent<HTMLDivElement>) => {
-      if (!synctexData || !onJumpToLine || !pageProxyRef.current) return;
+      if (!synctexData || !onJumpToLine) return;
+
+      const handle = pageProxyRef.current;
+      if (!handle || handle.pageNumber !== pageRef.current) return;
 
       const canvas = canvasRef.current;
       if (!canvas) return;
 
-      const pageProxy = pageProxyRef.current;
-      const viewport = pageProxy.getViewport({
+      const pageRect = canvas.getBoundingClientRect();
+      const viewport = handle.proxy.getViewport({
         scale,
-        rotation: pageProxy.rotate ?? 0,
+        rotation: handle.proxy.rotate ?? 0,
       });
       const [synctexX, synctexY] = clientClickToSynctexPoint(
         event.clientX,
         event.clientY,
-        canvas.getBoundingClientRect(),
-        viewport,
-        pageProxy.view
+        pageRect,
+        viewport
       );
 
       const location = await synctexLookupFromBase64(
         synctexData,
-        page,
+        handle.pageNumber,
         synctexX,
         synctexY,
         projectFiles
@@ -88,7 +107,7 @@ export function PdfPreview({
         onJumpToLine(location.line, location.file);
       }
     },
-    [synctexData, onJumpToLine, page, scale, projectFiles]
+    [synctexData, onJumpToLine, scale, projectFiles]
   );
 
   if (loading) {
@@ -175,13 +194,20 @@ export function PdfPreview({
               className={synctexData && onJumpToLine ? "cursor-crosshair" : undefined}
             >
               <Page
+                key={`${page}-${scale}`}
                 pageNumber={page}
                 scale={scale}
                 canvasRef={canvasRef}
                 renderTextLayer={false}
                 renderAnnotationLayer={false}
                 onRenderSuccess={(pdfPage) => {
-                  pageProxyRef.current = pdfPage;
+                  if (pdfPage.pageNumber !== pageRef.current) return;
+                  const generation = renderGenerationRef.current;
+                  pageProxyRef.current = {
+                    pageNumber: pdfPage.pageNumber,
+                    proxy: pdfPage,
+                    generation,
+                  };
                 }}
               />
             </div>

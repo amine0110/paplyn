@@ -32,6 +32,10 @@ function letterViewport(scale: number): PdfViewportLike {
   };
 }
 
+function canvasHeight(viewport: PdfViewportLike): number {
+  return Math.floor(viewport.height);
+}
+
 function sp(points: number): number {
   return Math.round(points * 65781.76);
 }
@@ -86,49 +90,43 @@ describe("domClickOffset", () => {
 describe("viewportClickToSynctexPoint", () => {
   it("returns SyncTeX Y-down coordinates (distance from page top)", () => {
     const viewport = letterViewport(1);
+    const h = canvasHeight(viewport);
 
-    const topClick = viewportClickToSynctexPoint(100, 0, viewport, [...LETTER_VIEW]);
-    const bottomClick = viewportClickToSynctexPoint(100, viewport.height, viewport, [
-      ...LETTER_VIEW,
-    ]);
+    const topClick = viewportClickToSynctexPoint(100, 0, viewport, h);
+    const bottomClick = viewportClickToSynctexPoint(100, h, viewport, h);
 
     expect(topClick[1]).toBeLessThan(bottomClick[1]);
     expect(topClick[1]).toBeCloseTo(0, 0);
     expect(bottomClick[1]).toBeCloseTo(PAGE_HEIGHT, 0);
   });
 
-  it("uses pageView[3] - pdfY (equivalent to LaTeX-Workshop getPagePoint flip)", () => {
+  it("matches LaTeX-Workshop getPagePoint (convertToPdfPoint with canvasHeight - clickY)", () => {
     const viewport = letterViewport(0.95);
     const clickX = 120;
     const clickY = 40;
-    const [synctexX, synctexY] = viewportClickToSynctexPoint(clickX, clickY, viewport, [
-      ...LETTER_VIEW,
-    ]);
-    const [, pdfY] = viewport.convertToPdfPoint(clickX, clickY);
-    expect(synctexX).toBeCloseTo(clickX / 0.95, 5);
-    expect(synctexY).toBeCloseTo(LETTER_VIEW[3] - pdfY, 5);
-    expect(synctexY).toBeCloseTo(clickY / 0.95, 1);
+    const h = canvasHeight(viewport);
+    const [synctexX, synctexY] = viewportClickToSynctexPoint(clickX, clickY, viewport, h);
+    const [lwX, lwY] = viewport.convertToPdfPoint(clickX, h - clickY);
+    expect(synctexX).toBeCloseTo(lwX, 5);
+    expect(synctexY).toBeCloseTo(lwY, 5);
+    expect(synctexY).toBeCloseTo(clickY / 0.95, 0);
   });
 
-  it("documents floor(canvasHeight) vs viewport.height flip delta at fractional scales", () => {
+  it("uses floor(canvasHeight) for the Y flip at fractional scales", () => {
     const viewport = letterViewport(0.95);
     const clickX = 120;
     const clickY = 40;
-    const canvasHeight = Math.floor(viewport.height);
-    const [, flipY] = viewport.convertToPdfPoint(clickX, canvasHeight - clickY);
-    const [, synctexY] = viewportClickToSynctexPoint(clickX, clickY, viewport, [...LETTER_VIEW]);
-    // pageView[3] - pdfY avoids canvasHeight rounding error from Math.floor(viewport.height).
-    expect(Math.abs(synctexY - flipY)).toBeLessThan(1);
+    const h = canvasHeight(viewport);
+    const [synctexX, synctexY] = viewportClickToSynctexPoint(clickX, clickY, viewport, h);
+    const [lwX, lwY] = viewport.convertToPdfPoint(clickX, h - clickY);
+    expect(synctexX).toBeCloseTo(lwX, 5);
+    expect(synctexY).toBeCloseTo(lwY, 5);
   });
 
   it("scales with viewport zoom", () => {
     const viewport = letterViewport(1.5);
-    const [x, y] = viewportClickToSynctexPoint(
-      viewport.width / 2,
-      viewport.height / 2,
-      viewport,
-      [...LETTER_VIEW]
-    );
+    const h = canvasHeight(viewport);
+    const [x, y] = viewportClickToSynctexPoint(viewport.width / 2, h / 2, viewport, h);
     expect(x).toBeCloseTo(LETTER_VIEW[2] / 2, 0);
     expect(y).toBeCloseTo(PAGE_HEIGHT / 2, 0);
   });
@@ -137,21 +135,19 @@ describe("viewportClickToSynctexPoint", () => {
 describe("clientClickToSynctexPoint", () => {
   it("uses the canvas bounding rect rather than a padded wrapper", () => {
     const viewport = letterViewport(1);
-    const canvasRect = { left: 80, top: 40 };
+    const canvasRect = { left: 80, top: 40, height: canvasHeight(viewport) };
 
     const fromCanvas = clientClickToSynctexPoint(
       canvasRect.left + 72,
       canvasRect.top + 50,
       canvasRect,
-      viewport,
-      [...LETTER_VIEW]
+      viewport
     );
     const fromWrapper = clientClickToSynctexPoint(
       canvasRect.left + 72,
       canvasRect.top + 50,
-      { left: 0, top: 40 },
-      viewport,
-      [...LETTER_VIEW]
+      { left: 0, top: 40, height: canvasHeight(viewport) },
+      viewport
     );
 
     expect(fromCanvas[0]).toBeCloseTo(72, 5);
@@ -175,9 +171,8 @@ describe("synctex lookup with converted click coordinates", () => {
     const viewport = letterViewport(1);
 
     const introClickY = 306;
-    const [synctexX, synctexY] = viewportClickToSynctexPoint(72, introClickY, viewport, [
-      ...LETTER_VIEW,
-    ]);
+    const h = canvasHeight(viewport);
+    const [synctexX, synctexY] = viewportClickToSynctexPoint(72, introClickY, viewport, h);
     const hit = findSynctexSource(index, 1, synctexX, synctexY, ["main.tex"]);
 
     expect(synctexY).toBeCloseTo(introClickY, 0);
@@ -190,9 +185,12 @@ describe("synctex lookup with converted click coordinates", () => {
     const viewport = letterViewport(1);
 
     const conclusionClickY = 422;
-    const [synctexX, synctexY] = viewportClickToSynctexPoint(72, conclusionClickY, viewport, [
-      ...LETTER_VIEW,
-    ]);
+    const [synctexX, synctexY] = viewportClickToSynctexPoint(
+      72,
+      conclusionClickY,
+      viewport,
+      canvasHeight(viewport)
+    );
     const hit = findSynctexSource(index, 1, synctexX, synctexY, ["main.tex"]);
 
     expect(hit).toEqual({ line: 53, file: "main.tex" });
@@ -236,9 +234,12 @@ describe("synctex lookup with converted click coordinates", () => {
     });
 
     const viewport = letterViewport(1);
-    const [synctexX, synctexY] = viewportClickToSynctexPoint(72, 306, viewport, [
-      ...LETTER_VIEW,
-    ]);
+    const [synctexX, synctexY] = viewportClickToSynctexPoint(
+      72,
+      306,
+      viewport,
+      canvasHeight(viewport)
+    );
     const hit = findSynctexSource(index, 1, synctexX, synctexY, ["main.tex"]);
     expect(hit?.line).toBe(37);
   });
@@ -269,7 +270,7 @@ describe("compiled IEEEtran fixture (pdflatex synctex)", () => {
       const synctexY = block!.bottom - block!.height / 2;
       const pdfY = getPdfPageHeight(page) - synctexY;
       const [vx, vy] = viewport.convertToViewportPoint(block!.left + 4, pdfY);
-      return viewportClickToSynctexPoint(vx, vy, viewport, page.view);
+      return viewportClickToSynctexPoint(vx, vy, viewport, canvasHeight(viewport));
     }
 
     const intro = findSynctexSource(index!, 1, ...clickForLine(32), ["main.tex"]);
@@ -279,5 +280,80 @@ describe("compiled IEEEtran fixture (pdflatex synctex)", () => {
     const related = findSynctexSource(index!, 1, ...clickForLine(34), ["main.tex"]);
     expect(related?.line).toBe(34);
     expect(related?.line).not.toBe(32);
+  });
+});
+
+describe("compiled 2-page IEEEtran fixture (non-circular viewport clicks)", () => {
+  const PREAMBLE_LINES = [5, 6, 9];
+
+  async function lookupPage2Click(
+    index: NonNullable<ReturnType<typeof parseSynctex>>,
+    pdfPage: Awaited<ReturnType<Awaited<ReturnType<typeof getDocument>>["promise"]["getPage"]>>,
+    clickX: number,
+    clickY: number
+  ) {
+    const scale = 0.95;
+    const viewport = pdfPage.getViewport({ scale, rotation: pdfPage.rotate });
+    const [synctexX, synctexY] = viewportClickToSynctexPoint(
+      clickX,
+      clickY,
+      viewport,
+      canvasHeight(viewport)
+    );
+    return findSynctexSource(index, 2, synctexX, synctexY, ["main.tex"]);
+  }
+
+  it("maps fixed page-2 canvas clicks to section body lines, not preamble", async () => {
+    const synctexText = gunzipSync(
+      readFileSync(join(FIXTURES, "ieee-two-page.synctex.gz"))
+    ).toString("latin1");
+    const index = parseSynctex(synctexText);
+    expect(index).not.toBeNull();
+    expect(index!.pageBlocks[2]?.length).toBeGreaterThan(0);
+
+    const pdfData = new Uint8Array(readFileSync(join(FIXTURES, "ieee-two-page.pdf")));
+    const pdf = await getDocument({ data: pdfData }).promise;
+    expect(pdf.numPages).toBeGreaterThanOrEqual(2);
+    const page2 = await pdf.getPage(2);
+
+    // Calibrated from pdf.js viewport at scale 0.95 — not derived from synctex blocks.
+    const intro = await lookupPage2Click(index!, page2, 100, 250);
+    expect(intro?.line).toBe(35);
+    expect(PREAMBLE_LINES).not.toContain(intro?.line);
+
+    const related = await lookupPage2Click(index!, page2, 100, 300);
+    expect(related?.line).toBe(39);
+    expect(PREAMBLE_LINES).not.toContain(related?.line);
+
+    const conclusion = await lookupPage2Click(index!, page2, 100, 450);
+    expect(conclusion?.line).toBe(54);
+    expect(PREAMBLE_LINES).not.toContain(conclusion?.line);
+    expect(conclusion?.line).not.toBe(39);
+  });
+
+  it("does not resolve page-2 body clicks against page-1 preamble blocks", async () => {
+    const synctexText = gunzipSync(
+      readFileSync(join(FIXTURES, "ieee-two-page.synctex.gz"))
+    ).toString("latin1");
+    const index = parseSynctex(synctexText)!;
+
+    const pdfData = new Uint8Array(readFileSync(join(FIXTURES, "ieee-two-page.pdf")));
+    const pdf = await getDocument({ data: pdfData }).promise;
+    const page2 = await pdf.getPage(2);
+    const scale = 0.95;
+    const viewport = page2.getViewport({ scale, rotation: page2.rotate });
+    const [synctexX, synctexY] = viewportClickToSynctexPoint(
+      100,
+      400,
+      viewport,
+      canvasHeight(viewport)
+    );
+
+    const wrongPage = findSynctexSource(index, 1, synctexX, synctexY, ["main.tex"]);
+    expect(wrongPage).toBeNull();
+
+    const correctPage = findSynctexSource(index, 2, synctexX, synctexY, ["main.tex"]);
+    expect(correctPage?.line).toBe(51);
+    expect(PREAMBLE_LINES).not.toContain(correctPage?.line);
   });
 });

@@ -8,9 +8,9 @@
  *   downward (see SyncTeX README). The file's X/Y Offset records shift between pdf.js
  *   global coordinates and page-local block coordinates; `findSynctexSource` subtracts them.
  *
- * LaTeX-Workshop reverse sync uses `getPagePoint(x, canvasHeight - y)`, which is equivalent
- * to converting the click then flipping Y with the page media box:
- *   synctexY = pageView[3] - pdfY
+ * LaTeX-Workshop reverse sync uses `getPagePoint(x, canvasHeight - y)` and passes the
+ * resulting pdf.js point directly into synctex lookup. Use the canvas CSS height from
+ * `getBoundingClientRect()`, not `viewport.height`, so the flip matches the painted pixels.
  */
 
 export interface PdfViewportLike {
@@ -44,29 +44,26 @@ export function domClickOffset(
 /**
  * Convert a click on the rendered PDF page to global SyncTeX (x, y) in PDF points.
  * `clickX`/`clickY` must be relative to the page canvas origin (top-left, CSS pixels).
- *
- * Uses the canvas CSS height for sanity checks; conversion is driven by the viewport
- * transform and `pageView[3] - pdfY` (distance from the page top).
+ * `canvasHeight` must be the canvas CSS height (`getBoundingClientRect().height`).
  */
 export function viewportClickToSynctexPoint(
   clickX: number,
   clickY: number,
   viewport: PdfViewportLike,
-  pageView: number[]
+  canvasHeight: number
 ): [number, number] {
-  const [pdfX, pdfY] = viewport.convertToPdfPoint(clickX, clickY);
-  const synctexY = pageView[3] - pdfY;
-  return [pdfX, synctexY];
+  const h = Math.floor(canvasHeight);
+  const [pdfX, pdfY] = viewport.convertToPdfPoint(clickX, h - clickY);
+  return [pdfX, pdfY];
 }
 
 /** End-to-end: browser click on the canvas → global SyncTeX lookup point. */
 export function clientClickToSynctexPoint(
   clientX: number,
   clientY: number,
-  pageRect: Pick<DOMRectReadOnly, "left" | "top">,
-  viewport: PdfViewportLike,
-  pageView: number[]
+  pageRect: Pick<DOMRectReadOnly, "left" | "top" | "height">,
+  viewport: PdfViewportLike
 ): [number, number] {
   const { x, y } = domClickOffset(clientX, clientY, pageRect);
-  return viewportClickToSynctexPoint(x, y, viewport, pageView);
+  return viewportClickToSynctexPoint(x, y, viewport, pageRect.height);
 }

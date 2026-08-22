@@ -37,6 +37,10 @@ function letterViewport(scale: number): PdfViewportLike {
   };
 }
 
+function canvasHeight(viewport: PdfViewportLike): number {
+  return Math.floor(viewport.height);
+}
+
 function sp(points: number): number {
   return Math.round(points * 65781.76);
 }
@@ -109,9 +113,12 @@ describe("findSynctexSource", () => {
     const index = parseSynctex(ieeeSynctexFixture())!;
     const viewport = letterViewport(1);
     const introClickY = 306;
-    const [synctexX, synctexY] = viewportClickToSynctexPoint(72, introClickY, viewport, [
-      ...LETTER_VIEW,
-    ]);
+    const [synctexX, synctexY] = viewportClickToSynctexPoint(
+      72,
+      introClickY,
+      viewport,
+      canvasHeight(viewport)
+    );
     const hit = findSynctexSource(index, 1, synctexX, synctexY, ["main.tex"]);
 
     expect(synctexY).toBeCloseTo(introClickY, 0);
@@ -123,9 +130,12 @@ describe("findSynctexSource", () => {
     const index = parseSynctex(ieeeSynctexFixture())!;
     const viewport = letterViewport(1);
     const conclusionClickY = 422;
-    const [synctexX, synctexY] = viewportClickToSynctexPoint(72, conclusionClickY, viewport, [
-      ...LETTER_VIEW,
-    ]);
+    const [synctexX, synctexY] = viewportClickToSynctexPoint(
+      72,
+      conclusionClickY,
+      viewport,
+      canvasHeight(viewport)
+    );
     const hit = findSynctexSource(index, 1, synctexX, synctexY, ["main.tex"]);
 
     expect(hit).toEqual({ line: 53, file: "main.tex" });
