@@ -18,6 +18,8 @@ interface AiSidebarProps {
   compileErrors: string[];
   onInsert: (text: string) => void;
   onClose: () => void;
+  /** Full-pane sheet on mobile; sidebar panel on desktop. */
+  variant?: "sidebar" | "sheet";
 }
 
 export function AiSidebar({
@@ -27,6 +29,7 @@ export function AiSidebar({
   compileErrors,
   onInsert,
   onClose,
+  variant = "sidebar",
 }: AiSidebarProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -104,7 +107,11 @@ export function AiSidebar({
   ];
 
   return (
-    <div className="flex flex-col h-full border-l border-border bg-surface">
+    <div
+      className={`flex flex-col h-full min-h-0 bg-surface ${
+        variant === "sidebar" ? "border-l border-border" : ""
+      }`}
+    >
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
         <div className="flex items-center gap-2 text-sm font-medium">
           <Sparkles className="h-4 w-4 text-navy" />
@@ -163,7 +170,11 @@ export function AiSidebar({
         ))}
       </div>
 
-      <div className="p-3 border-t border-border">
+      <div
+        className={`border-t border-border p-3 ${
+          variant === "sheet" ? "pb-[max(0.75rem,env(safe-area-inset-bottom))]" : ""
+        }`}
+      >
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -176,6 +187,7 @@ export function AiSidebar({
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask about your document..."
             disabled={loading}
+            className="min-w-0"
           />
           <Button type="submit" size="icon" disabled={loading || !input.trim()}>
             <Send className="h-4 w-4" />

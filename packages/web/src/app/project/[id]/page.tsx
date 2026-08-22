@@ -31,6 +31,7 @@ import { ShareDialog } from "@/components/share-dialog";
 import { HistoryDialog } from "@/components/history-dialog";
 import { CollabPresence } from "@/components/collab-presence";
 import { AiSidebar } from "@/components/ai-sidebar";
+import { AiAssistantFab } from "@/components/ai-assistant-fab";
 import { EditorStatusBar, EditorToolbar } from "@/components/editor-toolbar";
 import { LayoutModeSwitcher } from "@/components/layout-mode-switcher";
 import { MobileWorkspaceTabs } from "@/components/mobile-workspace-tabs";
@@ -39,7 +40,6 @@ import { Button } from "@/components/ui/button";
 import { useMediaQuery } from "@/lib/use-media-query";
 import {
   Play,
-  Sparkles,
   Share2,
   ChevronLeft,
   PanelLeftClose,
@@ -407,6 +407,10 @@ export default function ProjectPage() {
       changes: { from, to, insert: text },
       selection: { anchor: from + text.length },
     });
+    if (isNarrow) {
+      setShowAi(false);
+      setMobileTab("editor");
+    }
   }
 
   function handleJumpToLine(line: number, file?: string) {
@@ -612,15 +616,15 @@ export default function ProjectPage() {
 
   if (!project) {
     return (
-      <div className="flex items-center justify-center h-screen text-ink-muted font-serif">
+      <div className="flex items-center justify-center h-[100dvh] text-ink-muted font-serif">
         Loading manuscript…
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex flex-col bg-canvas">
-      <header className="h-11 shrink-0 flex items-center justify-between gap-2 px-3 sm:px-4 border-b border-border bg-paper/90 backdrop-blur-sm">
+    <div className="h-[100dvh] flex flex-col bg-canvas overflow-hidden">
+      <header className="h-11 shrink-0 flex items-center justify-between gap-2 px-3 sm:px-4 border-b border-border bg-paper/90 backdrop-blur-sm pt-[env(safe-area-inset-top,0px)]">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <Link href="/dashboard" className="text-ink-faint hover:text-ink transition-colors" title="Back to manuscripts">
             <ChevronLeft className="h-4 w-4" />
@@ -657,15 +661,6 @@ export default function ProjectPage() {
           >
             <BookOpen className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Proof</span>
-          </Button>
-          <Button
-            variant={showAi ? "secondary" : "ghost"}
-            size="sm"
-            onClick={() => setShowAi(!showAi)}
-            className="hidden sm:inline-flex"
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">AI</span>
           </Button>
           {canEdit && (
             <Button
@@ -756,17 +751,6 @@ export default function ProjectPage() {
                       Settings
                     </button>
                   )}
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-canvas-dark"
-                    onClick={() => {
-                      setShowMobileMenu(false);
-                      setShowAi(!showAi);
-                    }}
-                  >
-                    AI assistant
-                  </button>
                   <div className="border-t border-border my-1" />
                   <div className="px-3 py-2">
                     <ThemeToggle compact />
@@ -858,10 +842,24 @@ export default function ProjectPage() {
           <MobileWorkspaceTabs activeTab={mobileTab} onChange={handleMobileTabChange} />
         </main>
 
-        {showAi && (
+        {showAi && isNarrow && (
+          <div className="absolute inset-0 z-30 flex flex-col min-h-0 bg-surface">
+            <AiSidebar
+              projectId={projectId}
+              activeFile={activeFile}
+              selectedText=""
+              compileErrors={compileErrors.map((e) => e.message)}
+              onInsert={handleInsertAtCursor}
+              onClose={() => setShowAi(false)}
+              variant="sheet"
+            />
+          </div>
+        )}
+
+        {showAi && !isNarrow && (
           <>
             <div className="absolute inset-0 bg-ink/10 z-20" onClick={() => setShowAi(false)} />
-            <aside className="absolute right-0 top-0 bottom-0 w-full sm:w-[380px] z-30 shadow-2xl">
+            <aside className="absolute right-0 top-0 bottom-0 w-[380px] z-30 shadow-2xl">
               <AiSidebar
                 projectId={projectId}
                 activeFile={activeFile}
@@ -873,6 +871,8 @@ export default function ProjectPage() {
             </aside>
           </>
         )}
+
+        {!showAi && <AiAssistantFab onClick={() => setShowAi(true)} />}
       </div>
 
       {showShare && project && (
