@@ -10,6 +10,9 @@ const GZIP_MAGIC = [0x1f, 0x8b];
 /** Reject nearest-box fallback when the click is farther than this (pt). */
 export const SYNCTEX_MAX_LOOKUP_DISTANCE_PT = 72;
 
+/** Container/kern block types excluded from reverse lookup (synctex-js / LaTeX-Workshop). */
+const SYNCTEX_SKIP_BLOCK_TYPES = new Set(["v", "h", "g", "k", "r"]);
+
 export interface SynctexBlock {
   type: string;
   fileNumber: number;
@@ -60,6 +63,13 @@ class Rectangle {
     const cx = (this.left + this.right) / 2;
     const cy = (this.bottom + this.top) / 2;
     return Math.hypot(cx - x, cy - y);
+  }
+
+  /** Shortest distance from a point to the rectangle edge (0 when inside). */
+  distanceToEdge(x: number, y: number): number {
+    const dx = Math.max(this.left - x, 0, x - this.right);
+    const dy = Math.max(this.top - y, 0, y - this.bottom);
+    return Math.hypot(dx, dy);
   }
 
   containsPoint(x: number, y: number, epsilon = 1): boolean {
@@ -280,10 +290,9 @@ export function findSynctexSource(
   const blocks = index.pageBlocks[page];
   if (!blocks?.length) return null;
 
-  // Click coordinates from viewportClickToSynctexPoint are already in the same
-  // absolute page space as block geometry from TeX Live; do not subtract offset.
-  const x0 = x;
-  const y0 = y;
+  // Global pdf.js / getPagePoint coords → page-local block space (synctex-js convention).
+  const x0 = x - index.offset.x;
+  const y0 = y - index.offset.y;
 
   let bestContaining: {
     filePath: string;
@@ -300,7 +309,7 @@ export function findSynctexSource(
   } | null = null;
 
   for (const block of blocks) {
-    if (block.type === "k" || block.type === "r") continue;
+    if (SYNCTEX_SKIP_BLOCK_TYPES.has(block.type)) continue;
 
     const rect = blockToRect(block);
     const distFromCenter = rect.distanceFromCenter(x0, y0);
@@ -334,7 +343,7 @@ export function findSynctexSource(
 
   const best = bestContaining ?? bestNearest;
   if (!best) return null;
-  if (!bestContaining && best.distanceFromCenter > maxDistancePt) return null;
+  if (!bestContaining && best.rect.distanceToEdge(x0, y0) > maxDistancePt) return null;
 
   const file = projectFiles.length
     ? resolveSynctexFilePath(best.filePath, projectFiles)
