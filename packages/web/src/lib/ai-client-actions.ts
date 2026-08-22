@@ -52,6 +52,13 @@ export type AiClientAction =
   | ApplyEditAction
   | FixCompileErrorsAction;
 
+/** Unlabeled action payload from the model before server validation. */
+export type RawAiClientAction =
+  | (Omit<InsertAtCursorAction, "label"> & { label?: string })
+  | (Omit<ReplaceSelectionAction, "label"> & { label?: string })
+  | (Omit<ApplyEditAction, "label"> & { label?: string })
+  | (Omit<FixCompileErrorsAction, "label"> & { label?: string });
+
 export interface ClientActionToolPayload {
   kind: "client-action";
   action: AiClientAction;
@@ -140,7 +147,7 @@ function applyLineRangeEdit(
 
 /** Server-side validation before returning an action to the client. */
 export function validateClientAction(
-  raw: Omit<AiClientAction, "label"> & { label?: string },
+  raw: RawAiClientAction,
   ctx: ValidateActionContext
 ): ValidatedAction | null {
   const label = raw.label?.trim();
@@ -240,9 +247,8 @@ export function validateClientAction(
 /** Apply a validated action to file content (client-side preview / non-active files). */
 export function applyActionToFileContent(
   content: string,
-  action: ApplyEditAction | FixCompileErrorsEdit
+  action: ApplyEditAction
 ): string | null {
-  if ("edits" in action) return null;
   if (action.search) {
     const result = applySearchReplace(content, action.search, action.replace);
     return result.ok ? result.content : null;
