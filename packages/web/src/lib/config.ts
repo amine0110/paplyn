@@ -24,10 +24,10 @@ export const config = {
     model: process.env.OPENAI_MODEL || "gpt-4o-mini",
   },
 
-  xai: {
-    apiKey: process.env.XAI_API_KEY || "",
-    baseUrl: "https://api.x.ai/v1",
-    model: process.env.OPENAI_MODEL || "grok-4.6",
+  groq: {
+    apiKey: process.env.GROQ_API_KEY || "",
+    baseUrl: "https://api.groq.com/openai/v1",
+    model: process.env.OPENAI_MODEL || "llama-3.3-70b-versatile",
   },
 
   stripe: {

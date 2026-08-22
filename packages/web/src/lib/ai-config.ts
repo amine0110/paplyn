@@ -4,12 +4,13 @@ export type AiProviderConfig = {
   model: string;
 };
 
-export const XAI_DEFAULT_BASE_URL = "https://api.x.ai/v1";
-export const XAI_DEFAULT_MODEL = "grok-4.6";
+export const GROQ_DEFAULT_BASE_URL = "https://api.groq.com/openai/v1";
+export const GROQ_DEFAULT_MODEL = "llama-3.3-70b-versatile";
 export const OPENAI_DEFAULT_BASE_URL = "https://api.openai.com/v1";
 export const OPENAI_DEFAULT_MODEL = "gpt-4o-mini";
 
 export type AiEnv = {
+  groqApiKey?: string;
   xaiApiKey?: string;
   openaiApiKey?: string;
   openaiBaseUrl?: string;
@@ -22,6 +23,24 @@ export type OrgAiSettings = {
   openaiModel?: string | null;
 };
 
+export function looksLikeGroqApiKey(key: string): boolean {
+  return key.trim().startsWith("gsk");
+}
+
+/** Groq key from GROQ_API_KEY, or gsk-prefixed legacy XAI_/OPENAI_ vars. */
+export function resolveGroqApiKey(env: AiEnv): string | null {
+  const groq = env.groqApiKey?.trim();
+  if (groq) return groq;
+
+  const xai = env.xaiApiKey?.trim();
+  if (xai && looksLikeGroqApiKey(xai)) return xai;
+
+  const openai = env.openaiApiKey?.trim();
+  if (openai && looksLikeGroqApiKey(openai)) return openai;
+
+  return null;
+}
+
 export function isOpenAiHostedBaseUrl(baseUrl: string): boolean {
   try {
     const host = new URL(baseUrl).hostname.toLowerCase();
@@ -31,14 +50,14 @@ export function isOpenAiHostedBaseUrl(baseUrl: string): boolean {
   }
 }
 
-/** Hosted (SaaS): XAI_API_KEY + xAI defaults, else OPENAI_* BYO. */
+/** Hosted (SaaS): Groq first, else OPENAI_* BYO. */
 export function resolveHostedAiConfig(env: AiEnv): AiProviderConfig | null {
-  const xaiKey = env.xaiApiKey?.trim();
-  if (xaiKey) {
+  const groqKey = resolveGroqApiKey(env);
+  if (groqKey) {
     return {
-      apiKey: xaiKey,
-      baseUrl: XAI_DEFAULT_BASE_URL,
-      model: env.openaiModel?.trim() || XAI_DEFAULT_MODEL,
+      apiKey: groqKey,
+      baseUrl: GROQ_DEFAULT_BASE_URL,
+      model: env.openaiModel?.trim() || GROQ_DEFAULT_MODEL,
     };
   }
 
@@ -96,7 +115,7 @@ export function aiNotConfiguredMessage(isSelfHosted: boolean): string {
   if (isSelfHosted) {
     return "AI not configured. Set an API key in Admin settings or OPENAI_API_KEY in environment.";
   }
-  return "AI not configured. Set XAI_API_KEY for hosted Grok, or OPENAI_API_KEY with OPENAI_BASE_URL for BYO OpenAI.";
+  return "AI not configured. Set GROQ_API_KEY for hosted Groq, or OPENAI_API_KEY with OPENAI_BASE_URL for BYO OpenAI.";
 }
 
 /** Client-safe: reads only NEXT_PUBLIC_DEPLOYMENT_MODE (defaults to selfhosted). */
@@ -108,11 +127,12 @@ export function aiUnavailableBannerMessage(isSelfHosted: boolean): string {
   if (isSelfHosted) {
     return "Configure an API key in Admin settings or OPENAI_API_KEY to enable AI features.";
   }
-  return "AI assistant is not available. Hosted deployments need XAI_API_KEY (Grok) or OPENAI_API_KEY.";
+  return "AI assistant is not available. Hosted deployments need GROQ_API_KEY or OPENAI_API_KEY.";
 }
 
 export function readAiEnvFromProcess(env: NodeJS.ProcessEnv = process.env): AiEnv {
   return {
+    groqApiKey: env.GROQ_API_KEY,
     xaiApiKey: env.XAI_API_KEY,
     openaiApiKey: env.OPENAI_API_KEY,
     openaiBaseUrl: env.OPENAI_BASE_URL,

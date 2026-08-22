@@ -27,7 +27,7 @@ Both modes share the same codebase and feature set. Self-hosting is the supporte
 - **Sharing** — Email invites with owner/editor/viewer roles
 - **Version history** — Automatic revisions with restore
 - **Templates** — Blank article, IEEE conference, thesis chapter, Beamer slides
-- **AI assistant** — Optional Grok (xAI) on hosted deployments, or any OpenAI-compatible provider for self-hosting
+- **AI assistant** — Optional Groq on hosted deployments, or any OpenAI-compatible provider for self-hosting
 - **Themes** — Light, dark, and system appearance
 
 ## Self-host quickstart (Docker)
@@ -130,10 +130,10 @@ See [`.env.example`](.env.example) for the full list. Key variables:
 | `NEXT_PUBLIC_COLLAB_URL` | WebSocket URL for collaboration |
 | `COLLAB_SECRET` | Token signing for WebSocket auth |
 | `COMPILER_URL` | Compile service URL |
-| `XAI_API_KEY` | Enables AI assistant on hosted (SaaS) deployments using xAI Grok |
+| `GROQ_API_KEY` | Enables AI assistant on hosted (SaaS) deployments using Groq |
 | `OPENAI_API_KEY` | Enables AI assistant via BYO OpenAI or self-hosted env fallback |
 | `OPENAI_BASE_URL` | OpenAI-compatible API base URL (default `https://api.openai.com/v1`) |
-| `OPENAI_MODEL` | Model override (`grok-4.6` with XAI key, `gpt-4o-mini` with OpenAI key) |
+| `OPENAI_MODEL` | Model override (`llama-3.3-70b-versatile` with Groq, `gpt-4o-mini` with OpenAI) |
 | `STRIPE_*` | Stripe keys and price IDs (SaaS mode only) |
 
 ## Testing

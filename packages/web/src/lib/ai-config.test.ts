@@ -1,44 +1,84 @@
 import { describe, it, expect } from "vitest";
 import {
+  GROQ_DEFAULT_BASE_URL,
+  GROQ_DEFAULT_MODEL,
   OPENAI_DEFAULT_BASE_URL,
   OPENAI_DEFAULT_MODEL,
-  XAI_DEFAULT_BASE_URL,
-  XAI_DEFAULT_MODEL,
   aiNotConfiguredMessage,
   isOpenAiHostedBaseUrl,
+  looksLikeGroqApiKey,
+  resolveGroqApiKey,
   resolveHostedAiConfig,
   resolveSelfHostedAiConfig,
 } from "@/lib/ai-config";
 
+describe("looksLikeGroqApiKey", () => {
+  it("detects gsk prefix", () => {
+    expect(looksLikeGroqApiKey("gsk_test_key")).toBe(true);
+    expect(looksLikeGroqApiKey("sk-openai")).toBe(false);
+  });
+});
+
+describe("resolveGroqApiKey", () => {
+  it("prefers GROQ_API_KEY", () => {
+    expect(
+      resolveGroqApiKey({
+        groqApiKey: "gsk-primary",
+        openaiApiKey: "gsk-fallback",
+      })
+    ).toBe("gsk-primary");
+  });
+
+  it("accepts gsk in XAI_API_KEY when GROQ_API_KEY unset", () => {
+    expect(resolveGroqApiKey({ xaiApiKey: "gsk-from-xai" })).toBe("gsk-from-xai");
+  });
+
+  it("accepts gsk in OPENAI_API_KEY when GROQ_API_KEY unset", () => {
+    expect(resolveGroqApiKey({ openaiApiKey: "gsk-from-openai" })).toBe("gsk-from-openai");
+  });
+});
+
 describe("resolveHostedAiConfig", () => {
-  it("prefers XAI_API_KEY with xAI defaults", () => {
+  it("uses GROQ_API_KEY with Groq defaults", () => {
     expect(
       resolveHostedAiConfig({
-        xaiApiKey: "xai-test-key",
+        groqApiKey: "gsk-test",
         openaiApiKey: "sk-openai",
         openaiBaseUrl: OPENAI_DEFAULT_BASE_URL,
       })
     ).toEqual({
-      apiKey: "xai-test-key",
-      baseUrl: XAI_DEFAULT_BASE_URL,
-      model: XAI_DEFAULT_MODEL,
+      apiKey: "gsk-test",
+      baseUrl: GROQ_DEFAULT_BASE_URL,
+      model: GROQ_DEFAULT_MODEL,
     });
   });
 
-  it("uses OPENAI_MODEL override with xAI key", () => {
+  it("treats gsk XAI_API_KEY as Groq when GROQ_API_KEY unset", () => {
     expect(
       resolveHostedAiConfig({
-        xaiApiKey: "xai-test-key",
-        openaiModel: "grok-custom",
+        xaiApiKey: "gsk-legacy-slot",
       })
     ).toEqual({
-      apiKey: "xai-test-key",
-      baseUrl: XAI_DEFAULT_BASE_URL,
-      model: "grok-custom",
+      apiKey: "gsk-legacy-slot",
+      baseUrl: GROQ_DEFAULT_BASE_URL,
+      model: GROQ_DEFAULT_MODEL,
     });
   });
 
-  it("falls back to OPENAI_* when XAI_API_KEY is unset", () => {
+  it("uses OPENAI_MODEL override with Groq key", () => {
+    expect(
+      resolveHostedAiConfig({
+        groqApiKey: "gsk-test",
+        openaiModel: "llama-custom",
+      })
+    ).toEqual({
+      apiKey: "gsk-test",
+      baseUrl: GROQ_DEFAULT_BASE_URL,
+      model: "llama-custom",
+    });
+  });
+
+  it("falls back to OPENAI_* when no Groq key is configured", () => {
     expect(
       resolveHostedAiConfig({
         openaiApiKey: "sk-openai",
@@ -67,7 +107,7 @@ describe("resolveHostedAiConfig", () => {
 
   it("returns null when no keys are configured", () => {
     expect(resolveHostedAiConfig({})).toBeNull();
-    expect(resolveHostedAiConfig({ xaiApiKey: "  ", openaiApiKey: "" })).toBeNull();
+    expect(resolveHostedAiConfig({ groqApiKey: "  ", openaiApiKey: "" })).toBeNull();
   });
 });
 
@@ -103,10 +143,10 @@ describe("resolveSelfHostedAiConfig", () => {
     });
   });
 
-  it("does not use XAI_API_KEY on self-hosted", () => {
+  it("does not use GROQ_API_KEY on self-hosted", () => {
     expect(
       resolveSelfHostedAiConfig(null, {
-        xaiApiKey: "xai-only",
+        groqApiKey: "gsk-only",
       })
     ).toBeNull();
   });
@@ -115,13 +155,13 @@ describe("resolveSelfHostedAiConfig", () => {
 describe("isOpenAiHostedBaseUrl", () => {
   it("detects api.openai.com", () => {
     expect(isOpenAiHostedBaseUrl("https://api.openai.com/v1")).toBe(true);
-    expect(isOpenAiHostedBaseUrl("https://api.x.ai/v1")).toBe(false);
+    expect(isOpenAiHostedBaseUrl("https://api.groq.com/openai/v1")).toBe(false);
   });
 });
 
 describe("aiNotConfiguredMessage", () => {
-  it("mentions XAI_API_KEY for hosted", () => {
-    expect(aiNotConfiguredMessage(false)).toContain("XAI_API_KEY");
+  it("mentions GROQ_API_KEY for hosted", () => {
+    expect(aiNotConfiguredMessage(false)).toContain("GROQ_API_KEY");
   });
 
   it("mentions admin settings for self-hosted", () => {
