@@ -4,4 +4,4 @@ import { createAuthClient } from "better-auth/react";
 // falls back to the relative path /api/auth — no build-time hostname required.
 export const authClient = createAuthClient();
 
-export const { signIn, signUp, signOut, useSession } = authClient;
+export const { signIn, signUp, signOut, useSession, updateUser, changePassword } = authClient;

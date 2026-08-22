@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- User profile settings at `/settings`: edit display name and change password while signed in.
+
 ### Fixed
 
 - SyncTeX reverse lookup: stop subtracting the 72pt Y offset in `findSynctexSource` after click coordinates are already converted to the same absolute page space as TeX Live block geometry, which caused one-section-early jumps on IEEE layouts.
