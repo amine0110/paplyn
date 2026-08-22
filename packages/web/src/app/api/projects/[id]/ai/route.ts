@@ -16,6 +16,8 @@ import {
 import { buildAiFileContext } from "@/lib/ai-file-context";
 import { getPluginActionPrompt, resolveAiPlugins } from "@/lib/ai-plugins";
 import {
+  collectPapersFromToolResults,
+  collectUsedPlugins,
   formatToolResultsAsAssistantMessage,
   hadToolActivity,
 } from "@/lib/ai-response";
@@ -170,7 +172,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     activeFile: parsed.data.activeFile,
   });
 
-  const { tools: pluginTools, systemPrompt: pluginSystemPrompt } = resolveAiPlugins();
+  const { tools: pluginTools, systemPrompt: pluginSystemPrompt, plugins } = resolveAiPlugins();
 
   let systemPrompt = `You are ${PRODUCT.aiAssistantName}, a helpful LaTeX assistant for academic writing.
 You help researchers write, edit, and debug LaTeX documents.
@@ -225,9 +227,16 @@ Format explanatory replies with markdown (headings, lists, tables) when helpful.
       messages: parsed.data.messages,
     });
 
+    const usedPlugins = collectUsedPlugins(result, plugins);
+    const papers = collectPapersFromToolResults(result);
+
     await incrementAiUsage(session.user.id);
 
-    return NextResponse.json({ content });
+    return NextResponse.json({
+      content,
+      ...(usedPlugins.length > 0 ? { usedPlugins } : {}),
+      ...(papers.length > 0 ? { papers } : {}),
+    });
   } catch (error) {
     if (isAiPromptTooLargeError(error)) {
       return NextResponse.json({ error: PROMPT_TOO_LARGE_MESSAGE }, { status: 429 });

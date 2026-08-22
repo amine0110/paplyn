@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  collectPapersFromToolResults,
   collectToolResultTexts,
+  collectUsedPlugins,
   formatToolResultsAsAssistantMessage,
   hadToolActivity,
   usedLiteratureSearch,
 } from "./ai-response";
+import { getEnabledAiPlugins } from "./ai-plugins";
 
 function mockResult(overrides: Record<string, unknown> = {}) {
   return {
@@ -17,6 +20,24 @@ function mockResult(overrides: Record<string, unknown> = {}) {
   } as Parameters<typeof hadToolActivity>[0];
 }
 
+const literaturePayload = {
+  kind: "literature-search" as const,
+  summary: 'Found 3 paper(s) for "transformers" via live semantic-scholar search.',
+  query: "transformers",
+  source: "semantic-scholar" as const,
+  papers: [
+    {
+      title: "Attention Is All You Need",
+      year: 2017,
+      authors: ["Vaswani"],
+      venue: "NeurIPS",
+      doi: null,
+      url: null,
+      source: "semantic-scholar" as const,
+    },
+  ],
+};
+
 describe("ai-response helpers", () => {
   it("detects tool activity across steps", () => {
     const result = mockResult({
@@ -25,21 +46,16 @@ describe("ai-response helpers", () => {
     expect(hadToolActivity(result)).toBe(true);
   });
 
-  it("collects string tool results", () => {
+  it("collects summary text from structured literature tool results", () => {
     const result = mockResult({
-      toolResults: [{ toolName: "search_literature", result: "Found 2 paper(s) for query." }],
+      toolResults: [{ toolName: "search_literature", result: literaturePayload }],
     });
-    expect(collectToolResultTexts(result)).toEqual(["Found 2 paper(s) for query."]);
+    expect(collectToolResultTexts(result)).toEqual([literaturePayload.summary]);
   });
 
   it("formats literature tool output as fallback assistant text", () => {
     const result = mockResult({
-      toolResults: [
-        {
-          toolName: "search_literature",
-          result: "Found 3 paper(s) for \"transformers\" via live semantic-scholar search.",
-        },
-      ],
+      toolResults: [{ toolName: "search_literature", result: literaturePayload }],
     });
     expect(formatToolResultsAsAssistantMessage(result)).toContain("Found 3 paper(s)");
   });
@@ -53,5 +69,32 @@ describe("ai-response helpers", () => {
       toolCalls: [{ toolName: "search_literature" }],
     });
     expect(usedLiteratureSearch(result)).toBe(true);
+  });
+
+  it("collects used plugins with OpenAlex fallback label", () => {
+    const result = mockResult({
+      toolResults: [
+        {
+          toolName: "search_literature",
+          result: { ...literaturePayload, source: "openalex" },
+        },
+      ],
+    });
+    const used = collectUsedPlugins(result, getEnabledAiPlugins());
+    expect(used).toEqual([
+      expect.objectContaining({
+        id: "semantic-scholar",
+        displayName: "OpenAlex",
+        source: "openalex",
+      }),
+    ]);
+  });
+
+  it("collects structured papers from tool results", () => {
+    const result = mockResult({
+      toolResults: [{ toolName: "search_literature", result: literaturePayload }],
+    });
+    expect(collectPapersFromToolResults(result)).toHaveLength(1);
+    expect(collectPapersFromToolResults(result)[0]?.title).toBe("Attention Is All You Need");
   });
 });

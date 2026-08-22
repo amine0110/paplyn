@@ -1,4 +1,7 @@
 import type { GenerateTextResult, ToolSet } from "ai";
+import type { AiPaper, AiUsedPlugin, LiteratureToolPayload } from "@/lib/ai-types";
+import { getPluginByToolName, pluginDisplayName } from "@/lib/ai-plugins";
+import type { AiPlugin } from "@/lib/ai-plugins/types";
 
 const LITERATURE_TOOL_NAME = "search_literature";
 
@@ -6,8 +9,20 @@ function isWhitespaceOnly(text: string): boolean {
   return text.trim().length === 0;
 }
 
+function isLiteratureToolPayload(result: unknown): result is LiteratureToolPayload {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    (result as LiteratureToolPayload).kind === "literature-search"
+  );
+}
+
 function stringifyToolResult(result: unknown): string | null {
   if (result == null) return null;
+  if (isLiteratureToolPayload(result)) {
+    const trimmed = result.summary.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
   if (typeof result === "string") {
     const trimmed = result.trim();
     return trimmed.length > 0 ? trimmed : null;
@@ -74,3 +89,99 @@ export function usedLiteratureSearch<TOOLS extends ToolSet>(
       step.toolResults.some((tr) => tr.toolName === LITERATURE_TOOL_NAME)
   );
 }
+
+function paperKey(paper: AiPaper): string {
+  if (paper.doi) return `doi:${paper.doi.toLowerCase()}`;
+  return `title:${paper.title.toLowerCase().replace(/\s+/g, " ").trim()}`;
+}
+
+function dedupePapers(papers: AiPaper[]): AiPaper[] {
+  const seen = new Set<string>();
+  const unique: AiPaper[] = [];
+  for (const paper of papers) {
+    const key = paperKey(paper);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(paper);
+  }
+  return unique;
+}
+
+function collectLiteraturePayloads(result: GenerateTextResult<ToolSet, unknown>): LiteratureToolPayload[] {
+  const payloads: LiteratureToolPayload[] = [];
+
+  for (const toolResult of result.toolResults) {
+    if (isLiteratureToolPayload(toolResult.result)) {
+      payloads.push(toolResult.result);
+    }
+  }
+
+  for (const step of result.steps) {
+    for (const toolResult of step.toolResults) {
+      if (isLiteratureToolPayload(toolResult.result)) {
+        payloads.push(toolResult.result);
+      }
+    }
+  }
+
+  return payloads;
+}
+
+function sourceFromToolResult(result: unknown): AiUsedPlugin["source"] | undefined {
+  if (!isLiteratureToolPayload(result)) return undefined;
+  return result.source;
+}
+
+function collectToolUsages(
+  result: GenerateTextResult<ToolSet, unknown>
+): { toolName: string; toolResult?: unknown }[] {
+  const usages: { toolName: string; toolResult?: unknown }[] = [];
+
+  for (const call of result.toolCalls) {
+    usages.push({ toolName: call.toolName });
+  }
+  for (const toolResult of result.toolResults) {
+    usages.push({ toolName: toolResult.toolName, toolResult: toolResult.result });
+  }
+  for (const step of result.steps) {
+    for (const call of step.toolCalls) {
+      usages.push({ toolName: call.toolName });
+    }
+    for (const toolResult of step.toolResults) {
+      usages.push({ toolName: toolResult.toolName, toolResult: toolResult.result });
+    }
+  }
+
+  return usages;
+}
+
+export function collectUsedPlugins(
+  result: GenerateTextResult<ToolSet, unknown>,
+  plugins: AiPlugin[]
+): AiUsedPlugin[] {
+  const used = new Map<string, AiUsedPlugin>();
+
+  for (const usage of collectToolUsages(result)) {
+    const plugin = plugins.find((entry) => entry.toolName === usage.toolName) ?? getPluginByToolName(usage.toolName);
+    if (!plugin) continue;
+
+    const source = sourceFromToolResult(usage.toolResult);
+    used.set(plugin.id, {
+      id: plugin.id,
+      displayName: pluginDisplayName(plugin, { source }),
+      toolName: plugin.toolName,
+      source,
+    });
+  }
+
+  return [...used.values()];
+}
+
+export function collectPapersFromToolResults(
+  result: GenerateTextResult<ToolSet, unknown>
+): AiPaper[] {
+  const papers = collectLiteraturePayloads(result).flatMap((payload) => payload.papers);
+  return dedupePapers(papers);
+}
+
+export { isWhitespaceOnly };

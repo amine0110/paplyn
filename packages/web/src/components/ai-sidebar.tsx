@@ -7,10 +7,14 @@ import { Sparkles, Send, X } from "lucide-react";
 import { aiUnavailableBannerMessage, isClientSelfHosted } from "@/lib/ai-config";
 import { extractInsertableContent } from "@/lib/ai-insert-content";
 import { AiMarkdown } from "@/components/ai-markdown";
+import type { AiPaper, AiUsedPlugin } from "@/lib/ai-types";
+import { loadingLabelForLiteratureAction } from "@/lib/ai-plugins/client-meta";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
+  usedPlugins?: AiUsedPlugin[];
+  papers?: AiPaper[];
 }
 
 export interface AiPendingRequest {
@@ -25,6 +29,7 @@ interface AiSidebarProps {
   compileErrors: string[];
   onInsert: (text: string) => void;
   onReplace?: (text: string) => void;
+  onCitePaper?: (paper: AiPaper) => void | Promise<void>;
   onClose: () => void;
   /** Full-pane sheet on mobile; sidebar panel on desktop. */
   variant?: "sidebar" | "sheet";
@@ -34,19 +39,21 @@ interface AiSidebarProps {
 }
 
 function loadingMessageForAction(action?: string, userMessage?: string): string {
-  if (action === "find-papers" || action === "citation") {
-    return "Searching papers…";
-  }
-  const lower = (userMessage ?? "").toLowerCase();
-  if (
-    lower.includes("paper") ||
-    lower.includes("literature") ||
-    lower.includes("citation") ||
-    lower.includes("related work")
-  ) {
-    return "Searching papers…";
-  }
-  return "Thinking…";
+  return loadingLabelForLiteratureAction(action, userMessage) ?? "Thinking…";
+}
+
+function formatAuthors(authors: string[]): string {
+  if (authors.length === 0) return "Unknown authors";
+  if (authors.length <= 2) return authors.join(", ");
+  return `${authors.slice(0, 2).join(", ")} et al.`;
+}
+
+function PluginChip({ plugin }: { plugin: AiUsedPlugin }) {
+  return (
+    <span className="inline-flex items-center rounded-full border border-border bg-canvas-dark/70 px-2 py-0.5 text-[10px] font-medium text-ink-muted">
+      Used {plugin.displayName}
+    </span>
+  );
 }
 
 export function AiSidebar({
@@ -56,6 +63,7 @@ export function AiSidebar({
   compileErrors,
   onInsert,
   onReplace,
+  onCitePaper,
   onClose,
   variant = "sidebar",
   pendingRequest,
@@ -66,6 +74,7 @@ export function AiSidebar({
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("Thinking…");
   const [available, setAvailable] = useState(true);
+  const [citingKey, setCitingKey] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef(messages);
@@ -139,11 +148,33 @@ export function AiSidebar({
         return;
       }
 
-      setMessages((prev) => [...prev, { role: "assistant", content: assistantContent }]);
+      const usedPlugins = Array.isArray(data.usedPlugins) ? (data.usedPlugins as AiUsedPlugin[]) : undefined;
+      const papers = Array.isArray(data.papers) ? (data.papers as AiPaper[]) : undefined;
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: assistantContent,
+          ...(usedPlugins?.length ? { usedPlugins } : {}),
+          ...(papers?.length ? { papers } : {}),
+        },
+      ]);
     } catch {
       setMessages((prev) => [...prev, { role: "assistant", content: "Failed to connect to AI service." }]);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleCite(paper: AiPaper) {
+    if (!onCitePaper) return;
+    const key = paper.doi ?? paper.title;
+    setCitingKey(key);
+    try {
+      await onCitePaper(paper);
+    } finally {
+      setCitingKey(null);
     }
   }
 
@@ -226,10 +257,53 @@ export function AiSidebar({
                   : "mr-auto border border-border bg-paper shadow-sm"
               }`}
             >
+              {msg.role === "assistant" && msg.usedPlugins && msg.usedPlugins.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-1">
+                  {msg.usedPlugins.map((plugin) => (
+                    <PluginChip key={`${plugin.id}-${plugin.source ?? "default"}`} plugin={plugin} />
+                  ))}
+                </div>
+              )}
               {msg.role === "user" ? (
                 <div className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</div>
               ) : (
                 <AiMarkdown content={msg.content} />
+              )}
+              {msg.role === "assistant" && msg.papers && msg.papers.length > 0 && onCitePaper && (
+                <div className="mt-3 space-y-2 border-t border-border pt-2">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-ink-faint">
+                    Cite from search
+                  </p>
+                  {msg.papers.map((paper) => {
+                    const citeId = paper.doi ?? paper.title;
+                    const isCiting = citingKey === citeId;
+                    return (
+                      <div
+                        key={citeId}
+                        className="flex items-start justify-between gap-2 rounded-lg border border-border/70 bg-canvas-dark/40 px-2 py-1.5"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium leading-snug text-ink line-clamp-2">
+                            {paper.title}
+                          </p>
+                          <p className="mt-0.5 text-[10px] text-ink-muted">
+                            {formatAuthors(paper.authors)}
+                            {paper.year != null ? ` · ${paper.year}` : ""}
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 shrink-0 px-2 text-[11px]"
+                          disabled={loading || isCiting}
+                          onClick={() => void handleCite(paper)}
+                        >
+                          {isCiting ? "Citing…" : "Cite"}
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
               {msg.role === "assistant" && msg.content && (
                 <div className="mt-1 flex flex-wrap gap-1">

@@ -43,7 +43,21 @@ export const semanticScholarPlugin: AiPlugin = {
       }),
       execute: async ({ query }) => {
         const searchResult = await searchLiterature(query);
-        return formatLiteratureSearchForModel(searchResult);
+        return {
+          kind: "literature-search" as const,
+          summary: formatLiteratureSearchForModel(searchResult),
+          query: searchResult.query,
+          source: searchResult.source,
+          papers: searchResult.papers.map((paper) => ({
+            title: paper.title,
+            year: paper.year,
+            authors: paper.authors,
+            venue: paper.venue,
+            doi: paper.doi,
+            url: paper.url,
+            source: paper.source,
+          })),
+        };
       },
     }),
 };

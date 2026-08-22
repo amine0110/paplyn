@@ -55,6 +55,14 @@ import type { EditorView } from "@codemirror/view";
 import type { Project } from "@/lib/schema";
 import type { DocumentStats } from "@/lib/document-stats";
 import { countDocumentStats } from "@/lib/document-stats";
+import type { AiPaper } from "@/lib/ai-types";
+import {
+  appendBibEntry,
+  formatBibtexEntry,
+  parseBibKeys,
+  resolveProjectBibPath,
+  suggestCitationKey,
+} from "@/lib/bibtex";
 import { canManageSharing, type ProjectRole } from "@/lib/project-sharing";
 import {
   effectiveLayoutMode,
@@ -428,6 +436,30 @@ export default function ProjectPage() {
       setShowAi(false);
       setMobileTab("editor");
     }
+  }
+
+  async function handleCitePaper(paper: AiPaper) {
+    if (!canEdit || !project) return;
+
+    const filePaths = files.map((file) => file.path);
+    const fileContents = Object.fromEntries(files.map((file) => [file.path, file.content]));
+    const bibPath = resolveProjectBibPath({
+      mainFile: project.mainFile,
+      filePaths,
+      fileContents,
+    });
+
+    const existingBib = fileContents[bibPath] ?? "";
+    const existingKeys = parseBibKeys(existingBib);
+    const citationKey = suggestCitationKey(paper, existingKeys);
+    const entry = formatBibtexEntry(paper, citationKey);
+    const updatedBib = appendBibEntry(existingBib, entry, citationKey);
+
+    if (updatedBib !== existingBib) {
+      await saveFile(bibPath, updatedBib, false);
+    }
+
+    handleInsertAtCursor(`\\cite{${citationKey}}`);
   }
 
   function handleSelectionAiAction(request: AiPendingRequest) {
@@ -881,6 +913,7 @@ export default function ProjectPage() {
               compileErrors={compileErrors.map((e) => e.message)}
               onInsert={handleInsertAtCursor}
               onReplace={handleReplaceSelection}
+              onCitePaper={canEdit ? handleCitePaper : undefined}
               onClose={() => setShowAi(false)}
               variant="sheet"
               pendingRequest={aiPendingRequest}
@@ -900,6 +933,7 @@ export default function ProjectPage() {
                 compileErrors={compileErrors.map((e) => e.message)}
                 onInsert={handleInsertAtCursor}
                 onReplace={handleReplaceSelection}
+                onCitePaper={canEdit ? handleCitePaper : undefined}
                 onClose={() => setShowAi(false)}
                 pendingRequest={aiPendingRequest}
                 onPendingRequestConsumed={() => setAiPendingRequest(null)}
