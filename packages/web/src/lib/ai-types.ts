@@ -2,6 +2,8 @@
 
 import type { AiClientAction } from "@/lib/ai-client-actions";
 
+export type { AiClientAction };
+
 export type LiteratureSource = "semantic-scholar" | "openalex";
 
 export interface AiUsedPlugin {
