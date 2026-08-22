@@ -133,7 +133,7 @@ See [`.env.example`](.env.example) for the full list. Key variables:
 | `GROQ_API_KEY` | Enables AI assistant on hosted (SaaS) deployments using Groq |
 | `OPENAI_API_KEY` | Enables AI assistant via BYO OpenAI or self-hosted env fallback |
 | `OPENAI_BASE_URL` | OpenAI-compatible API base URL (default `https://api.openai.com/v1`) |
-| `OPENAI_MODEL` | Model override (`llama-3.3-70b-versatile` with Groq, `gpt-4o-mini` with OpenAI) |
+| `OPENAI_MODEL` | Model override (`openai/gpt-oss-120b` with Groq; fallback `openai/gpt-oss-20b`; `gpt-4o-mini` with OpenAI) |
 | `STRIPE_*` | Stripe keys and price IDs (SaaS mode only) |
 
 ## Testing

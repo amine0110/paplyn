@@ -5,7 +5,8 @@ export type AiProviderConfig = {
 };
 
 export const GROQ_DEFAULT_BASE_URL = "https://api.groq.com/openai/v1";
-export const GROQ_DEFAULT_MODEL = "llama-3.3-70b-versatile";
+export const GROQ_DEFAULT_MODEL = "openai/gpt-oss-120b";
+export const GROQ_FALLBACK_MODEL = "openai/gpt-oss-20b";
 export const OPENAI_DEFAULT_BASE_URL = "https://api.openai.com/v1";
 export const OPENAI_DEFAULT_MODEL = "gpt-4o-mini";
 
