@@ -57,3 +57,31 @@ export function layoutShowsProof(mode: WorkspaceLayoutMode): boolean {
 export function openProofLayout(lastProofLayout: ProofLayoutPreference): WorkspaceLayoutMode {
   return lastProofLayout === "proof" ? "proof" : "columns";
 }
+
+/** Tailwind `sm` breakpoint — viewports below this use the mobile workspace. */
+export const MOBILE_BREAKPOINT_PX = 640;
+
+export type MobileWorkspaceTab = "files" | "editor" | "proof";
+
+export function isNarrowViewport(width: number): boolean {
+  return width < MOBILE_BREAKPOINT_PX;
+}
+
+/** On narrow viewports, split modes collapse to a single pane. */
+export function effectiveLayoutMode(
+  mode: WorkspaceLayoutMode,
+  narrow: boolean
+): WorkspaceLayoutMode {
+  if (!narrow) return mode;
+  if (mode === "columns" || mode === "rows") return "editor";
+  return mode;
+}
+
+export function layoutModeToMobileTab(mode: WorkspaceLayoutMode): MobileWorkspaceTab {
+  if (mode === "proof") return "proof";
+  return "editor";
+}
+
+export function mobileTabToLayoutMode(tab: MobileWorkspaceTab): WorkspaceLayoutMode {
+  return tab === "proof" ? "proof" : "editor";
+}

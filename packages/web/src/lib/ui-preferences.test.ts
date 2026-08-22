@@ -11,6 +11,11 @@ import {
   openProofLayout,
   readStoredLayoutMode,
   LAYOUT_STORAGE_KEY,
+  effectiveLayoutMode,
+  isNarrowViewport,
+  layoutModeToMobileTab,
+  mobileTabToLayoutMode,
+  MOBILE_BREAKPOINT_PX,
 } from "@/lib/workspace-layout";
 
 describe("theme", () => {
@@ -56,5 +61,28 @@ describe("workspace layout", () => {
 
   it("uses a stable storage key", () => {
     expect(LAYOUT_STORAGE_KEY).toBe("quire-workspace-layout");
+  });
+
+  it("detects narrow viewports below the sm breakpoint", () => {
+    expect(MOBILE_BREAKPOINT_PX).toBe(640);
+    expect(isNarrowViewport(375)).toBe(true);
+    expect(isNarrowViewport(639)).toBe(true);
+    expect(isNarrowViewport(640)).toBe(false);
+  });
+
+  it("collapses split modes on narrow viewports", () => {
+    expect(effectiveLayoutMode("columns", true)).toBe("editor");
+    expect(effectiveLayoutMode("rows", true)).toBe("editor");
+    expect(effectiveLayoutMode("proof", true)).toBe("proof");
+    expect(effectiveLayoutMode("columns", false)).toBe("columns");
+  });
+
+  it("maps layout modes to mobile tabs", () => {
+    expect(layoutModeToMobileTab("proof")).toBe("proof");
+    expect(layoutModeToMobileTab("editor")).toBe("editor");
+    expect(layoutModeToMobileTab("columns")).toBe("editor");
+    expect(mobileTabToLayoutMode("proof")).toBe("proof");
+    expect(mobileTabToLayoutMode("files")).toBe("editor");
+    expect(mobileTabToLayoutMode("editor")).toBe("editor");
   });
 });

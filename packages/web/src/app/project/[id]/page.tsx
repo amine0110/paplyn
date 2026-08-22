@@ -33,8 +33,10 @@ import { CollabPresence } from "@/components/collab-presence";
 import { AiSidebar } from "@/components/ai-sidebar";
 import { EditorStatusBar, EditorToolbar } from "@/components/editor-toolbar";
 import { LayoutModeSwitcher } from "@/components/layout-mode-switcher";
+import { MobileWorkspaceTabs } from "@/components/mobile-workspace-tabs";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
+import { useMediaQuery } from "@/lib/use-media-query";
 import {
   Play,
   Sparkles,
@@ -46,6 +48,7 @@ import {
   Settings,
   History,
   X,
+  MoreHorizontal,
 } from "lucide-react";
 import type { EditorView } from "@codemirror/view";
 import type { Project } from "@/lib/schema";
@@ -53,12 +56,16 @@ import type { DocumentStats } from "@/lib/document-stats";
 import { countDocumentStats } from "@/lib/document-stats";
 import { canManageSharing, type ProjectRole } from "@/lib/project-sharing";
 import {
+  effectiveLayoutMode,
+  layoutModeToMobileTab,
   layoutShowsProof,
+  mobileTabToLayoutMode,
   openProofLayout,
   persistLayoutMode,
   persistProofLayoutPreference,
   readProofLayoutPreference,
   readStoredLayoutMode,
+  type MobileWorkspaceTab,
   type ProofLayoutPreference,
   type WorkspaceLayoutMode,
 } from "@/lib/workspace-layout";
@@ -97,9 +104,12 @@ export default function ProjectPage() {
 
   const [showOutline, setShowOutline] = useState(true);
   const [layoutMode, setLayoutMode] = useState<WorkspaceLayoutMode>("editor");
+  const [mobileTab, setMobileTab] = useState<MobileWorkspaceTab>("editor");
   const [proofLayoutPreference, setProofLayoutPreference] =
     useState<ProofLayoutPreference>("columns");
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showAi, setShowAi] = useState(false);
+  const isNarrow = useMediaQuery("(max-width: 639px)");
   const [showShare, setShowShare] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -109,23 +119,53 @@ export default function ProjectPage() {
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    setLayoutMode(readStoredLayoutMode());
+    const mode = readStoredLayoutMode();
+    setLayoutMode(mode);
     setProofLayoutPreference(readProofLayoutPreference());
+    setMobileTab(layoutModeToMobileTab(mode));
   }, []);
 
-  const updateLayoutMode = useCallback((mode: WorkspaceLayoutMode) => {
-    setLayoutMode(mode);
-    persistLayoutMode(mode);
-    if (mode === "columns" || mode === "proof") {
-      setProofLayoutPreference(mode);
-      persistProofLayoutPreference(mode);
+  useEffect(() => {
+    if (isNarrow) {
+      setMobileTab(layoutModeToMobileTab(layoutMode));
     }
-  }, []);
+  }, [isNarrow, layoutMode]);
+
+  const updateLayoutMode = useCallback(
+    (mode: WorkspaceLayoutMode) => {
+      setLayoutMode(mode);
+      persistLayoutMode(mode);
+      if (mode === "columns" || mode === "proof") {
+        setProofLayoutPreference(mode);
+        persistProofLayoutPreference(mode);
+      }
+      if (isNarrow) {
+        setMobileTab(layoutModeToMobileTab(mode));
+      }
+    },
+    [isNarrow]
+  );
 
   const openProof = useCallback(() => {
+    if (isNarrow) {
+      setMobileTab("proof");
+      setLayoutMode("proof");
+      persistLayoutMode("proof");
+      return;
+    }
     const next = openProofLayout(proofLayoutPreference);
     updateLayoutMode(next);
-  }, [proofLayoutPreference, updateLayoutMode]);
+  }, [isNarrow, proofLayoutPreference, updateLayoutMode]);
+
+  const handleMobileTabChange = useCallback(
+    (tab: MobileWorkspaceTab) => {
+      setMobileTab(tab);
+      if (tab !== "files") {
+        updateLayoutMode(mobileTabToLayoutMode(tab));
+      }
+    },
+    [updateLayoutMode]
+  );
 
   const loadProject = useCallback(async () => {
     const [projRes, filesRes, collabRes] = await Promise.all([
@@ -383,7 +423,8 @@ export default function ProjectPage() {
 
   const activeFileNode = files.find((f) => f.path === activeFile);
   const activeFileContent = activeFileNode?.content || "";
-  const showingProof = layoutShowsProof(layoutMode);
+  const workspaceLayoutMode = effectiveLayoutMode(layoutMode, isNarrow);
+  const showingProof = layoutShowsProof(workspaceLayoutMode);
   const isTextEditorFile =
     !!activeFile &&
     !isFolderPlaceholder(activeFile) &&
@@ -497,16 +538,44 @@ export default function ProjectPage() {
     </div>
   );
 
+  const filesPane = (
+    <div className="workspace-pane">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border-light">
+        <span className="text-xs font-medium tracking-wide uppercase text-ink-faint">Files</span>
+      </div>
+      <FileTree
+        files={files}
+        activeFile={activeFile}
+        onSelect={(path) => {
+          setActiveFile(path);
+          handleMobileTabChange("editor");
+        }}
+        onCreate={createFile}
+        onCreateFolder={createFolder}
+        onRename={renamePath}
+        onDelete={deleteFile}
+        onDeleteFolder={deleteFolder}
+        onUpload={uploadFiles}
+        onDownloadSource={downloadSource}
+        canEdit={canEdit}
+      />
+    </div>
+  );
+
   function renderWorkspace() {
-    if (layoutMode === "editor") {
+    if (isNarrow && mobileTab === "files") {
+      return filesPane;
+    }
+
+    if (workspaceLayoutMode === "editor") {
       return editorPane;
     }
 
-    if (layoutMode === "proof") {
+    if (workspaceLayoutMode === "proof") {
       return proofPane;
     }
 
-    if (layoutMode === "columns") {
+    if (workspaceLayoutMode === "columns") {
       return (
         <PanelGroup
           direction="horizontal"
@@ -558,7 +627,7 @@ export default function ProjectPage() {
           </Link>
           <button
             onClick={() => setShowOutline(!showOutline)}
-            className="text-ink-faint hover:text-ink transition-colors lg:hidden"
+            className="text-ink-faint hover:text-ink transition-colors hidden sm:block lg:hidden"
             title={showOutline ? "Hide outline" : "Show outline"}
           >
             {showOutline ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
@@ -584,37 +653,130 @@ export default function ProjectPage() {
             variant={showingProof ? "secondary" : "ghost"}
             size="sm"
             onClick={openProof}
+            className="hidden sm:inline-flex"
           >
             <BookOpen className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Proof</span>
           </Button>
-          <Button variant={showAi ? "secondary" : "ghost"} size="sm" onClick={() => setShowAi(!showAi)}>
+          <Button
+            variant={showAi ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setShowAi(!showAi)}
+            className="hidden sm:inline-flex"
+          >
             <Sparkles className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">AI</span>
           </Button>
           {canEdit && (
-            <Button variant="ghost" size="sm" onClick={() => setShowHistory(true)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowHistory(true)}
+              className="hidden sm:inline-flex"
+            >
               <History className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">History</span>
             </Button>
           )}
           {canEdit && (
-            <Button variant="ghost" size="sm" onClick={() => setShowSettings(true)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowSettings(true)}
+              className="hidden sm:inline-flex"
+            >
               <Settings className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Settings</span>
             </Button>
           )}
-          <Button variant="ghost" size="sm" onClick={() => setShowShare(true)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowShare(true)}
+            className="hidden sm:inline-flex"
+          >
             <Share2 className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Share</span>
           </Button>
+          <div className="relative sm:hidden">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              aria-expanded={showMobileMenu}
+              aria-haspopup="menu"
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </Button>
+            {showMobileMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowMobileMenu(false)}
+                  aria-hidden
+                />
+                <div
+                  className="absolute right-0 top-full mt-1 z-50 min-w-[10rem] rounded-sm border border-border bg-paper py-1 shadow-lg"
+                  role="menu"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-canvas-dark"
+                    onClick={() => {
+                      setShowMobileMenu(false);
+                      setShowShare(true);
+                    }}
+                  >
+                    Share
+                  </button>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-canvas-dark"
+                      onClick={() => {
+                        setShowMobileMenu(false);
+                        setShowHistory(true);
+                      }}
+                    >
+                      History
+                    </button>
+                  )}
+                  {canEdit && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-canvas-dark"
+                      onClick={() => {
+                        setShowMobileMenu(false);
+                        setShowSettings(true);
+                      }}
+                    >
+                      Settings
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-canvas-dark"
+                    onClick={() => {
+                      setShowMobileMenu(false);
+                      setShowAi(!showAi);
+                    }}
+                  >
+                    AI assistant
+                  </button>
+                  <div className="border-t border-border my-1" />
+                  <div className="px-3 py-2">
+                    <ThemeToggle compact />
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </header>
-
-      <div className="sm:hidden px-3 py-2 border-b border-border bg-paper flex items-center gap-2">
-        <LayoutModeSwitcher mode={layoutMode} onChange={updateLayoutMode} />
-        <ThemeToggle compact />
-      </div>
 
       <div className="flex-1 flex overflow-hidden relative min-h-0">
         {showOutline && (
@@ -656,7 +818,7 @@ export default function ProjectPage() {
         )}
 
         {showOutline && (
-          <aside className="lg:hidden absolute inset-y-0 left-0 w-64 z-30 bg-paper border-r border-border shadow-lg flex flex-col">
+          <aside className="hidden sm:flex lg:hidden absolute inset-y-0 left-0 w-64 z-30 bg-paper border-r border-border shadow-lg flex-col">
             <div className="flex items-center justify-between px-3 py-2 border-b border-border-light">
               <span className="text-xs font-medium tracking-wide uppercase text-ink-faint">Outline</span>
               <button onClick={() => setShowOutline(false)} className="text-ink-faint hover:text-ink p-0.5">
@@ -683,7 +845,9 @@ export default function ProjectPage() {
         )}
 
         <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">{renderWorkspace()}</div>
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden overflow-x-hidden">
+            {renderWorkspace()}
+          </div>
           <CompilePanel
             log={compileLog}
             errors={compileErrors}
@@ -691,6 +855,7 @@ export default function ProjectPage() {
             showLog={showLog}
             onToggleLog={() => setShowLog(!showLog)}
           />
+          <MobileWorkspaceTabs activeTab={mobileTab} onChange={handleMobileTabChange} />
         </main>
 
         {showAi && (

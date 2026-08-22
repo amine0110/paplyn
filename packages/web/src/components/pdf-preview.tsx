@@ -126,42 +126,42 @@ export function PdfPreview({
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className="flex items-center justify-center gap-3 py-2 shrink-0">
-        <Button variant="ghost" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+      <div className="flex items-center justify-center gap-1 sm:gap-3 py-2 shrink-0 overflow-x-auto px-2">
+        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" disabled={page <= 1} onClick={() => setPage(page - 1)}>
           <ChevronLeft className="h-3.5 w-3.5" />
         </Button>
-        <span className="text-xs text-ink-muted font-mono tabular-nums">
+        <span className="text-xs text-ink-muted font-mono tabular-nums shrink-0">
           {page} / {numPages || "—"}
         </span>
-        <Button variant="ghost" size="icon" className="h-7 w-7" disabled={page >= numPages} onClick={() => setPage(page + 1)}>
+        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" disabled={page >= numPages} onClick={() => setPage(page + 1)}>
           <ChevronRight className="h-3.5 w-3.5" />
         </Button>
-        <div className="w-px h-4 bg-border mx-1" />
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setScale(Math.max(0.5, scale - 0.1))}>
+        <div className="w-px h-4 bg-border mx-0.5 sm:mx-1 shrink-0" />
+        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setScale(Math.max(0.5, scale - 0.1))}>
           <ZoomOut className="h-3.5 w-3.5" />
         </Button>
-        <span className="text-xs text-ink-faint w-8 text-center tabular-nums">{Math.round(scale * 100)}%</span>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setScale(Math.min(2, scale + 0.1))}>
+        <span className="text-xs text-ink-faint w-8 text-center tabular-nums shrink-0">{Math.round(scale * 100)}%</span>
+        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setScale(Math.min(2, scale + 0.1))}>
           <ZoomIn className="h-3.5 w-3.5" />
         </Button>
         {showDownload && downloadFilename && (
           <>
-            <div className="w-px h-4 bg-border mx-1" />
+            <div className="w-px h-4 bg-border mx-0.5 sm:mx-1 shrink-0" />
             <Button
               variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs"
+              size="icon"
+              className="h-7 w-7 shrink-0 sm:w-auto sm:px-2"
               onClick={() => downloadPdfBase64(pdfData, downloadFilename)}
               title="Download PDF"
             >
-              <Download className="h-3.5 w-3.5 mr-1" />
-              Download
+              <Download className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline ml-1 text-xs">Download</span>
             </Button>
           </>
         )}
       </div>
 
-      <div className="flex-1 overflow-auto px-6 pb-8 pt-2">
+      <div className="flex-1 overflow-auto px-3 sm:px-6 pb-8 pt-2">
         <div className="proof-page rounded-sm mx-auto w-fit">
           <Document
             file={pdfUrl}
