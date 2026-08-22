@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createOpenAI } from "@ai-sdk/openai";
-import { APICallError, generateText } from "ai";
+import { APICallError, generateText, tool } from "ai";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { projectFile, organization } from "@/lib/schema";
@@ -14,6 +14,7 @@ import {
   resolveSelfHostedAiConfig,
 } from "@/lib/ai-config";
 import { buildAiFileContext } from "@/lib/ai-file-context";
+import { formatLiteratureSearchForModel, searchLiterature } from "@/lib/ai-literature-search";
 import { PRODUCT } from "@/lib/product";
 import { checkAiLimit, incrementAiUsage } from "@/lib/usage";
 import { z } from "zod";
@@ -27,12 +28,19 @@ const chatSchema = z.object({
   ),
   activeFile: z.string().optional(),
   selectedText: z.string().optional(),
-  action: z.enum(["chat", "explain-errors", "tighten", "citation"]).optional(),
+  action: z.enum(["chat", "explain-errors", "tighten", "citation", "find-papers"]).optional(),
   compileErrors: z.array(z.string()).optional(),
 });
 
 const PROMPT_TOO_LARGE_MESSAGE =
   "The project context is too large for the AI service. Try asking about a specific file or selection.";
+
+const LITERATURE_SEARCH_INSTRUCTIONS = `
+When the user asks for papers, related work, literature, or citations:
+- Call the search_literature tool with a focused academic query.
+- Cite only papers returned by the tool. Never invent titles, authors, DOIs, or venues.
+- Present results as markdown bullets: title, year, authors, venue, citation count, one-line relevance, and DOI/url.
+- If the tool reports a failure or no results, say so plainly and do not fabricate a bibliography.`;
 
 function isAiPromptTooLargeError(error: unknown): boolean {
   if (!APICallError.isInstance(error)) return false;
@@ -105,7 +113,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   let systemPrompt = `You are ${PRODUCT.aiAssistantName}, a helpful LaTeX assistant for academic writing.
 You help researchers write, edit, and debug LaTeX documents.
-Be concise and precise. When suggesting LaTeX code, use proper syntax.`;
+Be concise and precise. When suggesting LaTeX code, use proper syntax and fenced \`\`\`latex blocks.
+Format explanatory replies with markdown (headings, lists, tables) when helpful.
+${LITERATURE_SEARCH_INSTRUCTIONS}`;
 
   if (fileContext) {
     systemPrompt += `\nCurrent project files:\n${fileContext}`;
@@ -113,6 +123,10 @@ Be concise and precise. When suggesting LaTeX code, use proper syntax.`;
 
   if (parsed.data.action === "explain-errors" && parsed.data.compileErrors) {
     systemPrompt += `\n\nThe user has compile errors:\n${parsed.data.compileErrors.join("\n")}`;
+  }
+
+  if (parsed.data.action === "find-papers") {
+    systemPrompt += `\n\nThe user wants related academic papers. Search literature with search_literature using terms from their project topic, selection, or latest message. Summarize only real search results.`;
   }
 
   if (parsed.data.selectedText) {
@@ -130,6 +144,22 @@ Be concise and precise. When suggesting LaTeX code, use proper syntax.`;
       system: systemPrompt,
       messages: parsed.data.messages,
       maxRetries: 0,
+      maxSteps: 3,
+      tools: {
+        search_literature: tool({
+          description:
+            "Search Semantic Scholar for academic papers. Use when the user asks for related work, literature, citations, or references.",
+          parameters: z.object({
+            query: z
+              .string()
+              .describe("Focused academic search query, e.g. topic + method or key terms from the manuscript"),
+          }),
+          execute: async ({ query }) => {
+            const searchResult = await searchLiterature(query);
+            return formatLiteratureSearchForModel(searchResult);
+          },
+        }),
+      },
     });
 
     await incrementAiUsage(session.user.id);

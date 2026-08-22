@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sparkles, Send, X } from "lucide-react";
 import { aiUnavailableBannerMessage, isClientSelfHosted } from "@/lib/ai-config";
+import { extractInsertableContent } from "@/lib/ai-insert-content";
+import { AiMarkdown } from "@/components/ai-markdown";
 
 interface Message {
   role: "user" | "assistant";
@@ -36,10 +38,11 @@ export function AiSidebar({
   const [loading, setLoading] = useState(false);
   const [available, setAvailable] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);
-  }, [messages]);
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
 
   async function sendMessage(content: string, action?: string) {
     if (!content.trim() && !action) return;
@@ -104,6 +107,7 @@ export function AiSidebar({
     { label: "Explain errors", action: "explain-errors", disabled: compileErrors.length === 0 },
     { label: "Tighten selection", action: "tighten", disabled: !selectedText },
     { label: "Add citation", action: "citation", disabled: false },
+    { label: "Find papers", action: "find-papers", disabled: false },
   ];
 
   return (
@@ -112,7 +116,7 @@ export function AiSidebar({
         variant === "sidebar" ? "border-l border-border" : ""
       }`}
     >
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+      <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
         <div className="flex items-center gap-2 text-sm font-medium">
           <Sparkles className="h-4 w-4 text-navy" />
           AI Assistant
@@ -123,55 +127,72 @@ export function AiSidebar({
       </div>
 
       {!available && (
-        <div className="px-3 py-2 bg-canvas-dark text-xs text-ink-muted border-b border-border">
+        <div className="shrink-0 border-b border-border bg-canvas-dark px-3 py-2 text-xs text-ink-muted">
           {aiUnavailableBannerMessage(isClientSelfHosted())}
         </div>
       )}
 
-      <div className="flex flex-wrap gap-1 p-2 border-b border-border">
-        {quickActions.map((a) => (
-          <Button
-            key={a.action}
-            variant="outline"
-            size="sm"
-            disabled={a.disabled || loading}
-            onClick={() => sendMessage(a.label, a.action)}
-          >
-            {a.label}
-          </Button>
-        ))}
+      <div className="shrink-0 border-b border-border px-2 py-1.5">
+        <div className="flex flex-wrap gap-1">
+          {quickActions.map((a) => (
+            <Button
+              key={a.action}
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-[11px]"
+              disabled={a.disabled || loading}
+              onClick={() => sendMessage(a.label, a.action)}
+            >
+              {a.label}
+            </Button>
+          ))}
+        </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-auto p-3 space-y-3">
-        {messages.length === 0 && (
-          <p className="text-sm text-ink-muted text-center py-8">
-            Ask about your LaTeX project, get help with errors, or improve your writing.
-          </p>
-        )}
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`text-sm rounded-lg p-3 ${
-              msg.role === "user" ? "bg-navy/5 ml-4" : "bg-canvas-dark mr-4"
-            }`}
-          >
-            <div className="whitespace-pre-wrap">{msg.content}</div>
-            {msg.role === "assistant" && msg.content && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="mt-2 text-xs"
-                onClick={() => onInsert(msg.content)}
-              >
-                Insert at cursor
-              </Button>
-            )}
-          </div>
-        ))}
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+        <div className="space-y-3">
+          {messages.length === 0 && (
+            <p className="py-8 text-center text-sm text-ink-muted">
+              Ask about your LaTeX project, get help with errors, or search for related papers.
+            </p>
+          )}
+          {messages.map((msg, i) => (
+            <div
+              key={i}
+              className={`max-w-[95%] rounded-xl px-3 py-2.5 ${
+                msg.role === "user"
+                  ? "ml-auto bg-navy text-white"
+                  : "mr-auto border border-border bg-paper shadow-sm"
+              }`}
+            >
+              {msg.role === "user" ? (
+                <div className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</div>
+              ) : (
+                <AiMarkdown content={msg.content} />
+              )}
+              {msg.role === "assistant" && msg.content && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mt-1 h-7 px-2 text-[11px] text-ink-muted hover:text-ink"
+                  onClick={() => onInsert(extractInsertableContent(msg.content))}
+                >
+                  Insert at cursor
+                </Button>
+              )}
+            </div>
+          ))}
+          {loading && (
+            <div className="mr-auto max-w-[95%] rounded-xl border border-border bg-paper px-3 py-2.5 text-sm text-ink-muted">
+              Thinking…
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
       </div>
 
       <div
-        className={`border-t border-border p-3 ${
+        className={`shrink-0 border-t border-border bg-surface p-3 ${
           variant === "sheet" ? "pb-[max(0.75rem,env(safe-area-inset-bottom))]" : ""
         }`}
       >
@@ -185,11 +206,11 @@ export function AiSidebar({
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about your document..."
+            placeholder="Ask about your document…"
             disabled={loading}
-            className="min-w-0"
+            className="min-h-9 min-w-0 flex-1"
           />
-          <Button type="submit" size="icon" disabled={loading || !input.trim()}>
+          <Button type="submit" size="icon" className="shrink-0" disabled={loading || !input.trim()}>
             <Send className="h-4 w-4" />
           </Button>
         </form>
