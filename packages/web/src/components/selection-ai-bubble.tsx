@@ -148,7 +148,7 @@ export function SelectionAiBubble({ editorView, onAction, className }: Selection
       role="toolbar"
       aria-label="AI actions for selection"
       className={cn(
-        "fixed z-50 flex items-center gap-0.5 rounded-full border border-border bg-paper/95 px-1 py-1 shadow-lg backdrop-blur-sm",
+        "fixed z-50 flex max-w-[min(100vw-1rem,28rem)] flex-wrap items-center justify-center gap-0.5 rounded-2xl border border-border bg-paper/95 px-1 py-1 shadow-lg backdrop-blur-sm sm:max-w-none sm:flex-nowrap sm:rounded-full",
         className
       )}
       style={{
@@ -166,7 +166,7 @@ export function SelectionAiBubble({ editorView, onAction, className }: Selection
         <button
           key={action}
           type="button"
-          className="rounded-full px-2.5 py-1 text-[11px] font-medium text-ink hover:bg-canvas-dark transition-colors whitespace-nowrap"
+          className="rounded-full px-2.5 py-1.5 text-[11px] font-medium text-ink hover:bg-canvas-dark transition-colors whitespace-nowrap sm:py-1"
           onClick={() => {
             onAction({
               message: ACTION_MESSAGES[action],

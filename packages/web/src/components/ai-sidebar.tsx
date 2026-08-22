@@ -1,20 +1,24 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Sparkles, Send, X } from "lucide-react";
+import { Sparkles, Send, X, Mic, MicOff, Square } from "lucide-react";
 import { aiUnavailableBannerMessage, isClientSelfHosted } from "@/lib/ai-config";
 import { extractInsertableContent } from "@/lib/ai-insert-content";
 import { AiMarkdown } from "@/components/ai-markdown";
-import type { AiPaper, AiUsedPlugin } from "@/lib/ai-types";
-import { loadingLabelForLiteratureAction } from "@/lib/ai-plugins/client-meta";
+import type { AiAppliedAction, AiClientAction, AiPaper, AiUsedPlugin } from "@/lib/ai-types";
+import { loadingLabelForAction } from "@/lib/ai-plugins/client-meta";
+import { applyAiClientActions, type ApplyAiActionsContext } from "@/lib/apply-ai-client-actions";
+import { useSpeechRecognition } from "@/lib/use-speech-recognition";
+import { parseVoiceCommand, speechStatusMessage } from "@/lib/voice-commands";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
   usedPlugins?: AiUsedPlugin[];
   papers?: AiPaper[];
+  appliedActions?: AiAppliedAction[];
 }
 
 export interface AiPendingRequest {
@@ -31,15 +35,13 @@ interface AiSidebarProps {
   onReplace?: (text: string) => void;
   onCitePaper?: (paper: AiPaper) => void | Promise<void>;
   onClose: () => void;
+  /** Context for applying agentic editor actions (collab-safe). */
+  applyActionsContext?: Omit<ApplyAiActionsContext, "hasSelection">;
   /** Full-pane sheet on mobile; sidebar panel on desktop. */
   variant?: "sidebar" | "sheet";
   /** Auto-send when opened from the selection bubble. */
   pendingRequest?: AiPendingRequest | null;
   onPendingRequestConsumed?: () => void;
-}
-
-function loadingMessageForAction(action?: string, userMessage?: string): string {
-  return loadingLabelForLiteratureAction(action, userMessage) ?? "Thinking…";
 }
 
 function formatAuthors(authors: string[]): string {
@@ -50,8 +52,16 @@ function formatAuthors(authors: string[]): string {
 
 function PluginChip({ plugin }: { plugin: AiUsedPlugin }) {
   return (
-    <span className="inline-flex items-center rounded-full border border-border bg-canvas-dark/70 px-2 py-0.5 text-[10px] font-medium text-ink-muted">
+    <span className="inline-flex max-w-full items-center rounded-full border border-border bg-canvas-dark/70 px-2 py-0.5 text-[10px] font-medium text-ink-muted truncate">
       Used {plugin.displayName}
+    </span>
+  );
+}
+
+function AppliedActionChip({ action }: { action: AiAppliedAction }) {
+  return (
+    <span className="inline-flex max-w-full items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-800 dark:text-emerald-200 truncate">
+      {action.label}
     </span>
   );
 }
@@ -65,6 +75,7 @@ export function AiSidebar({
   onReplace,
   onCitePaper,
   onClose,
+  applyActionsContext,
   variant = "sidebar",
   pendingRequest,
   onPendingRequestConsumed,
@@ -75,19 +86,63 @@ export function AiSidebar({
   const [loadingMessage, setLoadingMessage] = useState("Thinking…");
   const [available, setAvailable] = useState(true);
   const [citingKey, setCitingKey] = useState<string | null>(null);
+  const [voiceNote, setVoiceNote] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef(messages);
+  const inputBeforeVoiceRef = useRef("");
   messagesRef.current = messages;
+
+  const appendVoiceTranscript = useCallback((transcript: string, isFinal: boolean) => {
+    if (!transcript.trim()) return;
+    setInput((prev) => {
+      const base = inputBeforeVoiceRef.current;
+      const spacer = base && !base.endsWith(" ") ? " " : "";
+      return isFinal ? `${base}${spacer}${transcript.trim()}` : `${base}${spacer}${transcript}`;
+    });
+  }, []);
+
+  const speech = useSpeechRecognition({
+    onTranscript: appendVoiceTranscript,
+    onEnd: () => {
+      inputBeforeVoiceRef.current = "";
+    },
+  });
+
+  useEffect(() => {
+    const msg = speechStatusMessage(speech.status);
+    setVoiceNote(msg);
+  }, [speech.status]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
+  const applyReturnedActions = useCallback(
+    async (actions: AiClientAction[]): Promise<AiAppliedAction[]> => {
+      if (!applyActionsContext || actions.length === 0) return [];
+      const result = await applyAiClientActions(actions, {
+        ...applyActionsContext,
+        hasSelection: Boolean(selectedText),
+      });
+      return result.applied.map((a) => ({
+        label: a.label,
+        type: a.type,
+        file:
+          a.type === "apply_edit"
+            ? a.file
+            : a.type === "fix_compile_errors"
+              ? a.edits[0]?.file
+              : undefined,
+      }));
+    },
+    [applyActionsContext, selectedText]
+  );
+
   async function sendMessage(content: string, action?: string) {
     if (!content.trim() && !action) return;
     setLoading(true);
-    setLoadingMessage(loadingMessageForAction(action, content));
+    setLoadingMessage(loadingLabelForAction(action, content));
 
     const userMsg: Message = { role: "user", content: content || action || "" };
     setMessages((prev) => [...prev, userMsg]);
@@ -150,6 +205,14 @@ export function AiSidebar({
 
       const usedPlugins = Array.isArray(data.usedPlugins) ? (data.usedPlugins as AiUsedPlugin[]) : undefined;
       const papers = Array.isArray(data.papers) ? (data.papers as AiPaper[]) : undefined;
+      const actions = Array.isArray(data.actions) ? (data.actions as AiClientAction[]) : [];
+
+      let appliedActions: AiAppliedAction[] | undefined;
+      if (actions.length > 0 && applyActionsContext) {
+        appliedActions = await applyReturnedActions(actions);
+      } else if (Array.isArray(data.appliedActions) && data.appliedActions.length > 0) {
+        appliedActions = data.appliedActions as AiAppliedAction[];
+      }
 
       setMessages((prev) => [
         ...prev,
@@ -158,6 +221,7 @@ export function AiSidebar({
           content: assistantContent,
           ...(usedPlugins?.length ? { usedPlugins } : {}),
           ...(papers?.length ? { papers } : {}),
+          ...(appliedActions?.length ? { appliedActions } : {}),
         },
       ]);
     } catch {
@@ -178,6 +242,21 @@ export function AiSidebar({
     }
   }
 
+  function handleVoiceToggle() {
+    if (!speech.isSupported || speech.status === "denied") return;
+    if (speech.isListening) {
+      speech.stop();
+      const command = parseVoiceCommand(input);
+      if (command.message.trim()) {
+        void sendMessage(command.message, command.action);
+        setInput("");
+      }
+      return;
+    }
+    inputBeforeVoiceRef.current = input;
+    speech.start();
+  }
+
   useEffect(() => {
     if (!pendingRequest) return;
     void sendMessage(pendingRequest.message, pendingRequest.action);
@@ -187,13 +266,14 @@ export function AiSidebar({
   }, [pendingRequest]);
 
   const quickActions = [
-    { label: "Explain errors", action: "explain-errors", disabled: compileErrors.length === 0 },
-    { label: "Tighten selection", action: "tighten", disabled: !selectedText },
+    { label: "Fix errors", action: "explain-errors", disabled: compileErrors.length === 0 },
+    { label: "Tighten", action: "tighten", disabled: !selectedText },
     { label: "Add citation", action: "citation", disabled: false },
     { label: "Find papers", action: "find-papers", disabled: false },
   ];
 
   const canReplace = Boolean(selectedText && onReplace);
+  const micDisabled = !speech.isSupported || speech.status === "denied" || loading;
 
   return (
     <div
@@ -214,6 +294,12 @@ export function AiSidebar({
       {!available && (
         <div className="shrink-0 border-b border-border bg-canvas-dark px-3 py-2 text-xs text-ink-muted">
           {aiUnavailableBannerMessage(isClientSelfHosted())}
+        </div>
+      )}
+
+      {voiceNote && (
+        <div className="shrink-0 border-b border-border bg-canvas-dark/80 px-3 py-1.5 text-[11px] text-ink-muted">
+          {voiceNote}
         </div>
       )}
 
@@ -245,7 +331,7 @@ export function AiSidebar({
         <div className="space-y-3">
           {messages.length === 0 && (
             <p className="py-8 text-center text-sm text-ink-muted">
-              Ask about your LaTeX project, get help with errors, or search for related papers.
+              Ask about your LaTeX project, fix errors, search papers, or say &ldquo;fix errors&rdquo; with the mic.
             </p>
           )}
           {messages.map((msg, i) => (
@@ -257,13 +343,18 @@ export function AiSidebar({
                   : "mr-auto border border-border bg-paper shadow-sm"
               }`}
             >
-              {msg.role === "assistant" && msg.usedPlugins && msg.usedPlugins.length > 0 && (
-                <div className="mb-2 flex flex-wrap gap-1">
-                  {msg.usedPlugins.map((plugin) => (
-                    <PluginChip key={`${plugin.id}-${plugin.source ?? "default"}`} plugin={plugin} />
-                  ))}
-                </div>
-              )}
+              {msg.role === "assistant" &&
+                ((msg.usedPlugins && msg.usedPlugins.length > 0) ||
+                  (msg.appliedActions && msg.appliedActions.length > 0)) && (
+                  <div className="mb-2 flex flex-wrap gap-1">
+                    {msg.usedPlugins?.map((plugin) => (
+                      <PluginChip key={`${plugin.id}-${plugin.source ?? "default"}`} plugin={plugin} />
+                    ))}
+                    {msg.appliedActions?.map((action, idx) => (
+                      <AppliedActionChip key={`${action.type}-${idx}`} action={action} />
+                    ))}
+                  </div>
+                )}
               {msg.role === "user" ? (
                 <div className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</div>
               ) : (
@@ -305,7 +396,7 @@ export function AiSidebar({
                   })}
                 </div>
               )}
-              {msg.role === "assistant" && msg.content && (
+              {msg.role === "assistant" && msg.content && !msg.appliedActions?.length && (
                 <div className="mt-1 flex flex-wrap gap-1">
                   {canReplace && (
                     <Button
@@ -346,18 +437,42 @@ export function AiSidebar({
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            if (speech.isListening) speech.stop();
             sendMessage(input);
           }}
-          className="flex gap-2"
+          className="flex items-end gap-2"
         >
+          <Button
+            type="button"
+            size="icon"
+            variant={speech.isListening ? "default" : "outline"}
+            className={`shrink-0 ${variant === "sheet" ? "h-11 w-11" : "h-9 w-9"}`}
+            disabled={micDisabled}
+            onClick={handleVoiceToggle}
+            aria-label={speech.isListening ? "Stop voice input" : "Start voice input"}
+            title={speech.isListening ? "Stop and send" : "Voice input"}
+          >
+            {speech.isListening ? (
+              <Square className="h-4 w-4" />
+            ) : speech.status === "denied" ? (
+              <MicOff className="h-4 w-4" />
+            ) : (
+              <Mic className="h-4 w-4" />
+            )}
+          </Button>
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about your document…"
+            placeholder={speech.isListening ? "Listening…" : "Ask or dictate…"}
             disabled={loading}
-            className="min-h-9 min-w-0 flex-1"
+            className={`min-w-0 flex-1 ${variant === "sheet" ? "min-h-11 text-base" : "min-h-9"}`}
           />
-          <Button type="submit" size="icon" className="shrink-0" disabled={loading || !input.trim()}>
+          <Button
+            type="submit"
+            size="icon"
+            className={`shrink-0 ${variant === "sheet" ? "h-11 w-11" : ""}`}
+            disabled={loading || !input.trim()}
+          >
             <Send className="h-4 w-4" />
           </Button>
         </form>

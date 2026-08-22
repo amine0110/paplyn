@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   collectPapersFromToolResults,
+  collectClientActionsFromToolResults,
   collectToolResultTexts,
   collectUsedPlugins,
   formatToolResultsAsAssistantMessage,
   hadToolActivity,
+  toAppliedActionSummaries,
   usedLiteratureSearch,
 } from "./ai-response";
 import { getEnabledAiPlugins } from "./ai-plugins";
@@ -96,5 +98,27 @@ describe("ai-response helpers", () => {
     });
     expect(collectPapersFromToolResults(result)).toHaveLength(1);
     expect(collectPapersFromToolResults(result)[0]?.title).toBe("Attention Is All You Need");
+  });
+
+  it("collects client edit actions from tool results", () => {
+    const action = {
+      type: "apply_edit" as const,
+      file: "main.tex",
+      search: "foo",
+      replace: "bar",
+      label: "Applied edit to main.tex",
+    };
+    const result = mockResult({
+      toolResults: [
+        {
+          toolName: "apply_edit",
+          result: { kind: "client-action", action },
+        },
+      ],
+    });
+    expect(collectClientActionsFromToolResults(result)).toEqual([action]);
+    expect(toAppliedActionSummaries([action])).toEqual([
+      { label: "Applied edit to main.tex", type: "apply_edit", file: "main.tex" },
+    ]);
   });
 });

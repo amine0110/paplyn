@@ -18,9 +18,15 @@ import { getPluginActionPrompt, resolveAiPlugins } from "@/lib/ai-plugins";
 import {
   collectPapersFromToolResults,
   collectUsedPlugins,
+  collectClientActionsFromToolResults,
+  toAppliedActionSummaries,
   formatToolResultsAsAssistantMessage,
   hadToolActivity,
 } from "@/lib/ai-response";
+import {
+  createClientEditTools,
+  CLIENT_EDIT_SYSTEM_PROMPT,
+} from "@/lib/ai-plugins/client-edit-tools";
 import { PRODUCT } from "@/lib/product";
 import { checkAiLimit, incrementAiUsage } from "@/lib/usage";
 import { z } from "zod";
@@ -66,6 +72,8 @@ const WRITING_ACTION_PROMPTS: Record<string, string> = {
     "Expand the selected text with useful detail and academic tone while keeping LaTeX syntax valid.",
   citation:
     "Suggest how to cite or reference the selected passage. Use search_literature when real papers are needed; never invent citations.",
+  "explain-errors":
+    "Fix the compile errors using fix_compile_errors or apply_edit with exact search/replace from the file context. Apply surgical LaTeX fixes, then explain what you changed.",
 };
 
 const FOLLOW_UP_SYSTEM_SUFFIX = `
@@ -174,10 +182,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { tools: pluginTools, systemPrompt: pluginSystemPrompt, plugins } = resolveAiPlugins();
 
+  const texFileMap = new Map(texFiles.map((f) => [f.path, f.content]));
+  const hasSelection = Boolean(parsed.data.selectedText?.trim());
+
+  const clientEditTools = createClientEditTools({
+    texFiles: texFileMap,
+    activeFile: parsed.data.activeFile,
+    hasSelection,
+  });
+
   let systemPrompt = `You are ${PRODUCT.aiAssistantName}, a helpful LaTeX assistant for academic writing.
 You help researchers write, edit, and debug LaTeX documents.
 Be concise and precise. When suggesting LaTeX code, use proper syntax and fenced \`\`\`latex blocks.
-Format explanatory replies with markdown (headings, lists, tables) when helpful.`;
+Format explanatory replies with markdown (headings, lists, tables) when helpful.
+${CLIENT_EDIT_SYSTEM_PROMPT}`;
 
   if (pluginSystemPrompt) {
     systemPrompt += `\n${pluginSystemPrompt}`;
@@ -189,6 +207,8 @@ Format explanatory replies with markdown (headings, lists, tables) when helpful.
 
   if (parsed.data.action === "explain-errors" && parsed.data.compileErrors) {
     systemPrompt += `\n\nThe user has compile errors:\n${parsed.data.compileErrors.join("\n")}`;
+    systemPrompt +=
+      "\n\nWhen fixing errors, prefer fix_compile_errors or apply_edit with exact search/replace snippets from the file context.";
   }
 
   if (parsed.data.action) {
@@ -216,8 +236,8 @@ Format explanatory replies with markdown (headings, lists, tables) when helpful.
       system: systemPrompt,
       messages: parsed.data.messages,
       maxRetries: 0,
-      maxSteps: 5,
-      tools: pluginTools,
+      maxSteps: 8,
+      tools: { ...pluginTools, ...clientEditTools },
     });
 
     const content = await resolveAssistantContent({
@@ -229,6 +249,8 @@ Format explanatory replies with markdown (headings, lists, tables) when helpful.
 
     const usedPlugins = collectUsedPlugins(result, plugins);
     const papers = collectPapersFromToolResults(result);
+    const actions = collectClientActionsFromToolResults(result);
+    const appliedActions = toAppliedActionSummaries(actions);
 
     await incrementAiUsage(session.user.id);
 
@@ -236,6 +258,7 @@ Format explanatory replies with markdown (headings, lists, tables) when helpful.
       content,
       ...(usedPlugins.length > 0 ? { usedPlugins } : {}),
       ...(papers.length > 0 ? { papers } : {}),
+      ...(actions.length > 0 ? { actions, appliedActions } : {}),
     });
   } catch (error) {
     if (isAiPromptTooLargeError(error)) {

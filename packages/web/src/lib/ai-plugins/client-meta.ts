@@ -38,3 +38,38 @@ export function loadingLabelForLiteratureAction(action?: string, userMessage?: s
 
   return null;
 }
+
+const EDIT_ACTIONS = new Set([
+  "explain-errors",
+  "tighten",
+  "rephrase",
+  "improve",
+  "shorten",
+  "expand",
+]);
+
+export function loadingLabelForAction(action?: string, userMessage?: string): string {
+  const literature = loadingLabelForLiteratureAction(action, userMessage);
+  if (literature) return literature;
+
+  if (action === "explain-errors" || (userMessage ?? "").toLowerCase().includes("fix error")) {
+    return "Fixing compile errors…";
+  }
+
+  if (action && EDIT_ACTIONS.has(action)) {
+    return "Applying edit…";
+  }
+
+  const lower = (userMessage ?? "").toLowerCase();
+  if (
+    lower.includes("edit") ||
+    lower.includes("fix") ||
+    lower.includes("insert") ||
+    lower.includes("replace") ||
+    lower.includes("change")
+  ) {
+    return "Applying edit…";
+  }
+
+  return "Thinking…";
+}
