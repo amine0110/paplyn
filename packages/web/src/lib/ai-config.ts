@@ -84,7 +84,7 @@ export function resolveSelfHostedAiConfig(
   }
 ): AiProviderConfig | null {
   const orgKey = org?.openaiApiKey?.trim();
-  if (orgKey) {
+  if (org && orgKey) {
     return {
       apiKey: orgKey,
       baseUrl:
