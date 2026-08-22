@@ -73,7 +73,8 @@ export function PdfPreview({
         event.clientX,
         event.clientY,
         canvas.getBoundingClientRect(),
-        viewport
+        viewport,
+        pageProxy.view
       );
 
       const location = await synctexLookupFromBase64(
@@ -178,6 +179,7 @@ export function PdfPreview({
                 scale={scale}
                 canvasRef={canvasRef}
                 renderTextLayer={false}
+                renderAnnotationLayer={false}
                 onRenderSuccess={(pdfPage) => {
                   pageProxyRef.current = pdfPage;
                 }}

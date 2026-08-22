@@ -41,8 +41,9 @@ function sp(points: number): number {
   return Math.round(points * 65781.76);
 }
 
+/** Page-local block coords with 72pt synctex offset (see synctex spec). */
 function ieeeSynctexFixture(): string {
-  const left = sp(72);
+  const left = 0;
   const blockWidth = sp(200);
   const blockHeight = sp(24);
 
@@ -62,12 +63,12 @@ function ieeeSynctexFixture(): string {
     `X Offset:${SYNCTEX_OFFSET_SP}`,
     `Y Offset:${SYNCTEX_OFFSET_SP}`,
     "{1",
-    ...block(12, 180),
-    ...block(29, 250),
-    ...block(37, 320),
-    ...block(41, 420),
-    ...block(53, 442),
-    ...block(58, 700),
+    ...block(12, 108),
+    ...block(29, 178),
+    ...block(37, 248),
+    ...block(41, 348),
+    ...block(53, 370),
+    ...block(58, 628),
     "}1",
   ].join("\n");
 }
@@ -108,7 +109,9 @@ describe("findSynctexSource", () => {
     const index = parseSynctex(ieeeSynctexFixture())!;
     const viewport = letterViewport(1);
     const introClickY = 306;
-    const [synctexX, synctexY] = viewportClickToSynctexPoint(72, introClickY, viewport);
+    const [synctexX, synctexY] = viewportClickToSynctexPoint(72, introClickY, viewport, [
+      ...LETTER_VIEW,
+    ]);
     const hit = findSynctexSource(index, 1, synctexX, synctexY, ["main.tex"]);
 
     expect(synctexY).toBeCloseTo(introClickY, 0);
@@ -120,11 +123,21 @@ describe("findSynctexSource", () => {
     const index = parseSynctex(ieeeSynctexFixture())!;
     const viewport = letterViewport(1);
     const conclusionClickY = 422;
-    const [synctexX, synctexY] = viewportClickToSynctexPoint(72, conclusionClickY, viewport);
+    const [synctexX, synctexY] = viewportClickToSynctexPoint(72, conclusionClickY, viewport, [
+      ...LETTER_VIEW,
+    ]);
     const hit = findSynctexSource(index, 1, synctexX, synctexY, ["main.tex"]);
 
     expect(hit).toEqual({ line: 53, file: "main.tex" });
     expect(hit?.line).not.toBe(41);
+  });
+
+  it("maps a Y value ~25pt too high to the prior section (regression guard)", () => {
+    const index = parseSynctex(ieeeSynctexFixture())!;
+    // Correct intro click ≈306; off-by-25pt lands in the abstract band.
+    const hit = findSynctexSource(index, 1, 72, 240, ["main.tex"]);
+    expect(hit?.line).toBe(29);
+    expect(hit?.line).not.toBe(37);
   });
 });
 
