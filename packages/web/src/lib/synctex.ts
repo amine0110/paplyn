@@ -37,6 +37,35 @@ export interface SynctexSourceLocation {
   file?: string;
 }
 
+export interface SynctexLookupExplanation {
+  lookupPage: number;
+  synctexX: number;
+  synctexY: number;
+  offset: { x: number; y: number };
+  localX: number;
+  localY: number;
+  hit: SynctexSourceLocation | null;
+  chosenBlock: {
+    page: number;
+    line: number;
+    type: string;
+    left: number;
+    bottom: number;
+    height: number;
+    top: number;
+  } | null;
+  withinPoint: boolean;
+  distanceToEdgePt: number | null;
+}
+
+interface SynctexMatchCandidate {
+  block: SynctexBlock;
+  filePath: string;
+  line: number;
+  distanceFromCenter: number;
+  rect: Rectangle;
+}
+
 class Rectangle {
   readonly top: number;
   readonly bottom: number;
@@ -287,40 +316,53 @@ export function findSynctexSource(
   projectFiles: string[] = [],
   maxDistancePt: number = SYNCTEX_MAX_LOOKUP_DISTANCE_PT
 ): SynctexSourceLocation | null {
+  return explainSynctexLookup(index, page, x, y, projectFiles, maxDistancePt).hit;
+}
+
+/** Like `findSynctexSource` but returns the chosen block and coordinate trace (for tests/debug). */
+export function explainSynctexLookup(
+  index: SynctexIndex,
+  page: number,
+  x: number,
+  y: number,
+  projectFiles: string[] = [],
+  maxDistancePt: number = SYNCTEX_MAX_LOOKUP_DISTANCE_PT
+): SynctexLookupExplanation {
+  const localX = x - index.offset.x;
+  const localY = y - index.offset.y;
+  const base = {
+    lookupPage: page,
+    synctexX: x,
+    synctexY: y,
+    offset: { ...index.offset },
+    localX,
+    localY,
+    hit: null as SynctexSourceLocation | null,
+    chosenBlock: null as SynctexLookupExplanation["chosenBlock"],
+    withinPoint: false,
+    distanceToEdgePt: null as number | null,
+  };
+
   const blocks = index.pageBlocks[page];
-  if (!blocks?.length) return null;
+  if (!blocks?.length) return base;
 
-  // Global pdf.js / getPagePoint coords → page-local block space (synctex-js convention).
-  const x0 = x - index.offset.x;
-  const y0 = y - index.offset.y;
-
-  let bestContaining: {
-    filePath: string;
-    line: number;
-    distanceFromCenter: number;
-    rect: Rectangle;
-  } | null = null;
-
-  let bestNearest: {
-    filePath: string;
-    line: number;
-    distanceFromCenter: number;
-    rect: Rectangle;
-  } | null = null;
+  let bestContaining: SynctexMatchCandidate | null = null;
+  let bestNearest: SynctexMatchCandidate | null = null;
 
   for (const block of blocks) {
     if (SYNCTEX_SKIP_BLOCK_TYPES.has(block.type)) continue;
 
     const rect = blockToRect(block);
-    const distFromCenter = rect.distanceFromCenter(x0, y0);
-    const candidate = {
+    const distFromCenter = rect.distanceFromCenter(localX, localY);
+    const candidate: SynctexMatchCandidate = {
+      block,
       filePath: block.filePath,
       line: block.line,
       distanceFromCenter: distFromCenter,
       rect,
     };
 
-    if (rect.containsPoint(x0, y0)) {
+    if (rect.containsPoint(localX, localY)) {
       if (
         !bestContaining ||
         rect.includes(bestContaining.rect) ||
@@ -342,14 +384,32 @@ export function findSynctexSource(
   }
 
   const best = bestContaining ?? bestNearest;
-  if (!best) return null;
-  if (!bestContaining && best.rect.distanceToEdge(x0, y0) > maxDistancePt) return null;
+  if (!best) return base;
+
+  const withinPoint = bestContaining !== null;
+  const distanceToEdgePt = withinPoint ? 0 : best.rect.distanceToEdge(localX, localY);
+  if (!withinPoint && distanceToEdgePt > maxDistancePt) return base;
 
   const file = projectFiles.length
     ? resolveSynctexFilePath(best.filePath, projectFiles)
     : best.filePath.split(/[/\\]/).pop();
 
-  return { line: best.line, file };
+  const top = best.block.bottom - best.block.height;
+  return {
+    ...base,
+    hit: { line: best.line, file },
+    chosenBlock: {
+      page: best.block.page,
+      line: best.line,
+      type: best.block.type,
+      left: best.block.left,
+      bottom: best.block.bottom,
+      height: best.block.height,
+      top,
+    },
+    withinPoint,
+    distanceToEdgePt,
+  };
 }
 
 /** Parse base64 synctex payload and locate source for a PDF click. */
