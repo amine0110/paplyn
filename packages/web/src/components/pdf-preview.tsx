@@ -70,9 +70,11 @@ export function PdfPreview({
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const pageElementRef = useRef<HTMLDivElement | null>(null);
   const pageRef = useRef(page);
+  const numPagesRef = useRef(numPages);
   const renderGenerationRef = useRef(0);
 
   pageRef.current = page;
+  numPagesRef.current = numPages;
 
   useEffect(() => {
     renderGenerationRef.current += 1;
@@ -104,7 +106,8 @@ export function PdfPreview({
         lookupPage,
         synctexX,
         synctexY,
-        projectFiles
+        projectFiles,
+        { pdfPageCount: numPagesRef.current }
       );
       if (location?.line) {
         onJumpToLine(location.line, location.file);

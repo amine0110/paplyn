@@ -280,9 +280,8 @@ export default function ProjectPage() {
         if (result.success && result.pdf) {
           setPdfData(result.pdf);
           setSynctexData(result.synctex ?? null);
-        } else if (!result.success) {
-          setSynctexData(result.synctex ?? null);
         }
+        // Do not update synctex without a matching successful PDF — that desyncs page counts.
       }
     } catch {
       setCompileLog("");

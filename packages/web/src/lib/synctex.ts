@@ -4,6 +4,8 @@
  * https://github.com/tdurieux/synctex-js
  */
 
+import { mapPdfPageToSynctexPage, analyzeSynctexPdfAlignment } from "./synctex-page-alignment";
+
 const SYNCTEX_UNIT = 65781.76;
 const GZIP_MAGIC = [0x1f, 0x8b];
 
@@ -38,6 +40,9 @@ export interface SynctexSourceLocation {
 }
 
 export interface SynctexLookupExplanation {
+  /** PDF viewer page passed into lookup (toolbar page). */
+  pdfPage: number;
+  /** Synctex `pageBlocks` key after PDF↔synctex page mapping. */
   lookupPage: number;
   synctexX: number;
   synctexY: number;
@@ -56,6 +61,8 @@ export interface SynctexLookupExplanation {
   } | null;
   withinPoint: boolean;
   distanceToEdgePt: number | null;
+  /** Set when pdfPageCount was provided and differed from synctex page count. */
+  pageMappingNote: string | null;
 }
 
 interface SynctexMatchCandidate {
@@ -307,6 +314,28 @@ export function resolveSynctexFilePath(
   return undefined;
 }
 
+export interface SynctexLookupOptions {
+  /** PDF viewer page count; when set, maps toolbar page → synctex page before search. */
+  pdfPageCount?: number;
+}
+
+/** Resolve toolbar PDF page to synctex pageBlocks key. */
+export function resolveSynctexLookupPage(
+  pdfPage: number,
+  index: SynctexIndex,
+  pdfPageCount?: number
+): { synctexPage: number; pageMappingNote: string | null } {
+  if (!pdfPageCount || pdfPageCount <= 0) {
+    return { synctexPage: pdfPage, pageMappingNote: null };
+  }
+  const alignment = analyzeSynctexPdfAlignment(pdfPageCount, index);
+  const synctexPage = mapPdfPageToSynctexPage(pdfPage, pdfPageCount, index);
+  const pageMappingNote = alignment.countsMatch
+    ? null
+    : `PDF page ${pdfPage} → synctex page ${synctexPage} (${alignment.mismatchReason})`;
+  return { synctexPage, pageMappingNote };
+}
+
 /** Reverse SyncTeX: PDF page + point (pt, SyncTeX top-left Y-down) → nearest source line. */
 export function findSynctexSource(
   index: SynctexIndex,
@@ -326,24 +355,35 @@ export function explainSynctexLookup(
   x: number,
   y: number,
   projectFiles: string[] = [],
-  maxDistancePt: number = SYNCTEX_MAX_LOOKUP_DISTANCE_PT
+  maxDistancePt: number = SYNCTEX_MAX_LOOKUP_DISTANCE_PT,
+  options: SynctexLookupOptions & { pdfPage?: number } = {}
 ): SynctexLookupExplanation {
+  const pdfPage = options.pdfPage ?? page;
+  const { synctexPage, pageMappingNote } = resolveSynctexLookupPage(
+    pdfPage,
+    index,
+    options.pdfPageCount
+  );
+  const lookupPage = synctexPage;
+
   const localX = x - index.offset.x;
   const localY = y - index.offset.y;
-  const base = {
-    lookupPage: page,
+  const base: SynctexLookupExplanation = {
+    pdfPage,
+    lookupPage,
     synctexX: x,
     synctexY: y,
     offset: { ...index.offset },
     localX,
     localY,
-    hit: null as SynctexSourceLocation | null,
-    chosenBlock: null as SynctexLookupExplanation["chosenBlock"],
+    hit: null,
+    chosenBlock: null,
     withinPoint: false,
-    distanceToEdgePt: null as number | null,
+    distanceToEdgePt: null,
+    pageMappingNote,
   };
 
-  const blocks = index.pageBlocks[page];
+  const blocks = index.pageBlocks[lookupPage];
   if (!blocks?.length) return base;
 
   let bestContaining: SynctexMatchCandidate | null = null;
@@ -415,10 +455,11 @@ export function explainSynctexLookup(
 /** Parse base64 synctex payload and locate source for a PDF click. */
 export async function synctexLookupFromBase64(
   synctexBase64: string,
-  page: number,
+  pdfPage: number,
   x: number,
   y: number,
-  projectFiles: string[] = []
+  projectFiles: string[] = [],
+  options: SynctexLookupOptions = {}
 ): Promise<SynctexSourceLocation | null> {
   const text = await decodeSynctexBase64(synctexBase64);
   if (!text) return null;
@@ -426,5 +467,28 @@ export async function synctexLookupFromBase64(
   const index = parseSynctex(text);
   if (!index) return null;
 
-  return findSynctexSource(index, page, x, y, projectFiles);
+  const { synctexPage } = resolveSynctexLookupPage(pdfPage, index, options.pdfPageCount);
+  return findSynctexSource(index, synctexPage, x, y, projectFiles);
+}
+
+/** Full diagnostic trace for a base64 synctex payload (tests/debug). */
+export async function explainSynctexLookupFromBase64(
+  synctexBase64: string,
+  pdfPage: number,
+  x: number,
+  y: number,
+  projectFiles: string[] = [],
+  options: SynctexLookupOptions = {}
+): Promise<SynctexLookupExplanation | null> {
+  const text = await decodeSynctexBase64(synctexBase64);
+  if (!text) return null;
+
+  const index = parseSynctex(text);
+  if (!index) return null;
+
+  const { synctexPage } = resolveSynctexLookupPage(pdfPage, index, options.pdfPageCount);
+  return explainSynctexLookup(index, synctexPage, x, y, projectFiles, undefined, {
+    pdfPage,
+    pdfPageCount: options.pdfPageCount,
+  });
 }
