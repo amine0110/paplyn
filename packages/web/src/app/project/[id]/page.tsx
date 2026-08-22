@@ -30,8 +30,9 @@ import { ProjectSettingsDialog } from "@/components/project-settings-dialog";
 import { ShareDialog } from "@/components/share-dialog";
 import { HistoryDialog } from "@/components/history-dialog";
 import { CollabPresence } from "@/components/collab-presence";
-import { AiSidebar } from "@/components/ai-sidebar";
+import { AiSidebar, type AiPendingRequest } from "@/components/ai-sidebar";
 import { AiAssistantFab } from "@/components/ai-assistant-fab";
+import { SelectionAiBubble } from "@/components/selection-ai-bubble";
 import { EditorStatusBar, EditorToolbar } from "@/components/editor-toolbar";
 import { LayoutModeSwitcher } from "@/components/layout-mode-switcher";
 import { MobileWorkspaceTabs } from "@/components/mobile-workspace-tabs";
@@ -109,6 +110,8 @@ export default function ProjectPage() {
     useState<ProofLayoutPreference>("columns");
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showAi, setShowAi] = useState(false);
+  const [selectedText, setSelectedText] = useState("");
+  const [aiPendingRequest, setAiPendingRequest] = useState<AiPendingRequest | null>(null);
   const isNarrow = useMediaQuery("(max-width: 639px)");
   const [showShare, setShowShare] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -413,6 +416,25 @@ export default function ProjectPage() {
     }
   }
 
+  function handleReplaceSelection(text: string) {
+    const view = editorViewRef.current;
+    if (!view || !selectedText) return;
+    const { from, to } = view.state.selection.main;
+    view.dispatch({
+      changes: { from, to, insert: text },
+      selection: { anchor: from + text.length },
+    });
+    if (isNarrow) {
+      setShowAi(false);
+      setMobileTab("editor");
+    }
+  }
+
+  function handleSelectionAiAction(request: AiPendingRequest) {
+    setAiPendingRequest(request);
+    setShowAi(true);
+  }
+
   function handleJumpToLine(line: number, file?: string) {
     if (file && file !== activeFile) {
       setActiveFile(file);
@@ -483,6 +505,14 @@ export default function ProjectPage() {
           onEditorReady={(view) => {
             editorViewRef.current = view;
             setEditorView(view);
+            const syncSelection = () => {
+              const { from, to } = view.state.selection.main;
+              const text = from === to ? "" : view.state.sliceDoc(from, to).trim();
+              setSelectedText(text);
+            };
+            syncSelection();
+            view.dom.addEventListener("mouseup", syncSelection);
+            view.dom.addEventListener("keyup", syncSelection);
           }}
           onStatsChange={setDocumentStats}
           jumpToLine={jumpToLine}
@@ -847,11 +877,14 @@ export default function ProjectPage() {
             <AiSidebar
               projectId={projectId}
               activeFile={activeFile}
-              selectedText=""
+              selectedText={selectedText}
               compileErrors={compileErrors.map((e) => e.message)}
               onInsert={handleInsertAtCursor}
+              onReplace={handleReplaceSelection}
               onClose={() => setShowAi(false)}
               variant="sheet"
+              pendingRequest={aiPendingRequest}
+              onPendingRequestConsumed={() => setAiPendingRequest(null)}
             />
           </div>
         )}
@@ -863,16 +896,23 @@ export default function ProjectPage() {
               <AiSidebar
                 projectId={projectId}
                 activeFile={activeFile}
-                selectedText=""
+                selectedText={selectedText}
                 compileErrors={compileErrors.map((e) => e.message)}
                 onInsert={handleInsertAtCursor}
+                onReplace={handleReplaceSelection}
                 onClose={() => setShowAi(false)}
+                pendingRequest={aiPendingRequest}
+                onPendingRequestConsumed={() => setAiPendingRequest(null)}
               />
             </aside>
           </>
         )}
 
         {!showAi && <AiAssistantFab onClick={() => setShowAi(true)} />}
+
+        {isTextEditorFile && !showAi && (
+          <SelectionAiBubble editorView={editorView} onAction={handleSelectionAiAction} />
+        )}
       </div>
 
       {showShare && project && (

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createOpenAI } from "@ai-sdk/openai";
-import { APICallError, generateText } from "ai";
+import { APICallError, generateText, type GenerateTextResult, type ToolSet } from "ai";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { projectFile, organization } from "@/lib/schema";
@@ -15,6 +15,10 @@ import {
 } from "@/lib/ai-config";
 import { buildAiFileContext } from "@/lib/ai-file-context";
 import { getPluginActionPrompt, resolveAiPlugins } from "@/lib/ai-plugins";
+import {
+  formatToolResultsAsAssistantMessage,
+  hadToolActivity,
+} from "@/lib/ai-response";
 import { PRODUCT } from "@/lib/product";
 import { checkAiLimit, incrementAiUsage } from "@/lib/usage";
 import { z } from "zod";
@@ -28,12 +32,74 @@ const chatSchema = z.object({
   ),
   activeFile: z.string().optional(),
   selectedText: z.string().optional(),
-  action: z.enum(["chat", "explain-errors", "tighten", "citation", "find-papers"]).optional(),
+  action: z
+    .enum([
+      "chat",
+      "explain-errors",
+      "tighten",
+      "rephrase",
+      "improve",
+      "shorten",
+      "expand",
+      "citation",
+      "find-papers",
+    ])
+    .optional(),
   compileErrors: z.array(z.string()).optional(),
 });
 
 const PROMPT_TOO_LARGE_MESSAGE =
   "The project context is too large for the AI service. Try asking about a specific file or selection.";
+
+const WRITING_ACTION_PROMPTS: Record<string, string> = {
+  tighten:
+    "Tighten the selected text: remove redundancy and improve concision while preserving meaning and LaTeX syntax.",
+  rephrase:
+    "Rephrase the selected text for clarity while preserving meaning and LaTeX syntax. Return the revised passage.",
+  improve:
+    "Improve the selected text for clarity, flow, and academic tone while preserving meaning and LaTeX syntax.",
+  shorten:
+    "Shorten the selected text while preserving the key claims and LaTeX syntax.",
+  expand:
+    "Expand the selected text with useful detail and academic tone while keeping LaTeX syntax valid.",
+  citation:
+    "Suggest how to cite or reference the selected passage. Use search_literature when real papers are needed; never invent citations.",
+};
+
+const FOLLOW_UP_SYSTEM_SUFFIX = `
+
+The previous turn already ran tools and returned results in the conversation.
+Write a helpful reply for the user using those tool results.
+Do not call tools again.`;
+
+async function resolveAssistantContent<TOOLS extends ToolSet>(options: {
+  result: GenerateTextResult<TOOLS, unknown>;
+  model: ReturnType<ReturnType<typeof createOpenAI>>;
+  systemPrompt: string;
+  messages: { role: "user" | "assistant"; content: string }[];
+}): Promise<string> {
+  const { result, model, systemPrompt, messages } = options;
+  const trimmed = result.text.trim();
+  if (trimmed) return result.text;
+
+  if (!hadToolActivity(result)) {
+    return "I couldn't generate a response. Please try again.";
+  }
+
+  const followUp = await generateText({
+    model,
+    system: `${systemPrompt}${FOLLOW_UP_SYSTEM_SUFFIX}`,
+    messages: [...messages, ...result.response.messages],
+    maxRetries: 0,
+  });
+
+  if (followUp.text.trim()) return followUp.text;
+
+  const fallback = formatToolResultsAsAssistantMessage(result);
+  if (fallback) return fallback;
+
+  return "I searched but couldn't format the results. Please try asking again.";
+}
 
 function isAiPromptTooLargeError(error: unknown): boolean {
   if (!APICallError.isInstance(error)) return false;
@@ -124,7 +190,9 @@ Format explanatory replies with markdown (headings, lists, tables) when helpful.
   }
 
   if (parsed.data.action) {
-    const actionPrompt = getPluginActionPrompt(parsed.data.action);
+    const actionPrompt =
+      getPluginActionPrompt(parsed.data.action) ??
+      WRITING_ACTION_PROMPTS[parsed.data.action];
     if (actionPrompt) {
       systemPrompt += `\n\n${actionPrompt}`;
     }
@@ -140,18 +208,26 @@ Format explanatory replies with markdown (headings, lists, tables) when helpful.
   });
 
   try {
+    const model = openai(aiConfig.model);
     const result = await generateText({
-      model: openai(aiConfig.model),
+      model,
       system: systemPrompt,
       messages: parsed.data.messages,
       maxRetries: 0,
-      maxSteps: 3,
+      maxSteps: 5,
       tools: pluginTools,
+    });
+
+    const content = await resolveAssistantContent({
+      result,
+      model,
+      systemPrompt,
+      messages: parsed.data.messages,
     });
 
     await incrementAiUsage(session.user.id);
 
-    return NextResponse.json({ content: result.text });
+    return NextResponse.json({ content });
   } catch (error) {
     if (isAiPromptTooLargeError(error)) {
       return NextResponse.json({ error: PROMPT_TOO_LARGE_MESSAGE }, { status: 429 });
