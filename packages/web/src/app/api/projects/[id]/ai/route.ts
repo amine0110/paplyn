@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createOpenAI } from "@ai-sdk/openai";
-import { generateText } from "ai";
+import { APICallError, generateText } from "ai";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { projectFile, organization } from "@/lib/schema";
@@ -13,6 +13,7 @@ import {
   resolveHostedAiConfig,
   resolveSelfHostedAiConfig,
 } from "@/lib/ai-config";
+import { buildAiFileContext } from "@/lib/ai-file-context";
 import { PRODUCT } from "@/lib/product";
 import { checkAiLimit, incrementAiUsage } from "@/lib/usage";
 import { z } from "zod";
@@ -29,6 +30,23 @@ const chatSchema = z.object({
   action: z.enum(["chat", "explain-errors", "tighten", "citation"]).optional(),
   compileErrors: z.array(z.string()).optional(),
 });
+
+const PROMPT_TOO_LARGE_MESSAGE =
+  "The project context is too large for the AI service. Try asking about a specific file or selection.";
+
+function isAiPromptTooLargeError(error: unknown): boolean {
+  if (!APICallError.isInstance(error)) return false;
+  const msg = error.message.toLowerCase();
+  if (error.statusCode === 413) return true;
+  return (
+    error.statusCode === 429 &&
+    (msg.includes("too large") || msg.includes("tpm") || msg.includes("token"))
+  );
+}
+
+function isAiRateLimitError(error: unknown): boolean {
+  return APICallError.isInstance(error) && error.statusCode === 429;
+}
 
 async function getAiConfig() {
   const env = readAiEnvFromProcess();
@@ -77,15 +95,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const files = await db.select().from(projectFile).where(eq(projectFile.projectId, id));
-  const fileContext = files
+  const texFiles = files
     .filter((f) => !f.isBinary && f.path.endsWith(".tex"))
-    .map((f) => `--- ${f.path} ---\n${f.content}`)
-    .join("\n\n");
+    .map((f) => ({ path: f.path, content: f.content }));
+
+  const fileContext = buildAiFileContext(texFiles, {
+    activeFile: parsed.data.activeFile,
+  });
 
   let systemPrompt = `You are ${PRODUCT.aiAssistantName}, a helpful LaTeX assistant for academic writing.
 You help researchers write, edit, and debug LaTeX documents.
-Be concise and precise. When suggesting LaTeX code, use proper syntax.
-Current project files:\n${fileContext}`;
+Be concise and precise. When suggesting LaTeX code, use proper syntax.`;
+
+  if (fileContext) {
+    systemPrompt += `\nCurrent project files:\n${fileContext}`;
+  }
 
   if (parsed.data.action === "explain-errors" && parsed.data.compileErrors) {
     systemPrompt += `\n\nThe user has compile errors:\n${parsed.data.compileErrors.join("\n")}`;
@@ -100,13 +124,32 @@ Current project files:\n${fileContext}`;
     baseURL: aiConfig.baseUrl,
   });
 
-  await incrementAiUsage(session.user.id);
+  try {
+    const result = await generateText({
+      model: openai(aiConfig.model),
+      system: systemPrompt,
+      messages: parsed.data.messages,
+      maxRetries: 0,
+    });
 
-  const result = await generateText({
-    model: openai(aiConfig.model),
-    system: systemPrompt,
-    messages: parsed.data.messages,
-  });
+    await incrementAiUsage(session.user.id);
 
-  return NextResponse.json({ content: result.text });
+    return NextResponse.json({ content: result.text });
+  } catch (error) {
+    if (isAiPromptTooLargeError(error)) {
+      return NextResponse.json({ error: PROMPT_TOO_LARGE_MESSAGE }, { status: 429 });
+    }
+    if (isAiRateLimitError(error)) {
+      return NextResponse.json(
+        { error: "AI service rate limit reached. Please wait a moment and try again." },
+        { status: 429 }
+      );
+    }
+    console.error("AI request failed:", error);
+    const message =
+      APICallError.isInstance(error) && error.message
+        ? error.message
+        : "AI request failed. Please try again.";
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
 }

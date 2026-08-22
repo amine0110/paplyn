@@ -73,8 +73,18 @@ export function AiSidebar({
       }
 
       if (!res.ok) {
-        const err = await res.json();
-        setMessages((prev) => [...prev, { role: "assistant", content: err.error || "Request failed" }]);
+        const err = await res.json().catch(() => ({}));
+        const fallback =
+          res.status === 413 || res.status === 429
+            ? "The prompt is too large for the AI service. Try a smaller selection or ask about one file."
+            : "Request failed";
+        const message =
+          typeof err.error === "string"
+            ? err.error
+            : typeof err.error === "object" && err.error !== null
+              ? JSON.stringify(err.error)
+              : fallback;
+        setMessages((prev) => [...prev, { role: "assistant", content: message }]);
         return;
       }
 
