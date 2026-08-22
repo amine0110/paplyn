@@ -99,6 +99,11 @@ export function aiNotConfiguredMessage(isSelfHosted: boolean): string {
   return "AI not configured. Set XAI_API_KEY for hosted Grok, or OPENAI_API_KEY with OPENAI_BASE_URL for BYO OpenAI.";
 }
 
+/** Client-safe: reads only NEXT_PUBLIC_DEPLOYMENT_MODE (defaults to selfhosted). */
+export function isClientSelfHosted(): boolean {
+  return (process.env.NEXT_PUBLIC_DEPLOYMENT_MODE || "selfhosted") !== "saas";
+}
+
 export function aiUnavailableBannerMessage(isSelfHosted: boolean): string {
   if (isSelfHosted) {
     return "Configure an API key in Admin settings or OPENAI_API_KEY to enable AI features.";
