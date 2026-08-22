@@ -1,5 +1,7 @@
 /** Client-safe types for AI assistant API responses. */
 
+import type { AiClientAction } from "@/lib/ai-client-actions";
+
 export type LiteratureSource = "semantic-scholar" | "openalex";
 
 export interface AiUsedPlugin {
@@ -19,10 +21,19 @@ export interface AiPaper {
   source: LiteratureSource;
 }
 
+export interface AiAppliedAction {
+  label: string;
+  type: AiClientAction["type"];
+  file?: string;
+}
+
 export interface AiChatResponse {
   content: string;
   usedPlugins?: AiUsedPlugin[];
   papers?: AiPaper[];
+  /** Editor actions for the client to apply (collab-safe via existing save paths). */
+  actions?: AiClientAction[];
+  appliedActions?: AiAppliedAction[];
 }
 
 export interface LiteratureToolPayload {

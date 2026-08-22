@@ -1,5 +1,11 @@
 import type { GenerateTextResult, ToolSet } from "ai";
-import type { AiPaper, AiUsedPlugin, LiteratureToolPayload } from "@/lib/ai-types";
+import type { AiAppliedAction, AiPaper, AiUsedPlugin, LiteratureToolPayload } from "@/lib/ai-types";
+import {
+  isClientActionPayload,
+  type AiClientAction,
+  type ClientActionToolPayload,
+} from "@/lib/ai-client-actions";
+import { CLIENT_EDIT_TOOL_NAMES } from "@/lib/ai-plugins/client-edit-tools";
 import { getPluginByToolName, pluginDisplayName } from "@/lib/ai-plugins";
 import type { AiPlugin } from "@/lib/ai-plugins/types";
 
@@ -201,6 +207,69 @@ export function collectPapersFromToolResults<TOOLS extends ToolSet>(
     (payload) => payload.papers
   );
   return dedupePapers(papers);
+}
+
+function collectClientActionPayloads(result: LooseGenerateTextResult): ClientActionToolPayload[] {
+  const payloads: ClientActionToolPayload[] = [];
+
+  for (const toolResult of result.toolResults) {
+    if (isClientActionPayload(toolResult.result)) {
+      payloads.push(toolResult.result);
+    }
+  }
+
+  for (const step of result.steps) {
+    for (const toolResult of step.toolResults) {
+      if (isClientActionPayload(toolResult.result)) {
+        payloads.push(toolResult.result);
+      }
+    }
+  }
+
+  return payloads;
+}
+
+export function collectClientActionsFromToolResults<TOOLS extends ToolSet>(
+  result: GenerateTextResult<TOOLS, unknown>
+): AiClientAction[] {
+  const actions: AiClientAction[] = [];
+  const seen = new Set<string>();
+
+  for (const payload of collectClientActionPayloads(asLooseGenerateTextResult(result))) {
+    const key = JSON.stringify(payload.action);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    actions.push(payload.action);
+  }
+
+  return actions;
+}
+
+export function toAppliedActionSummaries(actions: AiClientAction[]): AiAppliedAction[] {
+  return actions.map((action) => ({
+    label: action.label,
+    type: action.type,
+    file:
+      action.type === "apply_edit"
+        ? action.file
+        : action.type === "fix_compile_errors"
+          ? action.edits[0]?.file
+          : undefined,
+  }));
+}
+
+export function usedClientEditTools<TOOLS extends ToolSet>(
+  result: GenerateTextResult<TOOLS, unknown>
+): boolean {
+  const loose = asLooseGenerateTextResult(result);
+  const names = new Set<string>(CLIENT_EDIT_TOOL_NAMES);
+  if (loose.toolCalls.some((call) => names.has(call.toolName))) return true;
+  if (loose.toolResults.some((tr) => names.has(tr.toolName))) return true;
+  return loose.steps.some(
+    (step) =>
+      step.toolCalls.some((call) => names.has(call.toolName)) ||
+      step.toolResults.some((tr) => names.has(tr.toolName))
+  );
 }
 
 export { isWhitespaceOnly };

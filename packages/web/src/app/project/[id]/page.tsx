@@ -438,6 +438,18 @@ export default function ProjectPage() {
     }
   }
 
+  const fileContentsMap = Object.fromEntries(files.map((f) => [f.path, f.content]));
+
+  const aiApplyActionsContext = {
+    activeFile,
+    editorView,
+    fileContents: fileContentsMap,
+    saveFile: async (path: string, content: string) => {
+      await saveFile(path, content, false);
+    },
+    onSwitchFile: (path: string) => setActiveFile(path),
+  };
+
   async function handleCitePaper(paper: AiPaper) {
     if (!canEdit || !project) return;
 
@@ -914,6 +926,7 @@ export default function ProjectPage() {
               onInsert={handleInsertAtCursor}
               onReplace={handleReplaceSelection}
               onCitePaper={canEdit ? handleCitePaper : undefined}
+              applyActionsContext={canEdit ? aiApplyActionsContext : undefined}
               onClose={() => setShowAi(false)}
               variant="sheet"
               pendingRequest={aiPendingRequest}
@@ -934,6 +947,7 @@ export default function ProjectPage() {
                 onInsert={handleInsertAtCursor}
                 onReplace={handleReplaceSelection}
                 onCitePaper={canEdit ? handleCitePaper : undefined}
+                applyActionsContext={canEdit ? aiApplyActionsContext : undefined}
                 onClose={() => setShowAi(false)}
                 pendingRequest={aiPendingRequest}
                 onPendingRequestConsumed={() => setAiPendingRequest(null)}
