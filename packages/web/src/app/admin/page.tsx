@@ -1,11 +1,22 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Nav } from "@/components/nav";
 import { PRODUCT } from "@/lib/product";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { config } from "@/lib/config";
+import { formatRevisionTimestamp } from "@/lib/format-date";
+
+type AdminUserSummary = {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  isAdmin: boolean;
+  createdAt: string;
+};
 
 export default function AdminPage() {
   const [settings, setSettings] = useState({
@@ -16,19 +27,51 @@ export default function AdminPage() {
     compileTimeoutMs: 60000,
     hasOpenaiKey: false,
   });
+  const [users, setUsers] = useState<AdminUserSummary[]>([]);
+  const [userSearch, setUserSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [usersLoading, setUsersLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [usersError, setUsersError] = useState("");
+
+  const loadUsers = useCallback(async (search?: string) => {
+    setUsersLoading(true);
+    setUsersError("");
+    const params = search?.trim() ? `?search=${encodeURIComponent(search.trim())}` : "";
+    const res = await fetch(`/api/admin/users${params}`);
+    if (res.ok) {
+      const data = await res.json();
+      setUsers(data.users ?? []);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      setUsersError(err.error || "Failed to load users");
+      setUsers([]);
+    }
+    setUsersLoading(false);
+  }, []);
 
   useEffect(() => {
-    fetch("/api/admin")
-      .then((r) => r.json())
-      .then((data) => {
-        setSettings((s) => ({ ...s, ...data }));
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
+    async function load() {
+      if (config.isSelfHosted) {
+        const res = await fetch("/api/admin");
+        if (res.ok) {
+          const data = await res.json();
+          setSettings((s) => ({ ...s, ...data }));
+        }
+      }
+      setLoading(false);
+    }
+    load();
+    loadUsers();
+  }, [loadUsers]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadUsers(userSearch);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [userSearch, loadUsers]);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -71,77 +114,127 @@ export default function AdminPage() {
     <div className="min-h-screen">
       <Nav />
       <main className="max-w-2xl mx-auto px-4 py-8">
-        <h1 className="font-serif text-2xl font-semibold mb-2">Organization Admin</h1>
-        <p className="text-sm text-ink-muted mb-8">{PRODUCT.adminSubtitle}</p>
+        <h1 className="font-serif text-2xl font-semibold mb-2">Admin</h1>
+        <p className="text-sm text-ink-muted mb-8">
+          {config.isSelfHosted
+            ? PRODUCT.adminSubtitle
+            : `Manage accounts on this ${PRODUCT.name} instance.`}
+        </p>
 
-        <form onSubmit={save} className="space-y-6">
-          <section className="border border-border rounded-lg p-6 bg-surface space-y-4">
-            <h2 className="font-medium">Organization</h2>
-            <div className="space-y-2">
-              <Label htmlFor="org-name">Organization name</Label>
-              <Input
-                id="org-name"
-                value={settings.name}
-                onChange={(e) => setSettings({ ...settings, name: e.target.value })}
-              />
+        <section className="border border-border rounded-lg p-6 bg-surface space-y-4 mb-8">
+          <h2 className="font-medium">Users</h2>
+          <div className="space-y-2">
+            <Label htmlFor="user-search">Search</Label>
+            <Input
+              id="user-search"
+              value={userSearch}
+              onChange={(e) => setUserSearch(e.target.value)}
+              placeholder="Email or name"
+            />
+          </div>
+          {usersError && <p className="text-sm text-destructive">{usersError}</p>}
+          {usersLoading ? (
+            <p className="text-sm text-ink-muted">Loading users...</p>
+          ) : users.length === 0 ? (
+            <p className="text-sm text-ink-muted">No users found.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-ink-muted">
+                    <th className="py-2 pr-4 font-medium">Email</th>
+                    <th className="py-2 pr-4 font-medium">Name</th>
+                    <th className="py-2 pr-4 font-medium">Role</th>
+                    <th className="py-2 font-medium">Joined</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => (
+                    <tr key={u.id} className="border-b border-border/60">
+                      <td className="py-2 pr-4">{u.email}</td>
+                      <td className="py-2 pr-4">{u.name}</td>
+                      <td className="py-2 pr-4">{u.isAdmin ? "Admin" : u.role}</td>
+                      <td className="py-2 text-ink-muted">
+                        {formatRevisionTimestamp(u.createdAt)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </section>
+          )}
+        </section>
 
-          <section className="border border-border rounded-lg p-6 bg-surface space-y-4">
-            <h2 className="font-medium">AI Configuration</h2>
-            <div className="space-y-2">
-              <Label htmlFor="openai-key">
-                OpenAI API Key {settings.hasOpenaiKey && <span className="text-success text-xs">(configured)</span>}
-              </Label>
-              <Input
-                id="openai-key"
-                type="password"
-                value={settings.openaiApiKey}
-                onChange={(e) => setSettings({ ...settings, openaiApiKey: e.target.value })}
-                placeholder={settings.hasOpenaiKey ? "••••••••" : "sk-..."}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="openai-base">Base URL (optional)</Label>
-              <Input
-                id="openai-base"
-                value={settings.openaiBaseUrl}
-                onChange={(e) => setSettings({ ...settings, openaiBaseUrl: e.target.value })}
-                placeholder="https://api.openai.com/v1"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="openai-model">Model</Label>
-              <Input
-                id="openai-model"
-                value={settings.openaiModel}
-                onChange={(e) => setSettings({ ...settings, openaiModel: e.target.value })}
-                placeholder="gpt-4o-mini"
-              />
-            </div>
-          </section>
+        {config.isSelfHosted && (
+          <form onSubmit={save} className="space-y-6">
+            <section className="border border-border rounded-lg p-6 bg-surface space-y-4">
+              <h2 className="font-medium">Organization</h2>
+              <div className="space-y-2">
+                <Label htmlFor="org-name">Organization name</Label>
+                <Input
+                  id="org-name"
+                  value={settings.name}
+                  onChange={(e) => setSettings({ ...settings, name: e.target.value })}
+                />
+              </div>
+            </section>
 
-          <section className="border border-border rounded-lg p-6 bg-surface space-y-4">
-            <h2 className="font-medium">Compilation</h2>
-            <div className="space-y-2">
-              <Label htmlFor="compile-timeout">Compile timeout (ms)</Label>
-              <Input
-                id="compile-timeout"
-                type="number"
-                value={settings.compileTimeoutMs}
-                onChange={(e) => setSettings({ ...settings, compileTimeoutMs: parseInt(e.target.value) })}
-                min={5000}
-                max={300000}
-              />
-            </div>
-          </section>
+            <section className="border border-border rounded-lg p-6 bg-surface space-y-4">
+              <h2 className="font-medium">AI Configuration</h2>
+              <div className="space-y-2">
+                <Label htmlFor="openai-key">
+                  OpenAI API Key {settings.hasOpenaiKey && <span className="text-success text-xs">(configured)</span>}
+                </Label>
+                <Input
+                  id="openai-key"
+                  type="password"
+                  value={settings.openaiApiKey}
+                  onChange={(e) => setSettings({ ...settings, openaiApiKey: e.target.value })}
+                  placeholder={settings.hasOpenaiKey ? "••••••••" : "sk-..."}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="openai-base">Base URL (optional)</Label>
+                <Input
+                  id="openai-base"
+                  value={settings.openaiBaseUrl}
+                  onChange={(e) => setSettings({ ...settings, openaiBaseUrl: e.target.value })}
+                  placeholder="https://api.openai.com/v1"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="openai-model">Model</Label>
+                <Input
+                  id="openai-model"
+                  value={settings.openaiModel}
+                  onChange={(e) => setSettings({ ...settings, openaiModel: e.target.value })}
+                  placeholder="gpt-4o-mini"
+                />
+              </div>
+            </section>
 
-          {message && <p className="text-sm text-ink-muted">{message}</p>}
+            <section className="border border-border rounded-lg p-6 bg-surface space-y-4">
+              <h2 className="font-medium">Compilation</h2>
+              <div className="space-y-2">
+                <Label htmlFor="compile-timeout">Compile timeout (ms)</Label>
+                <Input
+                  id="compile-timeout"
+                  type="number"
+                  value={settings.compileTimeoutMs}
+                  onChange={(e) => setSettings({ ...settings, compileTimeoutMs: parseInt(e.target.value) })}
+                  min={5000}
+                  max={300000}
+                />
+              </div>
+            </section>
 
-          <Button type="submit" disabled={saving}>
-            {saving ? "Saving..." : "Save settings"}
-          </Button>
-        </form>
+            {message && <p className="text-sm text-ink-muted">{message}</p>}
+
+            <Button type="submit" disabled={saving}>
+              {saving ? "Saving..." : "Save settings"}
+            </Button>
+          </form>
+        )}
       </main>
     </div>
   );
