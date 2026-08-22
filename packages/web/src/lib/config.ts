@@ -24,6 +24,12 @@ export const config = {
     model: process.env.OPENAI_MODEL || "gpt-4o-mini",
   },
 
+  groq: {
+    apiKey: process.env.GROQ_API_KEY || "",
+    baseUrl: "https://api.groq.com/openai/v1",
+    model: process.env.OPENAI_MODEL || "openai/gpt-oss-120b",
+  },
+
   stripe: {
     secretKey: process.env.STRIPE_SECRET_KEY || "",
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || "",

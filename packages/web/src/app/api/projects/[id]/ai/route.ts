@@ -7,6 +7,12 @@ import { projectFile, organization } from "@/lib/schema";
 import { getSession } from "@/lib/session";
 import { getProjectAccess } from "@/lib/project-access";
 import { config } from "@/lib/config";
+import {
+  aiNotConfiguredMessage,
+  readAiEnvFromProcess,
+  resolveHostedAiConfig,
+  resolveSelfHostedAiConfig,
+} from "@/lib/ai-config";
 import { PRODUCT } from "@/lib/product";
 import { checkAiLimit, incrementAiUsage } from "@/lib/usage";
 import { z } from "zod";
@@ -25,22 +31,18 @@ const chatSchema = z.object({
 });
 
 async function getAiConfig() {
+  const env = readAiEnvFromProcess();
+
   if (config.isSelfHosted) {
     const [org] = await db.select().from(organization).limit(1);
-    if (org?.openaiApiKey) {
-      return {
-        apiKey: org.openaiApiKey,
-        baseUrl: org.openaiBaseUrl || config.openai.baseUrl,
-        model: org.openaiModel || config.openai.model,
-      };
-    }
+    return resolveSelfHostedAiConfig(org, {
+      ...env,
+      fallbackOpenaiBaseUrl: config.openai.baseUrl,
+      fallbackOpenaiModel: config.openai.model,
+    });
   }
 
-  if (config.openai.apiKey) {
-    return config.openai;
-  }
-
-  return null;
+  return resolveHostedAiConfig(env);
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -58,7 +60,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const aiConfig = await getAiConfig();
   if (!aiConfig?.apiKey) {
     return NextResponse.json(
-      { error: "AI not configured. Set OPENAI_API_KEY in environment or admin settings." },
+      { error: aiNotConfiguredMessage(config.isSelfHosted) },
       { status: 503 }
     );
   }
