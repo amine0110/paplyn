@@ -16,6 +16,30 @@ export interface ApplyAiActionsResult {
   skipped: { action: AiClientAction; reason: string }[];
 }
 
+/** Ensure cursor inserts do not glue onto the following token when missing a newline. */
+export function normalizeInsertAtCursorText(
+  text: string,
+  document: string,
+  cursorPos: number
+): string {
+  if (!text) return text;
+
+  const charAfter = cursorPos < document.length ? document[cursorPos] : undefined;
+  const needsTrailingNewline =
+    !text.endsWith("\n") && charAfter !== undefined && !/\s/.test(charAfter);
+
+  if (!needsTrailingNewline) return text;
+
+  const lineStart = document.lastIndexOf("\n", cursorPos - 1) + 1;
+  const atLineStart = cursorPos === lineStart;
+  const isFullLineComment = /^\s*%/.test(text);
+  const needsLeadingNewline = !atLineStart && !text.startsWith("\n") && isFullLineComment;
+
+  let result = text;
+  if (needsLeadingNewline) result = `\n${result}`;
+  return `${result}\n`;
+}
+
 function dispatchEditorChange(view: EditorView, from: number, to: number, insert: string) {
   view.dispatch({
     changes: { from, to, insert },
@@ -79,7 +103,9 @@ export async function applyAiClientActions(
             break;
           }
           const { from, to } = view.state.selection.main;
-          applyToActiveEditor(view, from, to, action.text);
+          const doc = view.state.doc.toString();
+          const text = normalizeInsertAtCursorText(action.text, doc, from);
+          applyToActiveEditor(view, from, to, text);
           applied.push(action);
           break;
         }
