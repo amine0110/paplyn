@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { createRequire } from "node:module";
 import * as Yesm from "yjs";
+import Y from "./yjs.js";
 import type postgres from "postgres";
 import {
   PERSIST_ACK_FIELD,
@@ -71,7 +72,7 @@ describe("dual Yjs realm extraction", () => {
 
 describe("persist ack guard", () => {
   it("assertSyncableFilesExtracted throws when syncable paths exist but extraction is empty", () => {
-    const doc = new Yesm.Doc();
+    const doc = new Y.Doc();
     doc.getText("main.tex").insert(0, "live edits");
     expect(getSyncableTextPathsFromDoc(doc)).toEqual(["main.tex"]);
 
@@ -107,7 +108,7 @@ describe("persist ack guard", () => {
   });
 
   it("does not signal persist ack when project_file sync fails", async () => {
-    const doc = new Yesm.Doc();
+    const doc = new Y.Doc();
     doc.getText("main.tex").insert(0, "live edits");
 
     await expect(persistRoomState(createMockSql({ failUpsert: true }), "room-1", doc)).rejects.toThrow(
@@ -117,7 +118,7 @@ describe("persist ack guard", () => {
   });
 
   it("signals persist ack only after successful project_file sync", async () => {
-    const doc = new Yesm.Doc();
+    const doc = new Y.Doc();
     doc.getText("main.tex").insert(0, "saved");
 
     await persistRoomState(createMockSql(), "room-1", doc);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import * as Y from "yjs";
+import Y from "./yjs.js";
 import {
   applyDocState,
   decodeStoredState,
