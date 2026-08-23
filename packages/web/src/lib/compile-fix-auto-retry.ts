@@ -22,6 +22,12 @@ export function beginCompileFixRetrySession(session: CompileFixRetrySession): vo
   session.awaitingPostFixCompile = false;
 }
 
+export function endCompileFixRetrySession(session: CompileFixRetrySession): void {
+  session.active = false;
+  session.autoRetryUsed = false;
+  session.awaitingPostFixCompile = false;
+}
+
 export function markCompileFixEditsApplied(
   session: CompileFixRetrySession,
   appliedEditCount: number

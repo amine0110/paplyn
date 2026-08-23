@@ -3,6 +3,7 @@ import {
   beginCompileFixRetrySession,
   createCompileFixRetrySession,
   decideCompileFixAutoRetry,
+  endCompileFixRetrySession,
   markCompileFixEditsApplied,
 } from "./compile-fix-auto-retry";
 
@@ -46,5 +47,15 @@ describe("compile-fix auto-retry session", () => {
       reason: "success",
     });
     expect(session.active).toBe(false);
+  });
+
+  it("endCompileFixRetrySession clears active retry state", () => {
+    const session = createCompileFixRetrySession();
+    beginCompileFixRetrySession(session);
+    markCompileFixEditsApplied(session, 1);
+    endCompileFixRetrySession(session);
+    expect(session.active).toBe(false);
+    expect(session.awaitingPostFixCompile).toBe(false);
+    expect(session.autoRetryUsed).toBe(false);
   });
 });

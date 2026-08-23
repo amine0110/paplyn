@@ -333,4 +333,31 @@ describe("workspace-tools", () => {
       expect(second.reason).toContain("\\documentclass");
     }
   });
+
+  it("rejects compile-fix replace_lines that invent second begin{document}", async () => {
+    const content = [
+      "\\documentclass[conference]{IEEEtran}",
+      "\\usepackage{amsmath}",
+      "\\begin{document}",
+      "\\maketitle",
+      "\\end{document}",
+    ].join("\n");
+    const files = new Map([["main.tex", content]]);
+    const tools = createWorkspaceTools(
+      { texFiles: files, hasSelection: false },
+      { compileFix: true }
+    );
+
+    const result = await tools.replace_lines.execute({
+      file: "main.tex",
+      startLine: 4,
+      endLine: 4,
+      replace: "\\begin{document}\n\\maketitle",
+    });
+
+    expect(result.kind).toBe("client-action-rejected");
+    if (result.kind === "client-action-rejected") {
+      expect(result.reason).toContain("\\begin{document}");
+    }
+  });
 });
