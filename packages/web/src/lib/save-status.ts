@@ -31,6 +31,11 @@ export type SaveStatusTrackerOptions = {
   isConnected?: () => boolean;
   /** Ms to stay disconnected after sync before failing in-flight saves. */
   connectionLostGraceMs?: number;
+  /**
+   * Called when ack timeout fires while still saving.
+   * Return true to skip automatic markFailed (caller handles status via markSaved/markFailed).
+   */
+  onAckTimeout?: () => boolean | void;
 };
 
 export function createSaveStatusTracker(
@@ -75,7 +80,10 @@ export function createSaveStatusTracker(
     if (ackTimeoutMs <= 0 || status !== "saving") return;
     ackTimer = setTimeout(() => {
       if (status === "saving") {
-        markFailed();
+        const handled = options.onAckTimeout?.();
+        if (!handled) {
+          markFailed();
+        }
       }
     }, ackTimeoutMs);
   };

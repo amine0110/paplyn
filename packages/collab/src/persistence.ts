@@ -20,16 +20,18 @@ export function shouldSchedulePersistFromUpdate(origin: unknown): boolean {
   return origin !== PERSIST_ACK_ORIGIN;
 }
 
-/** Log .tex path lengths after a client-originated doc update (diagnostics). */
-export function logClientTexLengths(roomId: string, doc: Doc, origin: unknown): void {
-  const texLengths: Record<string, number> = {};
-  for (const file of getTextFilesFromDoc(doc)) {
-    if (getPathExtension(file.path) === "tex") {
-      texLengths[file.path] = file.content.length;
-    }
-  }
-  if (Object.keys(texLengths).length === 0) return;
-  console.log(`[collab] doc update roomId=${roomId} origin=${String(origin)}`, texLengths);
+/** Log incoming update size and main.tex length after apply (diagnostics). */
+export function logDocUpdateDiagnostics(
+  roomId: string,
+  doc: Doc,
+  update: Uint8Array,
+  origin: unknown
+): void {
+  const mainTex = getTextFilesFromDoc(doc).find((file) => file.path === "main.tex");
+  const mainTexLength = mainTex?.content.length ?? 0;
+  console.log(
+    `[collab] doc update roomId=${roomId} updateBytes=${update.byteLength} main.tex=${mainTexLength} origin=${String(origin)}`
+  );
 }
 
 /** Encode a Yjs document as a binary update suitable for storage. */
@@ -448,7 +450,7 @@ export function createPostgresPersistence(sql: postgres.Sql): CollabPersistence 
           }
           return;
         }
-        logClientTexLengths(roomId, doc, origin);
+        logDocUpdateDiagnostics(roomId, doc, _update, origin);
         debounced.schedule();
       });
     },

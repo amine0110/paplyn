@@ -129,6 +129,11 @@ export function resolveCollabUrl(request?: Request): string {
   return "ws://localhost:1234";
 }
 
+/** Resolve collab HTTP base URL from the websocket URL (for server-to-server calls). */
+export function resolveCollabHttpUrl(request?: Request): string {
+  return resolveCollabUrl(request).replace(/^wss:\/\//, "https://").replace(/^ws:\/\//, "http://");
+}
+
 export function getCollabWsUrl(projectId: string, token: string, request?: Request): string {
   const base = resolveCollabUrl(request).replace(/\/$/, "");
   return `${base}/${projectId}?token=${encodeURIComponent(token)}`;
