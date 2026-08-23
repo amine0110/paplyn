@@ -46,6 +46,8 @@ const EDIT_ACTIONS = new Set([
   "improve",
   "shorten",
   "expand",
+  "correct",
+  "write",
 ]);
 
 export function loadingLabelForAction(action?: string, userMessage?: string): string {

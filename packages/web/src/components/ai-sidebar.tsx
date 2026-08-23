@@ -49,7 +49,7 @@ interface AiSidebarProps {
   applyActionsContext?: Omit<ApplyAiActionsContext, "hasSelection">;
   /** Full-pane sheet on mobile; sidebar panel on desktop. */
   variant?: "sidebar" | "sheet";
-  /** Auto-send when opened from the selection bubble. */
+  /** Auto-send when opened from Fix with AI or compile-fix retry. */
   pendingRequest?: AiPendingRequest | null;
   onPendingRequestConsumed?: () => void;
   /** Called after compile-fix actions are applied to the workspace (before auto-compile). */

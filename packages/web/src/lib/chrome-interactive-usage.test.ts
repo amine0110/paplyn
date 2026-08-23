@@ -64,16 +64,20 @@ describe("workspace chrome class usage", () => {
     expect(src).toContain("Find papers");
   });
 
-  it("selection bubble chips use CHROME_CHIP and renders without gating on AI sidebar", () => {
+  it("selection bubble chips use CHROME_CHIP and runs inline without opening sidebar", () => {
     const bubbleSrc = readSource("components/selection-ai-bubble.tsx");
     expect(bubbleSrc).toContain("CHROME_CHIP");
     expect(bubbleSrc).toContain("Rephrase");
     expect(bubbleSrc).toContain("Improve");
     expect(bubbleSrc).toContain("Cite");
+    expect(bubbleSrc).toContain("Correct");
+    expect(bubbleSrc).toContain("Write");
+    expect(bubbleSrc).toContain("runInlineSelectionAi");
 
     const pageSrc = readSource("app/project/[id]/page.tsx");
     expect(pageSrc).toContain("<SelectionAiBubble");
     expect(pageSrc).not.toMatch(/isTextEditorFile\s*&&\s*!showAi/);
+    expect(pageSrc).toContain("AiSidebarPanel");
   });
 
   it("globals.css defines accent-tint hover backgrounds for chrome classes", () => {

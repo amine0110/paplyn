@@ -31,6 +31,7 @@ import { ShareDialog } from "@/components/share-dialog";
 import { HistoryDialog } from "@/components/history-dialog";
 import { CollabPresence } from "@/components/collab-presence";
 import { AiSidebar, type AiPendingRequest } from "@/components/ai-sidebar";
+import { AiSidebarPanel } from "@/components/ai-sidebar-panel";
 import { buildCompileFixAiRequest, buildCompileFixAutoRetryRequest } from "@/lib/ai-compile-fix-intent";
 import {
   beginCompileFixRetrySession,
@@ -568,13 +569,9 @@ export default function ProjectPage() {
     handleInsertAtCursor(`\\cite{${citationKey}}`);
   }
 
-  function handleSelectionAiAction(request: AiPendingRequest) {
-    setAiPendingRequest(request);
-    setShowAi(true);
-  }
-
   function handleFixCompileWithAi() {
-    handleSelectionAiAction(buildCompileFixAiRequest());
+    setAiPendingRequest(buildCompileFixAiRequest());
+    setShowAi(true);
   }
 
   function handleJumpToLine(line: number, file?: string) {
@@ -1035,38 +1032,59 @@ export default function ProjectPage() {
             {!isNarrow && (
               <div className="absolute inset-0 bg-ink/10 z-20" onClick={() => setShowAi(false)} />
             )}
-            <div
-              className={
-                isNarrow
-                  ? "absolute inset-0 z-30 flex flex-col min-h-0 bg-surface"
-                  : "absolute right-0 top-0 bottom-0 w-[380px] z-30 shadow-2xl"
-              }
-            >
-              <AiSidebar
-                projectId={projectId}
-                activeFile={activeFile}
-                selectedText={selectedText}
-                compileErrors={compileErrors}
-                onInsert={handleInsertAtCursor}
-                onReplace={handleReplaceSelection}
-                onCitePaper={canEdit ? handleCitePaper : undefined}
-                applyActionsContext={canEdit ? aiApplyActionsContext : undefined}
-                onClose={() => setShowAi(false)}
-                variant={isNarrow ? "sheet" : "sidebar"}
-                pendingRequest={aiPendingRequest}
-                onPendingRequestConsumed={() => setAiPendingRequest(null)}
-                onCompileFixActionsApplied={canEdit ? handleCompileFixActionsApplied : undefined}
-                onCompileFixSessionStart={canEdit ? handleCompileFixSessionStart : undefined}
-                onCompileFixRetryNoOp={canEdit ? handleCompileFixRetryNoOp : undefined}
-              />
-            </div>
+            {isNarrow ? (
+              <div className="absolute inset-0 z-30 flex flex-col min-h-0 bg-surface">
+                <AiSidebar
+                  projectId={projectId}
+                  activeFile={activeFile}
+                  selectedText={selectedText}
+                  compileErrors={compileErrors}
+                  onInsert={handleInsertAtCursor}
+                  onReplace={handleReplaceSelection}
+                  onCitePaper={canEdit ? handleCitePaper : undefined}
+                  applyActionsContext={canEdit ? aiApplyActionsContext : undefined}
+                  onClose={() => setShowAi(false)}
+                  variant="sheet"
+                  pendingRequest={aiPendingRequest}
+                  onPendingRequestConsumed={() => setAiPendingRequest(null)}
+                  onCompileFixActionsApplied={canEdit ? handleCompileFixActionsApplied : undefined}
+                  onCompileFixSessionStart={canEdit ? handleCompileFixSessionStart : undefined}
+                  onCompileFixRetryNoOp={canEdit ? handleCompileFixRetryNoOp : undefined}
+                />
+              </div>
+            ) : (
+              <AiSidebarPanel>
+                <AiSidebar
+                  projectId={projectId}
+                  activeFile={activeFile}
+                  selectedText={selectedText}
+                  compileErrors={compileErrors}
+                  onInsert={handleInsertAtCursor}
+                  onReplace={handleReplaceSelection}
+                  onCitePaper={canEdit ? handleCitePaper : undefined}
+                  applyActionsContext={canEdit ? aiApplyActionsContext : undefined}
+                  onClose={() => setShowAi(false)}
+                  variant="sidebar"
+                  pendingRequest={aiPendingRequest}
+                  onPendingRequestConsumed={() => setAiPendingRequest(null)}
+                  onCompileFixActionsApplied={canEdit ? handleCompileFixActionsApplied : undefined}
+                  onCompileFixSessionStart={canEdit ? handleCompileFixSessionStart : undefined}
+                  onCompileFixRetryNoOp={canEdit ? handleCompileFixRetryNoOp : undefined}
+                />
+              </AiSidebarPanel>
+            )}
           </>
         )}
 
         {!showAi && <AiAssistantFab onClick={() => setShowAi(true)} />}
 
         {isTextEditorFile && (
-          <SelectionAiBubble editorView={editorView} onAction={handleSelectionAiAction} />
+          <SelectionAiBubble
+            editorView={editorView}
+            projectId={projectId}
+            activeFile={activeFile}
+            inlineContext={{ applyActionsContext: aiApplyActionsContext }}
+          />
         )}
       </div>
 
