@@ -2,16 +2,20 @@
 export const COLLAB_SAVE_DEBOUNCE_MS = 2000;
 export const COLLAB_SAVE_MAX_WAIT_MS = 10000;
 
-export type SaveStatus = "saved" | "saving";
+/** Matches collab server persist ack map (packages/collab/src/persistence.ts). */
+export const PERSIST_META_MAP = "_meta";
+export const PERSIST_ACK_FIELD = "persistedAt";
+
+export type SaveStatus = "saved" | "saving" | "failed";
 
 export function getSaveStatusLabel(status: SaveStatus): string {
-  return status === "saving" ? "Saving…" : "Saved";
+  if (status === "saving") return "Saving…";
+  if (status === "failed") return "Save failed";
+  return "Saved";
 }
 
 export function createSaveStatusTracker(onChange: (status: SaveStatus) => void) {
   let status: SaveStatus = "saved";
-  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
-  let maxWaitTimer: ReturnType<typeof setTimeout> | undefined;
 
   const setStatus = (next: SaveStatus) => {
     if (status === next) return;
@@ -19,26 +23,16 @@ export function createSaveStatusTracker(onChange: (status: SaveStatus) => void) 
     onChange(next);
   };
 
-  const clearTimers = () => {
-    if (debounceTimer) clearTimeout(debounceTimer);
-    if (maxWaitTimer) clearTimeout(maxWaitTimer);
-    debounceTimer = undefined;
-    maxWaitTimer = undefined;
+  const markSaved = () => {
+    setStatus("saved");
   };
 
-  const markSaved = () => {
-    clearTimers();
-    setStatus("saved");
+  const markFailed = () => {
+    setStatus("failed");
   };
 
   const markDirty = () => {
     setStatus("saving");
-    if (!debounceTimer) {
-      debounceTimer = setTimeout(markSaved, COLLAB_SAVE_DEBOUNCE_MS);
-    }
-    if (!maxWaitTimer) {
-      maxWaitTimer = setTimeout(markSaved, COLLAB_SAVE_MAX_WAIT_MS);
-    }
   };
 
   const onDocUpdate = (origin: unknown, remoteOrigin: unknown) => {
@@ -47,8 +41,8 @@ export function createSaveStatusTracker(onChange: (status: SaveStatus) => void) 
   };
 
   const destroy = () => {
-    clearTimers();
+    // no-op — timers removed; status reflects real persist only
   };
 
-  return { onDocUpdate, markSaved, markDirty, destroy };
+  return { onDocUpdate, markSaved, markFailed, markDirty, destroy };
 }

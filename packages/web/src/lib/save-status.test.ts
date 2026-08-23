@@ -20,9 +20,10 @@ describe("save status helpers", () => {
     expect(COLLAB_SAVE_MAX_WAIT_MS).toBe(10000);
   });
 
-  it("labels saving and saved states", () => {
+  it("labels saving, saved, and failed states", () => {
     expect(getSaveStatusLabel("saving")).toBe("Saving…");
     expect(getSaveStatusLabel("saved")).toBe("Saved");
+    expect(getSaveStatusLabel("failed")).toBe("Save failed");
   });
 
   it("transitions from saved to saving on local doc updates", () => {
@@ -44,25 +45,37 @@ describe("save status helpers", () => {
     expect(changes).toEqual([]);
   });
 
-  it("returns to saved after the debounce window", () => {
+  it("returns to saved only after explicit markSaved", () => {
     const changes: string[] = [];
     const tracker = createSaveStatusTracker((status) => changes.push(status));
 
     tracker.onDocUpdate("local", "remote-provider");
     vi.advanceTimersByTime(COLLAB_SAVE_DEBOUNCE_MS);
 
+    expect(changes).toEqual(["saving"]);
+
+    tracker.markSaved();
     expect(changes).toEqual(["saving", "saved"]);
   });
 
-  it("flushes at max wait even with continuous edits", () => {
+  it("does not auto-save after debounce without markSaved", () => {
     const changes: string[] = [];
     const tracker = createSaveStatusTracker((status) => changes.push(status));
 
     tracker.onDocUpdate("local", "remote-provider");
-    vi.advanceTimersByTime(COLLAB_SAVE_DEBOUNCE_MS - 100);
-    tracker.onDocUpdate("local", "remote-provider");
     vi.advanceTimersByTime(COLLAB_SAVE_MAX_WAIT_MS);
 
-    expect(changes).toContain("saved");
+    expect(changes).toEqual(["saving"]);
+  });
+
+  it("markFailed surfaces save failure", () => {
+    const changes: string[] = [];
+    const tracker = createSaveStatusTracker((status) => changes.push(status));
+
+    tracker.onDocUpdate("local", "remote-provider");
+    tracker.markFailed();
+
+    expect(changes).toEqual(["saving", "failed"]);
+    expect(getSaveStatusLabel("failed")).toBe("Save failed");
   });
 });

@@ -72,6 +72,7 @@ import type { Project } from "@/lib/schema";
 import type { DocumentStats } from "@/lib/document-stats";
 import { countDocumentStats } from "@/lib/document-stats";
 import type { SaveStatus } from "@/lib/save-status";
+import { saveProjectFile } from "@/lib/save-file";
 import type { AiPaper } from "@/lib/ai-types";
 import {
   appendBibEntry,
@@ -157,6 +158,8 @@ export default function ProjectPage() {
   const editorViewRef = useRef<EditorView | null>(null);
   const [editorView, setEditorView] = useState<EditorView | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingSaveRef = useRef<{ path: string; content: string } | null>(null);
+  const collabTokenRef = useRef<string | null>(null);
   const compileSchedulerRef = useRef<ReturnType<typeof createCompileScheduler> | null>(null);
   const compileFixRetryRef = useRef(createCompileFixRetrySession());
 
@@ -260,14 +263,32 @@ export default function ProjectPage() {
     loadProject();
   }, [loadProject]);
 
+  useEffect(() => {
+    collabTokenRef.current = collabToken;
+  }, [collabToken]);
+
   const saveFile = useCallback(
-    async (path: string, content: string, isBinary = false) => {
-      if (!canEdit) return;
-      await fetch(`/api/projects/${projectId}/files`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path, content, isBinary }),
-      });
+    async (path: string, content: string, isBinary = false): Promise<boolean> => {
+      if (!canEdit) return false;
+
+      if (!collabTokenRef.current) {
+        setSaveStatus("saving");
+      }
+
+      const result = await saveProjectFile(projectId, path, content, isBinary, { retry: true });
+
+      if (!result.ok) {
+        console.error("[save] failed to persist file:", path, result.error);
+        if (!collabTokenRef.current) {
+          setSaveStatus("failed");
+        }
+        return false;
+      }
+
+      if (!collabTokenRef.current) {
+        setSaveStatus("saved");
+      }
+
       setFiles((prev) => {
         const existing = prev.find((f) => f.path === path);
         if (existing) {
@@ -277,15 +298,34 @@ export default function ProjectPage() {
         }
         return [...prev, { path, content, isBinary }];
       });
+      return true;
     },
     [projectId, canEdit]
   );
 
+  const flushPendingEditorSave = useCallback(async () => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+    const pending = pendingSaveRef.current;
+    if (!pending) return;
+    pendingSaveRef.current = null;
+    await saveFile(pending.path, pending.content, false);
+  }, [saveFile]);
+
   const handleEditorChange = useCallback(
     (content: string) => {
       if (!activeFile) return;
+      if (collabTokenRef.current) return;
+
+      pendingSaveRef.current = { path: activeFile, content };
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = setTimeout(() => saveFile(activeFile, content), 1000);
+      setSaveStatus("saving");
+      saveTimeoutRef.current = setTimeout(() => {
+        pendingSaveRef.current = null;
+        void saveFile(activeFile, content);
+      }, 1000);
     },
     [activeFile, saveFile]
   );
@@ -295,7 +335,14 @@ export default function ProjectPage() {
       clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = null;
     }
+    pendingSaveRef.current = null;
   }, []);
+
+  useEffect(() => {
+    return () => {
+      void flushPendingEditorSave();
+    };
+  }, [activeFile, flushPendingEditorSave]);
 
   const compile = useCallback(async () => {
     const hadPdfBeforeCompile = pdfData !== null;
