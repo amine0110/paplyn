@@ -3,21 +3,29 @@ import { describe, expect, it } from "vitest";
 import {
   AI_RATE_LIMIT_MESSAGE,
   formatAiRequestError,
+  getRetryAfterSeconds,
   isAiPromptTooLargeError,
   isAiRateLimitError,
   isPromptTooLargeMessage,
+  isSlimCompileFixPrompt,
   isTpmOrRateLimitMessage,
   isUnknownToolCallError,
   PROMPT_TOO_LARGE_MESSAGE,
+  redactAiErrorMessage,
+  shouldTreatCompileFix429AsRateLimit,
 } from "./ai-tool-errors";
 
-function apiError(message: string, statusCode: number): APICallError {
+function apiError(
+  message: string,
+  statusCode: number,
+  responseHeaders: Record<string, string | string[]> = {}
+): APICallError {
   return new APICallError({
     message,
     url: "https://api.groq.com/openai/v1/chat/completions",
     requestBodyValues: {},
     statusCode,
-    responseHeaders: {},
+    responseHeaders,
     responseBody: "",
     isRetryable: false,
   });
@@ -105,5 +113,55 @@ describe("user-facing messages", () => {
     expect(PROMPT_TOO_LARGE_MESSAGE).toContain("project context is too large");
     expect(AI_RATE_LIMIT_MESSAGE).toContain("rate limit");
     expect(PROMPT_TOO_LARGE_MESSAGE).not.toBe(AI_RATE_LIMIT_MESSAGE);
+  });
+});
+
+describe("redactAiErrorMessage", () => {
+  it("redacts API key patterns and caps length", () => {
+    const redacted = redactAiErrorMessage(
+      `failed with sk-abcdefghijklmnopqrstuvwxyz123456 and ${"x".repeat(600)}`
+    );
+    expect(redacted).toContain("sk-[REDACTED]");
+    expect(redacted).not.toContain("sk-abcdefghijklmnopqrstuvwxyz");
+    expect(redacted.length).toBeLessThanOrEqual(500);
+  });
+});
+
+describe("getRetryAfterSeconds", () => {
+  it("reads retry-after from response headers", () => {
+    const error = apiError("rate limited", 429, { "retry-after": "12" });
+    expect(getRetryAfterSeconds(error)).toBe(12);
+  });
+
+  it("returns undefined when header is missing", () => {
+    expect(getRetryAfterSeconds(apiError("rate limited", 429))).toBeUndefined();
+  });
+});
+
+describe("isSlimCompileFixPrompt", () => {
+  it("treats small prompts as slim", () => {
+    expect(isSlimCompileFixPrompt(2000, 500)).toBe(true);
+    expect(isSlimCompileFixPrompt(10_000, 5_000)).toBe(false);
+  });
+});
+
+describe("shouldTreatCompileFix429AsRateLimit", () => {
+  it("treats TPM 429 as rate limit", () => {
+    const error = apiError(
+      "Rate limit reached: limit 6000 TPM, used 5800, requested 500",
+      429
+    );
+    expect(shouldTreatCompileFix429AsRateLimit(error, 1500, 200)).toBe(true);
+  });
+
+  it("treats slim 429 with ambiguous too-large text as rate limit", () => {
+    const error = apiError("Request too large for model", 429);
+    expect(isAiPromptTooLargeError(error)).toBe(true);
+    expect(shouldTreatCompileFix429AsRateLimit(error, 1500, 200)).toBe(true);
+  });
+
+  it("keeps fat compile-fix 429 as prompt too large when message says so", () => {
+    const error = apiError("Request too large for model", 429);
+    expect(shouldTreatCompileFix429AsRateLimit(error, 20_000, 5_000)).toBe(false);
   });
 });

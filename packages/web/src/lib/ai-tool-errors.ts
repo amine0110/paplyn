@@ -6,6 +6,9 @@ export const PROMPT_TOO_LARGE_MESSAGE =
 export const AI_RATE_LIMIT_MESSAGE =
   "AI service rate limit reached. Please wait a moment and try again.";
 
+/** Compile-fix prompts at or below this size are treated as slim (not context bloat). */
+export const COMPILE_FIX_SLIM_PROMPT_MAX_CHARS = 12_000;
+
 const TPM_OR_RATE_LIMIT_PATTERNS = [
   "tpm",
   "tokens per minute",
@@ -60,6 +63,66 @@ export function isAiPromptTooLargeError(error: unknown): boolean {
 export function isAiRateLimitError(error: unknown): boolean {
   if (!APICallError.isInstance(error)) return false;
   return error.statusCode === 429 && !isAiPromptTooLargeError(error);
+}
+
+export function isSlimCompileFixPrompt(
+  systemPromptChars: number,
+  messagesChars: number
+): boolean {
+  return systemPromptChars + messagesChars <= COMPILE_FIX_SLIM_PROMPT_MAX_CHARS;
+}
+
+/** Slim compile-fix 429s are treated as rate limits (TPM), not context bloat. */
+export function shouldTreatCompileFix429AsRateLimit(
+  error: unknown,
+  systemPromptChars: number,
+  messagesChars: number
+): boolean {
+  if (!APICallError.isInstance(error) || error.statusCode !== 429) return false;
+  if (isAiRateLimitError(error)) return true;
+  return isSlimCompileFixPrompt(systemPromptChars, messagesChars);
+}
+
+export function redactAiErrorMessage(message: string): string {
+  return message
+    .replace(/\bsk-[a-zA-Z0-9_-]{8,}\b/g, "sk-[REDACTED]")
+    .replace(/\bgsk_[a-zA-Z0-9_-]{8,}\b/g, "gsk_[REDACTED]")
+    .slice(0, 500);
+}
+
+export function getRetryAfterSeconds(error: unknown): number | undefined {
+  if (!APICallError.isInstance(error)) return undefined;
+  const headers = error.responseHeaders ?? {};
+  const raw =
+    headers["retry-after"] ??
+    headers["Retry-After"] ??
+    headers["x-ratelimit-reset-requests"];
+  if (raw == null) return undefined;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  const seconds = Number.parseInt(String(value), 10);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : undefined;
+}
+
+export interface AiApiErrorLogContext {
+  compileFix?: boolean;
+  mode?: string;
+  systemPromptChars?: number;
+  messagesChars?: number;
+  errorCount?: number;
+}
+
+export function logAiApiError(context: AiApiErrorLogContext, error: unknown): void {
+  if (!APICallError.isInstance(error)) {
+    console.error("[ai api error]", { ...context, error: String(error) });
+    return;
+  }
+
+  console.error("[ai api error]", {
+    ...context,
+    statusCode: error.statusCode,
+    message: redactAiErrorMessage(error.message),
+    retryAfter: getRetryAfterSeconds(error),
+  });
 }
 
 export function isUnknownToolCallError(error: unknown): boolean {

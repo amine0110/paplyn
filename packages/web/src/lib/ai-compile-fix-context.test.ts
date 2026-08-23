@@ -34,6 +34,23 @@ describe("normalizeAiCompileErrors", () => {
       ])
     ).toEqual([{ message: "Missing } inserted", file: "main.tex", line: 5 }]);
   });
+
+  it("drops warnings when errors are present", () => {
+    expect(
+      normalizeAiCompileErrors([
+        { message: "Fatal error", severity: "error", file: "main.tex", line: 1 },
+        { message: "Overfull hbox", severity: "warning", file: "main.tex", line: 2 },
+      ])
+    ).toEqual([{ message: "Fatal error", severity: "error", file: "main.tex", line: 1 }]);
+  });
+
+  it("caps the number of compile errors", () => {
+    const errors = Array.from({ length: 30 }, (_, index) => ({
+      message: `error ${index}`,
+      severity: "error" as const,
+    }));
+    expect(normalizeAiCompileErrors(errors)).toHaveLength(25);
+  });
 });
 
 describe("formatCompileErrorLines", () => {
