@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertCircle, AlertTriangle } from "lucide-react";
+import { FixWithAiButton } from "@/components/fix-with-ai-button";
 import { CHROME_LINK, CHROME_MENU_ITEM } from "@/lib/chrome-interactive";
 
 interface CompileError {
@@ -16,9 +17,10 @@ interface CompilePanelProps {
   onJumpToLine: (line: number, file?: string) => void;
   showLog: boolean;
   onToggleLog: () => void;
+  onFixWithAi?: () => void;
 }
 
-export function CompilePanel({ log, errors, onJumpToLine, showLog, onToggleLog }: CompilePanelProps) {
+export function CompilePanel({ log, errors, onJumpToLine, showLog, onToggleLog, onFixWithAi }: CompilePanelProps) {
   const errorList = errors.filter((e) => e.severity === "error");
   const warnList = errors.filter((e) => e.severity === "warning");
 
@@ -37,6 +39,9 @@ export function CompilePanel({ log, errors, onJumpToLine, showLog, onToggleLog }
               <AlertCircle className="h-3.5 w-3.5" />
               {errorList.length} error{errorList.length !== 1 ? "s" : ""}
             </span>
+          )}
+          {onFixWithAi && (
+            <FixWithAiButton errorCount={errorList.length} onClick={onFixWithAi} />
           )}
           {warnList.length > 0 && (
             <span className="flex items-center gap-1 text-accent">

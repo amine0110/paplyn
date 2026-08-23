@@ -1,5 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { detectFixCompileIntent } from "./ai-compile-fix-intent";
+import {
+  buildCompileFixAiRequest,
+  COMPILE_FIX_ACTION,
+  COMPILE_FIX_USER_MESSAGE,
+  detectFixCompileIntent,
+} from "./ai-compile-fix-intent";
+
+describe("compile-fix request helpers", () => {
+  it("exposes the canonical compile-fix user message", () => {
+    expect(COMPILE_FIX_USER_MESSAGE).toBe("Find the error that stopping the compiler");
+    expect(COMPILE_FIX_ACTION).toBe("explain-errors");
+  });
+
+  it("builds a pending AI request for compile-fix", () => {
+    expect(buildCompileFixAiRequest()).toEqual({
+      message: "Find the error that stopping the compiler",
+      action: "explain-errors",
+    });
+  });
+});
 
 describe("detectFixCompileIntent", () => {
   it("detects explain-errors action", () => {
