@@ -22,4 +22,4 @@ export function formatAiRequestError(error: unknown): string {
   return "AI request failed. Please try again.";
 }
 
-export const UNKNOWN_TOOL_RETRY_HINT = `Important: only call tools that are explicitly listed for this request (get_file, fix_compile_errors, apply_edit, insert_at_cursor, replace_selection). Do not call any other tool names.`;
+export const UNKNOWN_TOOL_RETRY_HINT = `Important: only call workspace tools that are explicitly listed for this request (list_files, get_file, fix_compile_errors, apply_edit, insert_at_cursor, replace_selection, and any plugin tools shown above). Do not call any other tool names.`;

@@ -30,10 +30,10 @@ import {
   hadToolActivity,
 } from "@/lib/ai-response";
 import {
-  createClientEditTools,
-  CLIENT_EDIT_SYSTEM_PROMPT,
-  COMPILE_FIX_CLIENT_EDIT_PROMPT,
-} from "@/lib/ai-plugins/client-edit-tools";
+  createWorkspaceTools,
+  WORKSPACE_SYSTEM_PROMPT,
+  COMPILE_FIX_WORKSPACE_SUFFIX,
+} from "@/lib/ai-plugins/workspace-tools";
 import {
   formatAiRequestError,
   isUnknownToolCallError,
@@ -133,15 +133,16 @@ function buildSystemPrompt(options: {
   const compileFix = mode !== "full";
 
   let systemPrompt = compileFix
-    ? `You are ${PRODUCT.aiAssistantName}, a LaTeX assistant.
-Fix compile errors using fix_compile_errors or apply_edit with exact search/replace from the snippets below.
-Be concise and precise. Explain what you changed after applying fixes.
-${COMPILE_FIX_CLIENT_EDIT_PROMPT}`
+    ? `You are ${PRODUCT.aiAssistantName}, a LaTeX assistant for academic writing.
+Be concise and precise. When suggesting LaTeX code, use proper syntax and fenced \`\`\`latex blocks.
+Format explanatory replies with markdown (headings, lists, tables) when helpful.
+${WORKSPACE_SYSTEM_PROMPT}
+${COMPILE_FIX_WORKSPACE_SUFFIX}`
     : `You are ${PRODUCT.aiAssistantName}, a helpful LaTeX assistant for academic writing.
 You help researchers write, edit, and debug LaTeX documents.
 Be concise and precise. When suggesting LaTeX code, use proper syntax and fenced \`\`\`latex blocks.
 Format explanatory replies with markdown (headings, lists, tables) when helpful.
-${CLIENT_EDIT_SYSTEM_PROMPT}`;
+${WORKSPACE_SYSTEM_PROMPT}`;
 
   if (!compileFix && pluginSystemPrompt) {
     systemPrompt += `\n${pluginSystemPrompt}`;
@@ -284,7 +285,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const texFileMap = new Map(texFiles.map((f) => [f.path, f.content]));
   const hasSelection = Boolean(requestData.selectedText?.trim());
 
-  const clientEditTools = createClientEditTools({
+  const workspaceTools = createWorkspaceTools({
     texFiles: texFileMap,
     activeFile: requestData.activeFile,
     hasSelection,
@@ -326,8 +327,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       maxRetries: 0,
       maxSteps: 8,
       tools: compileFixRequest
-        ? clientEditTools
-        : { ...pluginTools, ...clientEditTools },
+        ? workspaceTools
+        : { ...pluginTools, ...workspaceTools },
     });
 
     const content = await resolveAssistantContent({
