@@ -5,12 +5,13 @@ import { seedDocFromProjectFiles, type ProjectFileRow } from "./room-seed.js";
 const SAMPLE = "\\documentclass{article}\n\\begin{document}\nHi\\end{document}\n";
 
 function makeFiles(
-  entries: Array<{ path: string; content: string; is_binary?: boolean }>
+  entries: Array<{ path: string; content: string; is_binary?: boolean; updated_at?: Date }>
 ): ProjectFileRow[] {
   return entries.map((e) => ({
     path: e.path,
     content: e.content,
     is_binary: e.is_binary ?? false,
+    updated_at: e.updated_at ?? null,
   }));
 }
 
@@ -54,6 +55,43 @@ describe("seedDocFromProjectFiles", () => {
     expect(seedDocFromProjectFiles(doc, files)).toBe(0);
     expect(doc.getText("main.tex").toString()).toBe(bloated);
     expect(doc.getText("main.tex").length).toBe(bloated.length);
+  });
+
+  it("adopts newer HTTP project_file when collab room blob is older", () => {
+    const doc = new Y.Doc();
+    doc.getText("main.tex").insert(0, "stale yjs without marker");
+
+    const collabRoomUpdatedAt = new Date("2026-08-23T18:33:27.000Z");
+    const httpUpdatedAt = new Date("2026-08-23T18:33:28.000Z");
+    const httpContent = "stale yjs without marker\n% persist-ack-llmsim-20260823";
+
+    const files = makeFiles([
+      { path: "main.tex", content: httpContent, updated_at: httpUpdatedAt },
+    ]);
+
+    expect(
+      seedDocFromProjectFiles(doc, files, { collabRoomUpdatedAt })
+    ).toBe(1);
+    expect(doc.getText("main.tex").toString()).toBe(httpContent);
+  });
+
+  it("does not replace Y.Text when HTTP is older than collab room blob", () => {
+    const doc = new Y.Doc();
+    doc.getText("main.tex").insert(0, "live collab edits");
+
+    const collabRoomUpdatedAt = new Date("2026-08-23T18:33:27.000Z");
+    const httpUpdatedAt = new Date("2026-08-23T18:33:18.000Z");
+
+    const files = makeFiles([
+      {
+        path: "main.tex",
+        content: "older http with % persist-ack-llmsim-20260823",
+        updated_at: httpUpdatedAt,
+      },
+    ]);
+
+    expect(seedDocFromProjectFiles(doc, files, { collabRoomUpdatedAt })).toBe(0);
+    expect(doc.getText("main.tex").toString()).toBe("live collab edits");
   });
 
   it("server seed prevents multi-client Y.Text duplication race", () => {
