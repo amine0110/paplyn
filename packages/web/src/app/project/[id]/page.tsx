@@ -72,6 +72,11 @@ import {
 } from "@/lib/bibtex";
 import { canManageSharing, type ProjectRole } from "@/lib/project-sharing";
 import {
+  countCompileErrors,
+  deriveProofStaleAfterCompile,
+  shouldShowStaleProofBanner,
+} from "@/lib/proof-stale-state";
+import {
   effectiveLayoutMode,
   layoutModeToMobileTab,
   layoutShowsProof,
@@ -108,6 +113,7 @@ export default function ProjectPage() {
 
   const [compiling, setCompiling] = useState(false);
   const [pdfData, setPdfData] = useState<string | null>(null);
+  const [proofIsStale, setProofIsStale] = useState(false);
   const [synctexData, setSynctexData] = useState<string | null>(null);
   const [compileLog, setCompileLog] = useState("");
   const [compileErrors, setCompileErrors] = useState<CompileError[]>([]);
@@ -267,6 +273,7 @@ export default function ProjectPage() {
   );
 
   async function compile() {
+    const hadPdfBeforeCompile = pdfData !== null;
     setCompiling(true);
     setCompileErrors([]);
     openProof();
@@ -276,7 +283,10 @@ export default function ProjectPage() {
       const result = await res.json();
       if (result.error) {
         setCompileLog("");
-        setCompileErrors([{ message: result.error, severity: "error" }]);
+        const errors: CompileError[] = [{ message: result.error, severity: "error" }];
+        setCompileErrors(errors);
+        const stale = deriveProofStaleAfterCompile(hadPdfBeforeCompile, { success: false }, errors);
+        setProofIsStale(stale.isStale);
       } else {
         setCompileLog(result.log || "");
         let errors: CompileError[] = result.errors || [];
@@ -292,6 +302,8 @@ export default function ProjectPage() {
           ];
         }
         setCompileErrors(errors);
+        const stale = deriveProofStaleAfterCompile(hadPdfBeforeCompile, result, errors);
+        setProofIsStale(stale.isStale);
         if (!result.success && result.log?.trim()) {
           setShowLog(true);
         }
@@ -304,7 +316,10 @@ export default function ProjectPage() {
       }
     } catch {
       setCompileLog("");
-      setCompileErrors([{ message: "Failed to compile", severity: "error" }]);
+      const errors: CompileError[] = [{ message: "Failed to compile", severity: "error" }];
+      setCompileErrors(errors);
+      const stale = deriveProofStaleAfterCompile(hadPdfBeforeCompile, { success: false }, errors);
+      setProofIsStale(stale.isStale);
     } finally {
       setCompiling(false);
     }
@@ -603,11 +618,26 @@ export default function ProjectPage() {
     </div>
   );
 
+  const compileErrorCount = countCompileErrors(compileErrors);
+  const showStaleProofBanner = shouldShowStaleProofBanner(proofIsStale, pdfData);
+
   const proofPane = (
     <div className="workspace-pane">
       <div className="workspace-pane-header flex items-center gap-2">
-        <BookOpen className="h-3.5 w-3.5 text-accent" />
+        <BookOpen
+          className={cn(
+            "h-3.5 w-3.5",
+            showStaleProofBanner ? "text-error" : "text-accent"
+          )}
+        />
         <span>Proof</span>
+        {showStaleProofBanner && (
+          <span
+            className="ml-1 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-error/15 text-error border border-error/25"
+          >
+            Outdated
+          </span>
+        )}
       </div>
       <PdfPreview
         pdfData={pdfData}
@@ -617,8 +647,10 @@ export default function ProjectPage() {
         loading={compiling}
         showDownload
         downloadFilename={project?.name ?? "manuscript"}
-        compileFailed={compileErrors.some((e) => e.severity === "error")}
+        compileFailed={compileErrorCount > 0}
         compileErrors={compileErrors}
+        isStale={showStaleProofBanner}
+        staleErrorCount={compileErrorCount}
       />
     </div>
   );
@@ -1004,6 +1036,7 @@ export default function ProjectPage() {
             }
             if (pdf) {
               setPdfData(pdf);
+              setProofIsStale(false);
             }
           }}
         />
