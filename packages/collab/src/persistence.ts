@@ -1,5 +1,6 @@
 import * as Y from "yjs";
 import postgres from "postgres";
+import { seedRoomFromProjectFiles } from "./room-seed.js";
 
 const SAVE_DEBOUNCE_MS = parseInt(process.env.COLLAB_SAVE_DEBOUNCE_MS || "2000", 10);
 const SAVE_MAX_WAIT_MS = parseInt(process.env.COLLAB_SAVE_MAX_WAIT_MS || "10000", 10);
@@ -108,6 +109,9 @@ export function createPostgresPersistence(sql: postgres.Sql): CollabPersistence 
       if (stored && stored.length > 0) {
         applyDocState(doc, stored);
       }
+
+      // Authoritative one-time seed from HTTP source of truth before clients sync.
+      await seedRoomFromProjectFiles(sql, roomId, doc);
 
       const debounced = createDebouncedSave(
         async () => {

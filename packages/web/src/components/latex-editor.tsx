@@ -18,6 +18,11 @@ import { countDocumentStats, type DocumentStats } from "@/lib/document-stats";
 import { colorForUserId, parseCollabToken } from "@/lib/project-sharing";
 import { readStoredSpellcheckEnabled } from "@/lib/editor-preferences";
 import { spellcheckCompartment, spellcheckExtensions } from "@/lib/latex-spellcheck";
+import {
+  getCollabEditorInitialDoc,
+  getOfflineEditorInitialDoc,
+  seedYTextIfEmpty,
+} from "@/lib/collab-seed";
 
 const latexHighlightLight = HighlightStyle.define([
   { tag: t.keyword, color: "#2d6a6a" },
@@ -90,6 +95,8 @@ export function LatexEditor({
     const ytext = ydoc.getText(filePath);
 
     let provider: WebsocketProvider | null = null;
+    const collabEnabled = Boolean(collabToken);
+
     if (collabToken) {
       provider = new WebsocketProvider(collabBaseUrl, projectId, ydoc, {
         params: { token: collabToken },
@@ -102,17 +109,15 @@ export function LatexEditor({
           color: colorForUserId(payload.userId),
         });
       }
-      provider.on("sync", () => {
-        if (ytext.length === 0 && initialContent) {
-          ytext.insert(0, initialContent);
-        }
-      });
+      // Rooms are seeded on the collab server from project_file; do not seed here.
     } else if (initialContent) {
-      ytext.insert(0, initialContent);
+      seedYTextIfEmpty(ytext, initialContent);
     }
 
     const highlightStyle = isDark ? latexHighlightDark : latexHighlightLight;
-    const initialDoc = ytext.toString() || initialContent;
+    const initialDoc = collabEnabled
+      ? getCollabEditorInitialDoc(ytext.toString())
+      : getOfflineEditorInitialDoc(ytext.toString(), initialContent);
 
     const extensions = [
       lineNumbers(),
