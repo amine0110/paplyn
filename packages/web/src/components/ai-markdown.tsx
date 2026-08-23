@@ -38,7 +38,7 @@ function CodeBlock({ className, children, ...props }: React.ComponentProps<"code
   }
 
   return (
-    <div className="group relative my-2 overflow-hidden rounded-md border border-border bg-paper">
+    <div className="group relative my-1.5 overflow-hidden rounded-lg border border-border/80 bg-canvas-dark/20">
       <div className="flex items-center justify-between border-b border-border bg-canvas-dark/60 px-2 py-1">
         <span className="font-mono text-[10px] uppercase tracking-wide text-ink-faint">
           {language || "code"}
@@ -54,7 +54,7 @@ function CodeBlock({ className, children, ...props }: React.ComponentProps<"code
           {copied ? "Copied" : "Copy"}
         </Button>
       </div>
-      <pre className="overflow-x-auto p-3 font-mono text-xs leading-relaxed">
+      <pre className="overflow-x-auto p-2.5 font-mono text-[11px] leading-snug">
         <code className={className} {...props}>
           {children}
         </code>
@@ -65,25 +65,25 @@ function CodeBlock({ className, children, ...props }: React.ComponentProps<"code
 
 export function AiMarkdown({ content, className }: AiMarkdownProps) {
   return (
-    <div className={cn("ai-markdown text-sm leading-relaxed", className)}>
+    <div className={cn("ai-markdown text-sm leading-snug", className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
           h1: ({ children }) => (
-            <h1 className="mb-2 mt-3 font-serif text-base font-semibold first:mt-0">{children}</h1>
+            <h1 className="mb-1.5 mt-2 font-serif text-base font-semibold first:mt-0">{children}</h1>
           ),
           h2: ({ children }) => (
-            <h2 className="mb-2 mt-3 font-serif text-sm font-semibold first:mt-0">{children}</h2>
+            <h2 className="mb-1.5 mt-2 font-serif text-sm font-semibold first:mt-0">{children}</h2>
           ),
           h3: ({ children }) => (
-            <h3 className="mb-1 mt-2 text-sm font-semibold first:mt-0">{children}</h3>
+            <h3 className="mb-1 mt-1.5 text-sm font-semibold first:mt-0">{children}</h3>
           ),
-          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-          ul: ({ children }) => <ul className="mb-2 list-disc space-y-1 pl-5 last:mb-0">{children}</ul>,
-          ol: ({ children }) => <ol className="mb-2 list-decimal space-y-1 pl-5 last:mb-0">{children}</ol>,
-          li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+          p: ({ children }) => <p className="mb-1.5 last:mb-0">{children}</p>,
+          ul: ({ children }) => <ul className="mb-1.5 list-disc space-y-0.5 pl-4 last:mb-0">{children}</ul>,
+          ol: ({ children }) => <ol className="mb-1.5 list-decimal space-y-0.5 pl-4 last:mb-0">{children}</ol>,
+          li: ({ children }) => <li className="leading-snug">{children}</li>,
           blockquote: ({ children }) => (
-            <blockquote className="my-2 border-l-2 border-navy/30 pl-3 text-ink-muted">{children}</blockquote>
+            <blockquote className="my-1.5 border-l-2 border-accent/30 pl-2.5 text-ink-muted">{children}</blockquote>
           ),
           a: ({ href, children }) => (
             <a

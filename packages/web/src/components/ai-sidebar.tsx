@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Sparkles, Send, X, Mic, MicOff, Square } from "lucide-react";
 import { aiUnavailableBannerMessage, isClientSelfHosted } from "@/lib/ai-config";
 import { extractInsertableContent, hasInsertableContent } from "@/lib/ai-insert-content";
@@ -53,6 +52,9 @@ interface AiSidebarProps {
   onPendingRequestConsumed?: () => void;
 }
 
+const SCROLL_THRESHOLD_PX = 80;
+const TEXTAREA_MAX_HEIGHT_PX = 160;
+
 function formatAuthors(authors: string[]): string {
   if (authors.length === 0) return "Unknown authors";
   if (authors.length <= 2) return authors.join(", ");
@@ -61,7 +63,7 @@ function formatAuthors(authors: string[]): string {
 
 function PluginChip({ plugin }: { plugin: AiUsedPlugin }) {
   return (
-    <span className="inline-flex max-w-full items-center rounded-full border border-border bg-canvas-dark/70 px-2 py-0.5 text-[10px] font-medium text-ink-muted truncate">
+    <span className="inline-flex max-w-full items-center rounded-full border border-border/80 bg-canvas-dark/60 px-2 py-0.5 text-[10px] font-medium text-ink-muted truncate">
       Used {plugin.displayName}
     </span>
   );
@@ -71,6 +73,16 @@ function AppliedActionChip({ action }: { action: AiAppliedAction }) {
   return (
     <span className="inline-flex max-w-full items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-800 dark:text-emerald-200 truncate">
       {action.label}
+    </span>
+  );
+}
+
+function TypingIndicator() {
+  return (
+    <span className="inline-flex items-center gap-1" aria-hidden="true">
+      <span className="ai-typing-dot" />
+      <span className="ai-typing-dot" />
+      <span className="ai-typing-dot" />
     </span>
   );
 }
@@ -93,14 +105,24 @@ export function AiSidebar({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("Thinking…");
+  const [hasStreamProgress, setHasStreamProgress] = useState(false);
   const [available, setAvailable] = useState(true);
   const [citingKey, setCitingKey] = useState<string | null>(null);
   const [voiceNote, setVoiceNote] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const userScrolledUpRef = useRef(false);
   const messagesRef = useRef(messages);
   const inputBeforeVoiceRef = useRef("");
   messagesRef.current = messages;
+
+  const adjustTextareaHeight = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, TEXTAREA_MAX_HEIGHT_PX)}px`;
+  }, []);
 
   const appendVoiceTranscript = useCallback((transcript: string, isFinal: boolean) => {
     if (!transcript.trim()) return;
@@ -124,8 +146,24 @@ export function AiSidebar({
   }, [speech.status]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+    adjustTextareaHeight();
+  }, [input, adjustTextareaHeight]);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    bottomRef.current?.scrollIntoView({ behavior });
+  }, []);
+
+  const handleMessagesScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    userScrolledUpRef.current = distanceFromBottom > SCROLL_THRESHOLD_PX;
+  }, []);
+
+  useEffect(() => {
+    if (userScrolledUpRef.current) return;
+    scrollToBottom();
+  }, [messages, loading, loadingMessage, scrollToBottom]);
 
   const applyReturnedActions = useCallback(
     async (actions: AiClientAction[]): Promise<AiAppliedAction[]> => {
@@ -168,7 +206,9 @@ export function AiSidebar({
       return;
     }
 
+    userScrolledUpRef.current = false;
     setLoading(true);
+    setHasStreamProgress(false);
     setLoadingMessage(loadingLabelForAction(effectiveAction, content));
 
     const userMsg: Message = { role: "user", content: content || action || "" };
@@ -218,6 +258,7 @@ export function AiSidebar({
       }
 
       const data = await consumeAiStream(res, (message) => {
+        setHasStreamProgress(true);
         setLoadingMessage(message);
       });
       const assistantContent = typeof data.content === "string" ? data.content.trim() : "";
@@ -261,6 +302,7 @@ export function AiSidebar({
       setMessages((prev) => [...prev, { role: "assistant", content: message }]);
     } finally {
       setLoading(false);
+      setHasStreamProgress(false);
     }
   }
 
@@ -290,6 +332,22 @@ export function AiSidebar({
     speech.start();
   }
 
+  function handleComposerKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (!loading && input.trim()) {
+        if (speech.isListening) speech.stop();
+        void sendMessage(input);
+      }
+    }
+  }
+
+  function handleComposerSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (speech.isListening) speech.stop();
+    void sendMessage(input);
+  }
+
   useEffect(() => {
     if (!pendingRequest) return;
     void sendMessage(pendingRequest.message, pendingRequest.action);
@@ -307,6 +365,7 @@ export function AiSidebar({
 
   const canReplace = Boolean(selectedText && onReplace);
   const micDisabled = !speech.isSupported || speech.status === "denied" || loading;
+  const canSend = Boolean(input.trim()) && !loading;
 
   return (
     <div
@@ -314,71 +373,82 @@ export function AiSidebar({
         variant === "sidebar" ? "border-l border-border" : ""
       }`}
     >
-      <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <Sparkles className="h-4 w-4 text-navy" />
-          AI Assistant
+      <div className="flex shrink-0 items-center justify-between gap-2 px-3 py-1.5">
+        <div className="flex min-w-0 items-center gap-1.5 text-sm font-medium text-ink">
+          <Sparkles className="h-3.5 w-3.5 shrink-0 text-accent" aria-hidden="true" />
+          <span className="truncate">Assistant</span>
         </div>
-        <button type="button" onClick={onClose} className={CHROME_ICON_BTN_MD} aria-label="Close AI assistant">
+        <button
+          type="button"
+          onClick={onClose}
+          className={cn(CHROME_ICON_BTN_MD, "shrink-0 rounded-lg")}
+          aria-label="Close AI assistant"
+        >
           <X className="h-4 w-4" />
         </button>
       </div>
 
       {!available && (
-        <div className="shrink-0 border-b border-border bg-canvas-dark px-3 py-2 text-xs text-ink-muted">
+        <div className="shrink-0 px-3 pb-2 text-xs text-ink-muted">
           {aiUnavailableBannerMessage(isClientSelfHosted())}
         </div>
       )}
 
       {voiceNote && (
-        <div className="shrink-0 border-b border-border bg-canvas-dark/80 px-3 py-1.5 text-[11px] text-ink-muted">
-          {voiceNote}
-        </div>
+        <div className="shrink-0 px-3 pb-1.5 text-[11px] text-ink-muted">{voiceNote}</div>
       )}
 
       {selectedText && (
-        <div className="shrink-0 border-b border-border bg-canvas-dark/60 px-3 py-2 text-xs text-ink-muted">
-          <span className="font-medium text-ink">Selection:</span>{" "}
+        <div className="shrink-0 mx-3 mb-2 rounded-lg bg-canvas-dark/50 px-2.5 py-1.5 text-xs text-ink-muted">
+          <span className="font-medium text-ink">Selection</span>
+          <span className="mx-1 text-ink-faint">·</span>
           <span className="line-clamp-2">{selectedText}</span>
         </div>
       )}
 
-      <div className="shrink-0 border-b border-border px-2 py-1.5">
-        <div className="flex flex-wrap gap-1">
-          {quickActions.map((a) => (
-            <button
-              key={a.action}
-              type="button"
-              className={cn(CHROME_CHIP, "h-7 border border-border bg-surface px-2 text-[11px]")}
-              disabled={a.disabled || loading}
-              onClick={() => sendMessage(a.label, a.action)}
-            >
-              {a.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-        <div className="space-y-3">
+      <div
+        ref={scrollRef}
+        onScroll={handleMessagesScroll}
+        className="min-h-0 flex-1 overflow-y-auto px-3 py-2"
+      >
+        <div className="space-y-2">
           {messages.length === 0 && (
-            <p className="py-8 text-center text-sm text-ink-muted">
-              Ask about your LaTeX project, fix errors, search papers, or say &ldquo;fix errors&rdquo; with the mic.
-            </p>
+            <div className="flex flex-col items-center px-1 pt-6 pb-4 text-center">
+              <p className="text-sm text-ink-muted">
+                Ask about your LaTeX project, fix errors, or search papers.
+              </p>
+              <div className="mt-4 flex flex-wrap justify-center gap-1.5">
+                {quickActions.map((a) => (
+                  <button
+                    key={a.action}
+                    type="button"
+                    className={cn(
+                      CHROME_CHIP,
+                      "h-8 border border-border/80 bg-paper px-3 text-xs text-ink-muted hover:text-ink"
+                    )}
+                    disabled={a.disabled || loading}
+                    onClick={() => void sendMessage(a.label, a.action)}
+                  >
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
           {messages.map((msg, i) => (
             <div
               key={i}
-              className={`max-w-[95%] rounded-xl px-3 py-2.5 ${
+              className={cn(
+                "ai-message-enter max-w-[92%]",
                 msg.role === "user"
-                  ? "ml-auto bg-navy text-white"
-                  : "mr-auto border border-border bg-paper shadow-sm"
-              }`}
+                  ? "ml-auto rounded-2xl rounded-br-md bg-navy px-3.5 py-2 text-white shadow-sm"
+                  : "mr-auto rounded-2xl rounded-bl-md bg-paper px-3.5 py-2 shadow-sm ring-1 ring-border/60"
+              )}
             >
               {msg.role === "assistant" &&
                 ((msg.usedPlugins && msg.usedPlugins.length > 0) ||
                   (msg.appliedActions && msg.appliedActions.length > 0)) && (
-                  <div className="mb-2 flex flex-wrap gap-1">
+                  <div className="mb-1.5 flex flex-wrap gap-1">
                     {msg.usedPlugins?.map((plugin) => (
                       <PluginChip key={`${plugin.id}-${plugin.source ?? "default"}`} plugin={plugin} />
                     ))}
@@ -388,13 +458,13 @@ export function AiSidebar({
                   </div>
                 )}
               {msg.role === "user" ? (
-                <div className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</div>
+                <div className="whitespace-pre-wrap text-sm leading-snug">{msg.content}</div>
               ) : (
                 <AiMarkdown content={msg.content} />
               )}
               {msg.role === "assistant" && msg.papers && msg.papers.length > 0 && onCitePaper && (
-                <div className="mt-3 space-y-2 border-t border-border pt-2">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-ink-faint">
+                <div className="mt-2.5 space-y-1.5 border-t border-border/70 pt-2">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">
                     Cite from search
                   </p>
                   {msg.papers.map((paper) => {
@@ -403,7 +473,7 @@ export function AiSidebar({
                     return (
                       <div
                         key={citeId}
-                        className="flex items-start justify-between gap-2 rounded-lg border border-border/70 bg-canvas-dark/40 px-2 py-1.5"
+                        className="flex items-start justify-between gap-2 rounded-lg border border-border/60 bg-canvas-dark/30 px-2 py-1.5"
                       >
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-medium leading-snug text-ink line-clamp-2">
@@ -432,7 +502,7 @@ export function AiSidebar({
                 msg.content &&
                 hasInsertableContent(msg.content) &&
                 !msg.appliedActions?.length && (
-                <div className="mt-1 flex flex-wrap gap-1">
+                <div className="mt-1 flex flex-wrap gap-0.5">
                   {canReplace && (
                     <Button
                       variant="ghost"
@@ -456,8 +526,19 @@ export function AiSidebar({
             </div>
           ))}
           {loading && (
-            <div className="mr-auto max-w-[95%] rounded-xl border border-border bg-paper px-3 py-2.5 text-sm text-ink-muted">
-              {loadingMessage}
+            <div
+              className="ai-message-enter mr-auto max-w-[92%] rounded-2xl rounded-bl-md bg-paper px-3.5 py-2.5 shadow-sm ring-1 ring-border/60"
+            >
+              <div className="flex items-center gap-2 text-sm text-ink-muted">
+                {!hasStreamProgress ? (
+                  <>
+                    <TypingIndicator />
+                    <span className="text-ink-faint">Thinking</span>
+                  </>
+                ) : (
+                  <span className="leading-snug">{loadingMessage}</span>
+                )}
+              </div>
             </div>
           )}
           <div ref={bottomRef} />
@@ -465,55 +546,70 @@ export function AiSidebar({
       </div>
 
       <div
-        className={`shrink-0 border-t border-border bg-surface p-3 ${
+        className={cn(
+          "shrink-0 px-3 pt-2 pb-3",
           variant === "sheet" ? "pb-[max(0.75rem,env(safe-area-inset-bottom))]" : ""
-        }`}
+        )}
       >
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (speech.isListening) speech.stop();
-            sendMessage(input);
-          }}
-          className="flex items-end gap-2"
-        >
-          <Button
-            type="button"
-            size="icon"
-            variant={speech.isListening ? "default" : "outline"}
-            className={`shrink-0 ${variant === "sheet" ? "h-11 w-11" : "h-9 w-9"}`}
-            disabled={micDisabled}
-            onClick={handleVoiceToggle}
-            aria-label={speech.isListening ? "Stop voice input" : "Start voice input"}
-            title={speech.isListening ? "Stop and send" : "Voice input"}
-          >
-            {speech.isListening ? (
-              <Square className="h-4 w-4" />
-            ) : speech.status === "denied" ? (
-              <MicOff className="h-4 w-4" />
-            ) : (
-              <Mic className="h-4 w-4" />
-            )}
-          </Button>
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={speech.isListening ? "Listening…" : "Ask or dictate…"}
-            disabled={loading}
-            className={`min-w-0 flex-1 ${variant === "sheet" ? "min-h-11 text-base" : "min-h-9"}`}
-          />
-          <button
-            type="submit"
+        <form onSubmit={handleComposerSubmit}>
+          <div
             className={cn(
-              CHROME_SEND_BTN,
-              "shrink-0",
-              variant === "sheet" ? "h-11 w-11" : "h-9 w-9"
+              "rounded-2xl border border-border bg-paper shadow-sm transition-shadow",
+              "focus-within:ring-2 focus-within:ring-accent/40 focus-within:ring-offset-1 focus-within:ring-offset-surface"
             )}
-            disabled={loading || !input.trim()}
-            aria-label="Send message"
           >
-            <Send className="h-4 w-4" />
-          </button>
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleComposerKeyDown}
+              placeholder={speech.isListening ? "Listening…" : "Message the assistant…"}
+              disabled={loading}
+              rows={1}
+              className={cn(
+                "block w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-sm leading-snug placeholder:text-ink-faint",
+                "focus-visible:outline-none",
+                "disabled:cursor-not-allowed disabled:opacity-50",
+                variant === "sheet" ? "min-h-[44px] text-base" : "min-h-[36px]"
+              )}
+            />
+            <div className="flex items-center justify-between gap-2 px-2 pb-2">
+              <Button
+                type="button"
+                size="icon"
+                variant={speech.isListening ? "default" : "ghost"}
+                className={cn(
+                  "shrink-0 rounded-lg text-ink-muted",
+                  variant === "sheet" ? "h-9 w-9" : "h-8 w-8"
+                )}
+                disabled={micDisabled}
+                onClick={handleVoiceToggle}
+                aria-label={speech.isListening ? "Stop voice input" : "Start voice input"}
+                title={speech.isListening ? "Stop and send" : "Voice input"}
+              >
+                {speech.isListening ? (
+                  <Square className="h-4 w-4" />
+                ) : speech.status === "denied" ? (
+                  <MicOff className="h-4 w-4" />
+                ) : (
+                  <Mic className="h-4 w-4" />
+                )}
+              </Button>
+              <button
+                type="submit"
+                className={cn(
+                  CHROME_SEND_BTN,
+                  "shrink-0 rounded-full transition-opacity",
+                  variant === "sheet" ? "h-9 w-9" : "h-8 w-8",
+                  !canSend && "opacity-40"
+                )}
+                disabled={!canSend}
+                aria-label="Send message"
+              >
+                <Send className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         </form>
       </div>
     </div>
