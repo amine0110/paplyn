@@ -51,6 +51,8 @@ interface AiSidebarProps {
   /** Auto-send when opened from the selection bubble. */
   pendingRequest?: AiPendingRequest | null;
   onPendingRequestConsumed?: () => void;
+  /** Called after compile-fix actions are applied to the workspace (before auto-compile). */
+  onCompileFixActionsApplied?: (applied: AiClientAction[]) => void | Promise<void>;
 }
 
 function formatAuthors(authors: string[]): string {
@@ -88,6 +90,7 @@ export function AiSidebar({
   variant = "sidebar",
   pendingRequest,
   onPendingRequestConsumed,
+  onCompileFixActionsApplied,
 }: AiSidebarProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -128,12 +131,18 @@ export function AiSidebar({
   }, [messages, loading]);
 
   const applyReturnedActions = useCallback(
-    async (actions: AiClientAction[]): Promise<AiAppliedAction[]> => {
+    async (
+      actions: AiClientAction[],
+      options?: { isCompileFixTurn?: boolean }
+    ): Promise<AiAppliedAction[]> => {
       if (!applyActionsContext || actions.length === 0) return [];
       const result = await applyAiClientActions(actions, {
         ...applyActionsContext,
         hasSelection: Boolean(selectedText),
       });
+      if (options?.isCompileFixTurn && result.applied.length > 0) {
+        await onCompileFixActionsApplied?.(result.applied);
+      }
       return result.applied.map((a) => ({
         label: a.label,
         type: a.type,
@@ -145,7 +154,7 @@ export function AiSidebar({
               : undefined,
       }));
     },
-    [applyActionsContext, selectedText]
+    [applyActionsContext, onCompileFixActionsApplied, selectedText]
   );
 
   async function sendMessage(content: string, action?: string) {
@@ -238,7 +247,7 @@ export function AiSidebar({
 
       let appliedActions: AiAppliedAction[] | undefined;
       if (actions.length > 0 && applyActionsContext) {
-        appliedActions = await applyReturnedActions(actions);
+        appliedActions = await applyReturnedActions(actions, { isCompileFixTurn: fixIntent });
       } else if (Array.isArray(data.appliedActions) && data.appliedActions.length > 0) {
         appliedActions = data.appliedActions as AiAppliedAction[];
       }
