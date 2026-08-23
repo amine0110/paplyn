@@ -9,10 +9,12 @@ import {
   isPromptTooLargeMessage,
   isSlimCompileFixPrompt,
   isTpmOrRateLimitMessage,
+  isToolChoiceNoneViolationError,
   isUnknownToolCallError,
   PROMPT_TOO_LARGE_MESSAGE,
   redactAiErrorMessage,
   shouldTreatCompileFix429AsRateLimit,
+  TOOL_CHOICE_NONE_MESSAGE,
 } from "./ai-tool-errors";
 
 function apiError(
@@ -47,6 +49,19 @@ describe("ai-tool-errors", () => {
 
     expect(isUnknownToolCallError(error)).toBe(false);
     expect(formatAiRequestError(error)).toBe("Upstream model unavailable");
+  });
+
+  it("detects Groq tool-choice-none violations", () => {
+    const error = apiError("Tool choice is none, but model called a tool", 400);
+
+    expect(isToolChoiceNoneViolationError(error)).toBe(true);
+    expect(formatAiRequestError(error)).toBe(TOOL_CHOICE_NONE_MESSAGE);
+    expect(formatAiRequestError(error)).not.toContain("Tool choice is none");
+  });
+
+  it("does not treat unrelated errors as tool-choice-none", () => {
+    const error = apiError("Invalid request", 400);
+    expect(isToolChoiceNoneViolationError(error)).toBe(false);
   });
 });
 
