@@ -932,7 +932,7 @@ export default function ProjectPage() {
                 projectId={projectId}
                 activeFile={activeFile}
                 selectedText={selectedText}
-                compileErrors={compileErrors.map((e) => e.message)}
+                compileErrors={compileErrors}
                 onInsert={handleInsertAtCursor}
                 onReplace={handleReplaceSelection}
                 onCitePaper={canEdit ? handleCitePaper : undefined}
