@@ -2,6 +2,7 @@ import type { GenerateTextResult, ToolSet } from "ai";
 import type { AiAppliedAction, AiPaper, AiUsedPlugin, LiteratureToolPayload } from "@/lib/ai-types";
 import {
   isClientActionPayload,
+  isClientActionRejectedPayload,
   type AiClientAction,
   type ClientActionToolPayload,
 } from "@/lib/ai-client-actions";
@@ -46,12 +47,7 @@ function isLiteratureToolPayload(result: unknown): result is LiteratureToolPaylo
 function isClientActionRejected(
   result: unknown
 ): result is { kind: "client-action-rejected"; reason: string } {
-  return (
-    typeof result === "object" &&
-    result !== null &&
-    (result as { kind?: string }).kind === "client-action-rejected" &&
-    typeof (result as { reason?: string }).reason === "string"
-  );
+  return isClientActionRejectedPayload(result);
 }
 
 function isReadTexFileResult(result: unknown): result is ReadTexFileResult {
@@ -88,7 +84,11 @@ export function summarizeToolResult(toolName: string, result: unknown): string |
   }
 
   if (isClientActionRejected(result)) {
-    if (toolName === "apply_edit" || toolName === "fix_compile_errors") {
+    if (
+      toolName === "apply_edit" ||
+      toolName === "fix_compile_errors" ||
+      toolName === "replace_lines"
+    ) {
       return "Couldn't apply edit";
     }
     return "Couldn't complete editor action";
@@ -340,7 +340,7 @@ export function toAppliedActionSummaries(actions: AiClientAction[]): AiAppliedAc
     label: action.label,
     type: action.type,
     file:
-      action.type === "apply_edit"
+      action.type === "apply_edit" || action.type === "replace_lines"
         ? action.file
         : action.type === "fix_compile_errors"
           ? action.edits[0]?.file

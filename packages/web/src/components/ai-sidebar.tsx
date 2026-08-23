@@ -131,7 +131,7 @@ export function AiSidebar({
         label: a.label,
         type: a.type,
         file:
-          a.type === "apply_edit"
+          a.type === "apply_edit" || a.type === "replace_lines"
             ? a.file
             : a.type === "fix_compile_errors"
               ? a.edits[0]?.file

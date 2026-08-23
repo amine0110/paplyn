@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   applyActionToFileContent,
+  applyLinesReplace,
+  applyReplaceLinesToFileContent,
   countOccurrences,
+  findOccurrenceLineNumbers,
+  lineRangeToOffsets,
   stripLineNumberPrefixes,
   validateClientAction,
 } from "./ai-client-actions";
@@ -34,7 +38,10 @@ describe("ai-client-actions", () => {
     expect(result).toEqual({
       rejected: true,
       reason:
-        "search text is ambiguous (multiple matches). Retry with a longer exact substring that appears once.",
+        "search text is ambiguous (2 occurrences at lines 1, 2). Include more surrounding lines for a unique match, or use replace_lines for a known line range.",
+      occurrences: 2,
+      matchLineNumbers: [1, 2],
+      emptySearch: false,
     });
   });
 
@@ -51,7 +58,10 @@ describe("ai-client-actions", () => {
     expect(result).toEqual({
       rejected: true,
       reason:
-        "Search text is empty or exceeds size limits. Retry with an exact unnumbered substring from get_file that appears once.",
+        "search text is empty. Provide an exact substring from get_file, or use replace_lines when compile errors cite a line number.",
+      occurrences: 0,
+      matchLineNumbers: [],
+      emptySearch: true,
     });
   });
 
@@ -109,5 +119,60 @@ describe("ai-client-actions", () => {
   it("counts occurrences", () => {
     expect(countOccurrences("aaa", "a")).toBe(3);
     expect(countOccurrences("aaa", "aa")).toBe(1);
+  });
+
+  it("finds occurrence line numbers for ambiguous search", () => {
+    expect(findOccurrenceLineNumbers("\\usepackage\n\\usepackage", "\\usepackage")).toEqual([1, 2]);
+  });
+
+  it("validates replace_lines for a single line", () => {
+    const files = new Map([
+      ["main.tex", "\\documentclass{article}\n\\usepackage\n\\begin{document}\n"],
+    ]);
+    const result = validateClientAction(
+      {
+        type: "replace_lines",
+        file: "main.tex",
+        startLine: 2,
+        endLine: 2,
+        replace: "\\usepackage{amsmath}",
+      },
+      { texFiles: files, hasSelection: false }
+    );
+    expect("action" in result && result.action.type).toBe("replace_lines");
+    if ("action" in result && result.action.type === "replace_lines") {
+      expect(result.action.label).toBe("Replaced line 2 in main.tex");
+      expect(result.action.replace).toBe("\\usepackage{amsmath}");
+    }
+  });
+
+  it("applies replace_lines to file content", () => {
+    const updated = applyReplaceLinesToFileContent(
+      "\\documentclass{article}\n\\usepackage\n\\begin{document}\n",
+      {
+        type: "replace_lines",
+        file: "main.tex",
+        startLine: 2,
+        endLine: 2,
+        replace: "\\usepackage{amsmath}",
+        label: "test",
+      }
+    );
+    expect(updated).toBe("\\documentclass{article}\n\\usepackage{amsmath}\n\\begin{document}\n");
+  });
+
+  it("applyLinesReplace rejects out-of-range startLine", () => {
+    expect(
+      applyLinesReplace("\\documentclass{article}", 5, 5, "text")
+    ).toEqual({
+      ok: false,
+      reason: "startLine 5 is past the end of the file (1 lines).",
+    });
+  });
+
+  it("lineRangeToOffsets maps inclusive line ranges", () => {
+    const content = "a\nb\nc\nd";
+    expect(lineRangeToOffsets(content, 3, 3)).toEqual({ from: 4, to: 5 });
+    expect(lineRangeToOffsets(content, 2, 3)).toEqual({ from: 2, to: 5 });
   });
 });

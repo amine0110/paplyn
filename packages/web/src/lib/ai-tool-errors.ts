@@ -158,6 +158,6 @@ export function formatAiRequestError(error: unknown): string {
   return "AI request failed. Please try again.";
 }
 
-export const UNKNOWN_TOOL_RETRY_HINT = `Important: only call workspace tools that are explicitly listed for this request (list_files, get_file, fix_compile_errors, apply_edit, insert_at_cursor, replace_selection, and any plugin tools shown above). Do not call any other tool names.`;
+export const UNKNOWN_TOOL_RETRY_HINT = `Important: only call workspace tools that are explicitly listed for this request (list_files, get_file, fix_compile_errors, apply_edit, replace_lines, insert_at_cursor, replace_selection, and any plugin tools shown above). Do not call any other tool names.`;
 
-export const TOOL_CHOICE_NONE_RETRY_HINT = `Important: use get_file and fix_compile_errors or apply_edit to fix the compile errors, then reply with a short summary of what you changed. After edits are applied, do not call tools again in the same turn.`;
+export const TOOL_CHOICE_NONE_RETRY_HINT = `Important: use get_file and fix_compile_errors, apply_edit, or replace_lines to fix the compile errors, then reply with a short summary of what you changed. Prefer replace_lines when errors cite a line number. After edits are applied, do not call tools again in the same turn.`;
