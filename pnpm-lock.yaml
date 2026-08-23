@@ -229,6 +229,9 @@ importers:
       eslint-config-next:
         specifier: ^15.1.4
         version: 15.5.23(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
+      pdfjs-dist:
+        specifier: 4.8.69
+        version: 4.8.69
       tailwindcss:
         specifier: ^4.0.0
         version: 4.3.3

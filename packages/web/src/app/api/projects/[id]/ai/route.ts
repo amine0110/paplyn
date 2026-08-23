@@ -30,9 +30,15 @@ import {
   hadToolActivity,
 } from "@/lib/ai-response";
 import {
-  createClientEditTools,
-  CLIENT_EDIT_SYSTEM_PROMPT,
-} from "@/lib/ai-plugins/client-edit-tools";
+  createWorkspaceTools,
+  WORKSPACE_SYSTEM_PROMPT,
+  COMPILE_FIX_WORKSPACE_SUFFIX,
+} from "@/lib/ai-plugins/workspace-tools";
+import {
+  formatAiRequestError,
+  isUnknownToolCallError,
+  UNKNOWN_TOOL_RETRY_HINT,
+} from "@/lib/ai-tool-errors";
 import { PRODUCT } from "@/lib/product";
 import { checkAiLimit, incrementAiUsage } from "@/lib/usage";
 import { z } from "zod";
@@ -80,11 +86,6 @@ type AiContextMode = "full" | "compile-fix" | "compile-fix-minimal";
 const PROMPT_TOO_LARGE_MESSAGE =
   "The project context is too large for the AI service. Try asking about a specific file or selection.";
 
-const COMPILE_FIX_CLIENT_EDIT_PROMPT = `Apply surgical LaTeX fixes with fix_compile_errors or apply_edit.
-- Use exact search/replace from the snippets provided. Each search must match once.
-- Only edit .tex files shown in context.
-- Keep edits minimal. After tool calls, briefly explain fixes.`;
-
 const WRITING_ACTION_PROMPTS: Record<string, string> = {
   tighten:
     "Tighten the selected text: remove redundancy and improve concision while preserving meaning and LaTeX syntax.",
@@ -126,20 +127,22 @@ function buildSystemPrompt(options: {
   fileContext: string;
   pluginSystemPrompt: string;
   mode: AiContextMode;
+  retryHint?: string;
 }): string {
-  const { data, compileErrors, fileContext, pluginSystemPrompt, mode } = options;
+  const { data, compileErrors, fileContext, pluginSystemPrompt, mode, retryHint } = options;
   const compileFix = mode !== "full";
 
   let systemPrompt = compileFix
-    ? `You are ${PRODUCT.aiAssistantName}, a LaTeX assistant.
-Fix compile errors using fix_compile_errors or apply_edit with exact search/replace from the snippets below.
-Be concise and precise. Explain what you changed after applying fixes.
-${COMPILE_FIX_CLIENT_EDIT_PROMPT}`
+    ? `You are ${PRODUCT.aiAssistantName}, a LaTeX assistant for academic writing.
+Be concise and precise. When suggesting LaTeX code, use proper syntax and fenced \`\`\`latex blocks.
+Format explanatory replies with markdown (headings, lists, tables) when helpful.
+${WORKSPACE_SYSTEM_PROMPT}
+${COMPILE_FIX_WORKSPACE_SUFFIX}`
     : `You are ${PRODUCT.aiAssistantName}, a helpful LaTeX assistant for academic writing.
 You help researchers write, edit, and debug LaTeX documents.
 Be concise and precise. When suggesting LaTeX code, use proper syntax and fenced \`\`\`latex blocks.
 Format explanatory replies with markdown (headings, lists, tables) when helpful.
-${CLIENT_EDIT_SYSTEM_PROMPT}`;
+${WORKSPACE_SYSTEM_PROMPT}`;
 
   if (!compileFix && pluginSystemPrompt) {
     systemPrompt += `\n${pluginSystemPrompt}`;
@@ -170,6 +173,10 @@ ${CLIENT_EDIT_SYSTEM_PROMPT}`;
 
   if (data.selectedText) {
     systemPrompt += `\n\nSelected text in ${data.activeFile || "editor"}:\n${data.selectedText}`;
+  }
+
+  if (retryHint) {
+    systemPrompt += `\n\n${retryHint}`;
   }
 
   return systemPrompt;
@@ -278,7 +285,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const texFileMap = new Map(texFiles.map((f) => [f.path, f.content]));
   const hasSelection = Boolean(requestData.selectedText?.trim());
 
-  const clientEditTools = createClientEditTools({
+  const workspaceTools = createWorkspaceTools({
     texFiles: texFileMap,
     activeFile: requestData.activeFile,
     hasSelection,
@@ -291,7 +298,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const model = openai(aiConfig.model);
 
-  async function runGenerateText(mode: AiContextMode) {
+  async function runGenerateText(mode: AiContextMode, options?: { retryHint?: string }) {
     const fileContext =
       mode === "full"
         ? buildAiFileContext(texFiles, {
@@ -310,6 +317,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       fileContext,
       pluginSystemPrompt,
       mode: compileFixRequest ? mode : "full",
+      retryHint: options?.retryHint,
     });
 
     const result = await generateText({
@@ -319,8 +327,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       maxRetries: 0,
       maxSteps: 8,
       tools: compileFixRequest
-        ? clientEditTools
-        : { ...pluginTools, ...clientEditTools },
+        ? workspaceTools
+        : { ...pluginTools, ...workspaceTools },
     });
 
     const content = await resolveAssistantContent({
@@ -333,8 +341,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return { result, content, systemPrompt };
   }
 
+  const initialMode: AiContextMode = compileFixRequest ? "compile-fix" : "full";
+
   try {
-    const initialMode: AiContextMode = compileFixRequest ? "compile-fix" : "full";
     let generation = await runGenerateText(initialMode);
 
     const usedPlugins = collectUsedPlugins(generation.result, plugins);
@@ -351,6 +360,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       ...(actions.length > 0 ? { actions, appliedActions } : {}),
     });
   } catch (error) {
+    if (isUnknownToolCallError(error)) {
+      try {
+        const retry = await runGenerateText(initialMode, {
+          retryHint: UNKNOWN_TOOL_RETRY_HINT,
+        });
+        const actions = collectClientActionsFromToolResults(retry.result);
+        const appliedActions = toAppliedActionSummaries(actions);
+
+        await incrementAiUsage(session.user.id);
+
+        return NextResponse.json({
+          content: retry.content,
+          ...(actions.length > 0 ? { actions, appliedActions } : {}),
+        });
+      } catch (retryError) {
+        console.error("AI unknown-tool retry failed:", retryError);
+        return NextResponse.json(
+          { error: formatAiRequestError(retryError) },
+          { status: 502 }
+        );
+      }
+    }
+
     if (compileFixRequest && isAiPromptTooLargeError(error)) {
       try {
         const retry = await runGenerateText("compile-fix-minimal");
@@ -368,11 +400,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           return NextResponse.json({ error: PROMPT_TOO_LARGE_MESSAGE }, { status: 429 });
         }
         console.error("AI compile-fix retry failed:", retryError);
-        const message =
-          APICallError.isInstance(retryError) && retryError.message
-            ? retryError.message
-            : "AI request failed. Please try again.";
-        return NextResponse.json({ error: message }, { status: 502 });
+        return NextResponse.json(
+          { error: formatAiRequestError(retryError) },
+          { status: 502 }
+        );
       }
     }
 
@@ -386,10 +417,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       );
     }
     console.error("AI request failed:", error);
-    const message =
-      APICallError.isInstance(error) && error.message
-        ? error.message
-        : "AI request failed. Please try again.";
-    return NextResponse.json({ error: message }, { status: 502 });
+    return NextResponse.json({ error: formatAiRequestError(error) }, { status: 502 });
   }
 }

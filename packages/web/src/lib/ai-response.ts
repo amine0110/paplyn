@@ -5,7 +5,7 @@ import {
   type AiClientAction,
   type ClientActionToolPayload,
 } from "@/lib/ai-client-actions";
-import { CLIENT_EDIT_TOOL_NAMES } from "@/lib/ai-plugins/client-edit-tools";
+import { CLIENT_ACTION_TOOL_NAMES } from "@/lib/ai-plugins/workspace-tools";
 import { getPluginByToolName, pluginDisplayName } from "@/lib/ai-plugins";
 import type { AiPlugin } from "@/lib/ai-plugins/types";
 
@@ -262,7 +262,7 @@ export function usedClientEditTools<TOOLS extends ToolSet>(
   result: GenerateTextResult<TOOLS, unknown>
 ): boolean {
   const loose = asLooseGenerateTextResult(result);
-  const names = new Set<string>(CLIENT_EDIT_TOOL_NAMES);
+  const names = new Set<string>(CLIENT_ACTION_TOOL_NAMES);
   if (loose.toolCalls.some((call) => names.has(call.toolName))) return true;
   if (loose.toolResults.some((tr) => names.has(tr.toolName))) return true;
   return loose.steps.some(
