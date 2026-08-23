@@ -23,7 +23,7 @@ import {
   getOfflineEditorInitialDoc,
   seedYTextIfEmpty,
 } from "@/lib/collab-seed";
-import { createSaveStatusTracker, type SaveStatus } from "@/lib/save-status";
+import { createSaveStatusTracker, PERSIST_ACK_FIELD, PERSIST_META_MAP, type SaveStatus } from "@/lib/save-status";
 
 const latexHighlightLight = HighlightStyle.define([
   { tag: t.keyword, color: "#2d6a6a" },
@@ -115,18 +115,41 @@ export function LatexEditor({
           color: colorForUserId(payload.userId),
         });
       }
-      provider.on("sync", (synced: boolean) => {
-        if (synced) saveStatusTracker?.markSaved();
-      });
       // Rooms are seeded on the collab server from project_file; do not seed here.
     } else if (initialContent) {
       seedYTextIfEmpty(ytext, initialContent);
     }
 
+    const disconnectCollab = () => {
+      if (provider?.wsconnected) {
+        provider.disconnect();
+      }
+    };
+
+    let metaObserver: (() => void) | null = null;
+    let metaMap: Y.Map<unknown> | null = null;
+
     if (saveStatusTracker && canEdit) {
       ydoc.on("update", (_update, origin) => {
         saveStatusTracker.onDocUpdate(origin, provider);
       });
+
+      if (collabToken) {
+        metaMap = ydoc.getMap(PERSIST_META_MAP);
+        metaObserver = () => {
+          if (metaMap?.get(PERSIST_ACK_FIELD) != null) {
+            saveStatusTracker.markSaved();
+          }
+        };
+        metaMap.observe(metaObserver);
+      }
+    }
+
+    const onBeforeUnload = () => {
+      disconnectCollab();
+    };
+    if (collabToken) {
+      window.addEventListener("beforeunload", onBeforeUnload);
     }
 
     const highlightStyle = isDark ? latexHighlightDark : latexHighlightLight;
@@ -229,6 +252,13 @@ export function LatexEditor({
     reportStats(initialDoc);
 
     return () => {
+      if (collabToken) {
+        window.removeEventListener("beforeunload", onBeforeUnload);
+        disconnectCollab();
+      }
+      if (metaMap && metaObserver) {
+        metaMap.unobserve(metaObserver);
+      }
       saveStatusTracker?.destroy();
       view.destroy();
       provider?.destroy();

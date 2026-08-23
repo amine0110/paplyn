@@ -164,7 +164,15 @@ export function EditorStatusBar({
   return (
     <div className="flex items-center justify-between px-3 py-1 border-t border-border-light bg-paper text-[11px] text-ink-faint font-mono shrink-0 tabular-nums">
       {showSaveStatus && (
-        <span className={saveStatus === "saving" ? "text-ink-muted" : "text-ink-faint"}>
+        <span
+          className={
+            saveStatus === "saving"
+              ? "text-ink-muted"
+              : saveStatus === "failed"
+                ? "text-red-600"
+                : "text-ink-faint"
+          }
+        >
           {getSaveStatusLabel(saveStatus)}
         </span>
       )}

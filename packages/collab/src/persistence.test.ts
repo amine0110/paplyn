@@ -5,6 +5,7 @@ import {
   decodeStoredState,
   encodeDocState,
   encodeStoredState,
+  getTextFilesFromDoc,
   isDocEmpty,
 } from "./persistence.js";
 
@@ -67,5 +68,16 @@ describe("Yjs persistence helpers", () => {
 
     expect(restored.getText("main.tex").toString()).toBe("Main body");
     expect(restored.getText("refs.bib").toString()).toBe("@article{key}");
+  });
+
+  it("getTextFilesFromDoc matches Y.Text after incremental edits", () => {
+    const doc = new Y.Doc();
+    const ytext = doc.getText("main.tex");
+    ytext.insert(0, "\n\\documentclass{IEEEtran}");
+    ytext.delete(0, 1);
+
+    const files = getTextFilesFromDoc(doc);
+    expect(files).toEqual([{ path: "main.tex", content: ytext.toString() }]);
+    expect(files[0].content).toBe("\\documentclass{IEEEtran}");
   });
 });
