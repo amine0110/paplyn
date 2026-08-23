@@ -302,4 +302,35 @@ describe("workspace-tools", () => {
       expect(result.reason).toContain("before \\documentclass");
     }
   });
+
+  it("rejects a second compile-fix replace_lines that would duplicate documentclass", async () => {
+    const content = ["\\usepackage", "\\title{Foo}", "\\begin{document}", "\\end{document}"].join(
+      "\n"
+    );
+    const files = new Map([["main.tex", content]]);
+    const tools = createWorkspaceTools(
+      { texFiles: files, hasSelection: false },
+      { compileFix: true }
+    );
+    const docclass = "\\documentclass[conference]{IEEEtran}";
+
+    const first = await tools.replace_lines.execute({
+      file: "main.tex",
+      startLine: 1,
+      endLine: 1,
+      replace: docclass,
+    });
+    expect(first.kind).toBe("client-action");
+
+    const second = await tools.replace_lines.execute({
+      file: "main.tex",
+      startLine: 2,
+      endLine: 2,
+      replace: docclass,
+    });
+    expect(second.kind).toBe("client-action-rejected");
+    if (second.kind === "client-action-rejected") {
+      expect(second.reason).toContain("\\documentclass");
+    }
+  });
 });

@@ -18,6 +18,16 @@ export function buildCompileFixAiRequest(): CompileFixAiRequest {
   };
 }
 
+/** Automatic follow-up compile-fix turn after a post-fix compile still fails. */
+export function buildCompileFixAutoRetryRequest(): CompileFixAiRequest & {
+  autoCompileFixRetry: true;
+} {
+  return {
+    ...buildCompileFixAiRequest(),
+    autoCompileFixRetry: true,
+  };
+}
+
 const FIX_INTENT_PATTERNS: RegExp[] = [
   /\bfix\b/i,
   /\bcompile\b/i,

@@ -323,6 +323,23 @@ function collectClientActionPayloads(result: LooseGenerateTextResult): ClientAct
   return payloads;
 }
 
+function clientActionDedupeKey(action: AiClientAction): string {
+  switch (action.type) {
+    case "replace_lines":
+      return `replace_lines:${action.file}:${action.startLine}:${action.endLine}:${action.replace}`;
+    case "apply_edit":
+      return `apply_edit:${action.file}:${action.search}:${action.replace}`;
+    case "fix_compile_errors":
+      return `fix_compile_errors:${JSON.stringify(action.edits)}`;
+    case "insert_at_cursor":
+      return `insert_at_cursor:${action.text}`;
+    case "replace_selection":
+      return `replace_selection:${action.text}`;
+    default:
+      return JSON.stringify(action);
+  }
+}
+
 export function collectClientActionsFromToolResults<TOOLS extends ToolSet>(
   result: GenerateTextResult<TOOLS, unknown>
 ): AiClientAction[] {
@@ -330,7 +347,7 @@ export function collectClientActionsFromToolResults<TOOLS extends ToolSet>(
   const seen = new Set<string>();
 
   for (const payload of collectClientActionPayloads(asLooseGenerateTextResult(result))) {
-    const key = JSON.stringify(payload.action);
+    const key = clientActionDedupeKey(payload.action);
     if (seen.has(key)) continue;
     seen.add(key);
     actions.push(payload.action);

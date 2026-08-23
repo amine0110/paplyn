@@ -109,4 +109,47 @@ describe("applyAiClientActions replace_lines ordering", () => {
       })
     ).toBe("\\documentclass{article}\n\\usepackage{amsmath}\n");
   });
+
+  it("skips duplicate documentclass replace_lines during compile-fix batch apply", async () => {
+    const docclass = "\\documentclass[conference]{IEEEtran}";
+    const content = ["\\usepackage", "\\title{Foo}", "\\begin{document}", "\\end{document}"].join(
+      "\n"
+    );
+    const fileContents: Record<string, string> = { "main.tex": content };
+    const actions: AiClientAction[] = [
+      {
+        type: "replace_lines",
+        file: "main.tex",
+        startLine: 1,
+        endLine: 1,
+        replace: docclass,
+        label: "Replaced line 1 in main.tex",
+      },
+      {
+        type: "replace_lines",
+        file: "main.tex",
+        startLine: 2,
+        endLine: 2,
+        replace: docclass,
+        label: "Replaced line 2 in main.tex",
+      },
+    ];
+
+    const result = await applyAiClientActions(actions, {
+      activeFile: null,
+      editorView: null,
+      fileContents,
+      hasSelection: false,
+      compileFix: true,
+      saveFile: async (path, next) => {
+        fileContents[path] = next;
+      },
+    });
+
+    expect(result.applied).toHaveLength(1);
+    expect(result.skipped).toHaveLength(1);
+    expect(fileContents["main.tex"].split("\n").filter((l) => l.includes("\\documentclass"))).toHaveLength(
+      1
+    );
+  });
 });

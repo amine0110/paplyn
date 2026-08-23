@@ -1,7 +1,9 @@
 import { tool } from "ai";
 import { z } from "zod";
 import {
+  applyValidatedClientActionToContent,
   validateClientAction,
+  type AiClientAction,
   type ValidateActionContext,
 } from "@/lib/ai-client-actions";
 import { buildGetFileWindow } from "@/lib/ai-compile-fix-context";
@@ -255,6 +257,9 @@ export function createWorkspaceTools(
           ...(validated.emptySearch ? { emptySearch: true } : {}),
         };
       }
+      if (compileFix) {
+        applyValidatedActionToTexFiles(validated.action);
+      }
       return {
         kind: "client-action" as const,
         action: validated.action,
@@ -266,6 +271,36 @@ export function createWorkspaceTools(
     options;
   const validateCtx: ValidateActionContext = { ...ctx, compileFix };
   let getFileCallCount = 0;
+
+  const applyValidatedActionToTexFiles = (action: AiClientAction) => {
+    switch (action.type) {
+      case "apply_edit":
+      case "replace_lines": {
+        const content = validateCtx.texFiles.get(action.file);
+        if (content == null) return;
+        const updated = applyValidatedClientActionToContent(content, action);
+        if (updated != null) validateCtx.texFiles.set(action.file, updated);
+        break;
+      }
+      case "fix_compile_errors": {
+        for (const edit of action.edits) {
+          const content = validateCtx.texFiles.get(edit.file);
+          if (content == null) continue;
+          const updated = applyValidatedClientActionToContent(content, {
+            type: "apply_edit",
+            file: edit.file,
+            search: edit.search,
+            replace: edit.replace,
+            label: "",
+          });
+          if (updated != null) validateCtx.texFiles.set(edit.file, updated);
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  };
 
   const citedFilePreload = (() => {
     if (!compileFix || !citedErrorLocation) return null;

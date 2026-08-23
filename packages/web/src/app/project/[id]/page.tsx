@@ -31,7 +31,13 @@ import { ShareDialog } from "@/components/share-dialog";
 import { HistoryDialog } from "@/components/history-dialog";
 import { CollabPresence } from "@/components/collab-presence";
 import { AiSidebar, type AiPendingRequest } from "@/components/ai-sidebar";
-import { buildCompileFixAiRequest } from "@/lib/ai-compile-fix-intent";
+import { buildCompileFixAiRequest, buildCompileFixAutoRetryRequest } from "@/lib/ai-compile-fix-intent";
+import {
+  beginCompileFixRetrySession,
+  createCompileFixRetrySession,
+  decideCompileFixAutoRetry,
+  markCompileFixEditsApplied,
+} from "@/lib/compile-fix-auto-retry";
 import { AiAssistantFab } from "@/components/ai-assistant-fab";
 import { SelectionAiBubble } from "@/components/selection-ai-bubble";
 import { EditorStatusBar, EditorToolbar } from "@/components/editor-toolbar";
@@ -148,6 +154,7 @@ export default function ProjectPage() {
   const [editorView, setEditorView] = useState<EditorView | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const compileSchedulerRef = useRef<ReturnType<typeof createCompileScheduler> | null>(null);
+  const compileFixRetryRef = useRef(createCompileFixRetrySession());
 
   useEffect(() => {
     const mode = readStoredLayoutMode();
@@ -288,6 +295,7 @@ export default function ProjectPage() {
 
   const compile = useCallback(async () => {
     const hadPdfBeforeCompile = pdfData !== null;
+    let compileErrorCount = 0;
     setCompiling(true);
     setCompileErrors([]);
     openProof();
@@ -298,6 +306,7 @@ export default function ProjectPage() {
       if (result.error) {
         setCompileLog("");
         const errors: CompileError[] = [{ message: result.error, severity: "error" }];
+        compileErrorCount = errors.length;
         setCompileErrors(errors);
         const stale = deriveProofStaleAfterCompile(hadPdfBeforeCompile, { success: false }, errors);
         setProofIsStale(stale.isStale);
@@ -315,6 +324,7 @@ export default function ProjectPage() {
             },
           ];
         }
+        compileErrorCount = countCompileErrors(errors);
         setCompileErrors(errors);
         const stale = deriveProofStaleAfterCompile(hadPdfBeforeCompile, result, errors);
         setProofIsStale(stale.isStale);
@@ -331,11 +341,21 @@ export default function ProjectPage() {
     } catch {
       setCompileLog("");
       const errors: CompileError[] = [{ message: "Failed to compile", severity: "error" }];
+      compileErrorCount = errors.length;
       setCompileErrors(errors);
       const stale = deriveProofStaleAfterCompile(hadPdfBeforeCompile, { success: false }, errors);
       setProofIsStale(stale.isStale);
     } finally {
       setCompiling(false);
+
+      const retryDecision = decideCompileFixAutoRetry(
+        compileFixRetryRef.current,
+        compileErrorCount
+      );
+      if (retryDecision.shouldRetry) {
+        setAiPendingRequest(buildCompileFixAutoRetryRequest());
+        setShowAi(true);
+      }
     }
   }, [openProof, pdfData, projectId]);
 
@@ -343,8 +363,14 @@ export default function ProjectPage() {
     compileSchedulerRef.current = createCompileScheduler(compile);
   }, [compile]);
 
+  const handleCompileFixSessionStart = useCallback(() => {
+    beginCompileFixRetrySession(compileFixRetryRef.current);
+  }, []);
+
   const handleCompileFixActionsApplied = useCallback(
     async (applied: AiClientAction[]) => {
+      markCompileFixEditsApplied(compileFixRetryRef.current, applied.length);
+
       const scheduler = compileSchedulerRef.current;
       if (!scheduler) return;
 
@@ -1025,6 +1051,7 @@ export default function ProjectPage() {
                 pendingRequest={aiPendingRequest}
                 onPendingRequestConsumed={() => setAiPendingRequest(null)}
                 onCompileFixActionsApplied={canEdit ? handleCompileFixActionsApplied : undefined}
+                onCompileFixSessionStart={canEdit ? handleCompileFixSessionStart : undefined}
               />
             </div>
           </>

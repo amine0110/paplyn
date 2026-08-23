@@ -205,4 +205,21 @@ describe("ai-response helpers", () => {
       { label: "Replaced line 3 in main.tex", type: "replace_lines", file: "main.tex" },
     ]);
   });
+
+  it("collects replace_lines actions without duplicates from mirrored tool results", () => {
+    const action = {
+      type: "replace_lines" as const,
+      file: "main.tex",
+      startLine: 1,
+      endLine: 1,
+      replace: "\\documentclass{article}",
+      label: "Replaced line 1 in main.tex",
+    };
+    const payload = { kind: "client-action" as const, action };
+    const result = mockResult({
+      toolResults: [{ toolName: "replace_lines", result: payload }],
+      steps: [{ toolCalls: [], toolResults: [{ toolName: "replace_lines", result: payload }] }],
+    });
+    expect(collectClientActionsFromToolResults(result)).toEqual([action]);
+  });
 });
