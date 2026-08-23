@@ -5,8 +5,11 @@ import { projectMember, projectInvite, user } from "@/lib/schema";
 import { getSession } from "@/lib/session";
 import { getProjectAccess } from "@/lib/project-access";
 import { generateId } from "@/lib/utils";
-import { buildInviteUrl } from "@/lib/project-sharing";
+import { buildInviteUrl, formatMemberRole } from "@/lib/project-sharing";
 import { getServerAppUrl } from "@/lib/urls";
+import { sendPlicumEmail } from "@/lib/email/send";
+import { renderInviteEmail } from "@/lib/email/templates";
+import { PRODUCT_NAME } from "@/lib/product";
 import { z } from "zod";
 
 const inviteSchema = z.object({
@@ -17,6 +20,36 @@ const inviteSchema = z.object({
 
 function inviteLink(inviteId: string) {
   return buildInviteUrl(getServerAppUrl(), inviteId);
+}
+
+async function sendInviteEmail({
+  to,
+  ownerName,
+  projectName,
+  role,
+  inviteId,
+}: {
+  to: string;
+  ownerName: string;
+  projectName: string;
+  role: "editor" | "viewer";
+  inviteId: string;
+}): Promise<boolean> {
+  const inviteUrl = inviteLink(inviteId);
+  const { subject, html, text } = renderInviteEmail({
+    productName: PRODUCT_NAME,
+    ownerName,
+    projectName,
+    roleLabel: formatMemberRole(role),
+    inviteUrl,
+    appUrl: getServerAppUrl(),
+  });
+
+  const result = await sendPlicumEmail({ to, subject, html, text });
+  if (!result.sent) {
+    console.warn(`[invite] Email not sent to ${to}: ${result.reason}`);
+  }
+  return result.sent;
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -128,8 +161,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       })
       .returning();
 
+    const emailSent = await sendInviteEmail({
+      to: email,
+      ownerName: session.user.name || session.user.email,
+      projectName: access.project.name,
+      role,
+      inviteId: invite.id,
+    });
+
     return NextResponse.json(
-      { ...invite, link: inviteLink(invite.id) },
+      { ...invite, link: inviteLink(invite.id), emailSent },
       { status: 201 }
     );
   }
