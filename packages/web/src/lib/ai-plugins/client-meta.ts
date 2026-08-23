@@ -1,4 +1,4 @@
-/** Client-safe plugin labels (no server-only imports). */
+import { detectFixCompileIntent } from "@/lib/ai-compile-fix-intent";
 
 export interface AiPluginClientMeta {
   id: string;
@@ -52,7 +52,7 @@ export function loadingLabelForAction(action?: string, userMessage?: string): st
   const literature = loadingLabelForLiteratureAction(action, userMessage);
   if (literature) return literature;
 
-  if (action === "explain-errors" || (userMessage ?? "").toLowerCase().includes("fix error")) {
+  if (action === "explain-errors" || detectFixCompileIntent(userMessage ?? "", action)) {
     return "Fixing compile errors…";
   }
 

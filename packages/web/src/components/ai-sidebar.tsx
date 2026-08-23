@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sparkles, Send, X, Mic, MicOff, Square } from "lucide-react";
 import { aiUnavailableBannerMessage, isClientSelfHosted } from "@/lib/ai-config";
-import { extractInsertableContent } from "@/lib/ai-insert-content";
+import { extractInsertableContent, hasInsertableContent } from "@/lib/ai-insert-content";
+import { detectFixCompileIntent } from "@/lib/ai-compile-fix-intent";
+import type { AiCompileError } from "@/lib/ai-compile-fix-context";
 import { AiMarkdown } from "@/components/ai-markdown";
 import type { AiAppliedAction, AiClientAction, AiPaper, AiUsedPlugin } from "@/lib/ai-types";
 import { loadingLabelForAction } from "@/lib/ai-plugins/client-meta";
@@ -30,7 +32,7 @@ interface AiSidebarProps {
   projectId: string;
   activeFile: string | null;
   selectedText: string;
-  compileErrors: string[];
+  compileErrors: AiCompileError[];
   onInsert: (text: string) => void;
   onReplace?: (text: string) => void;
   onCitePaper?: (paper: AiPaper) => void | Promise<void>;
@@ -141,8 +143,26 @@ export function AiSidebar({
 
   async function sendMessage(content: string, action?: string) {
     if (!content.trim() && !action) return;
+
+    const fixIntent = detectFixCompileIntent(content, action);
+    const effectiveAction = fixIntent ? "explain-errors" : action;
+
+    if (fixIntent && compileErrors.length === 0) {
+      const userMsg: Message = { role: "user", content: content || action || "" };
+      setMessages((prev) => [
+        ...prev,
+        userMsg,
+        {
+          role: "assistant",
+          content: "Please compile your project first so I can see the current errors.",
+        },
+      ]);
+      setInput("");
+      return;
+    }
+
     setLoading(true);
-    setLoadingMessage(loadingLabelForAction(action, content));
+    setLoadingMessage(loadingLabelForAction(effectiveAction, content));
 
     const userMsg: Message = { role: "user", content: content || action || "" };
     setMessages((prev) => [...prev, userMsg]);
@@ -156,8 +176,8 @@ export function AiSidebar({
           messages: [...messagesRef.current, userMsg],
           activeFile,
           selectedText: selectedText || undefined,
-          action,
-          compileErrors: action === "explain-errors" ? compileErrors : undefined,
+          action: effectiveAction,
+          compileErrors: compileErrors.length > 0 ? compileErrors : undefined,
         }),
       });
 
@@ -396,7 +416,10 @@ export function AiSidebar({
                   })}
                 </div>
               )}
-              {msg.role === "assistant" && msg.content && !msg.appliedActions?.length && (
+              {msg.role === "assistant" &&
+                msg.content &&
+                hasInsertableContent(msg.content) &&
+                !msg.appliedActions?.length && (
                 <div className="mt-1 flex flex-wrap gap-1">
                   {canReplace && (
                     <Button
