@@ -29,6 +29,7 @@ import {
   toAppliedActionSummaries,
   formatToolResultsAsAssistantMessage,
   hadToolActivity,
+  usedClientEditTools,
 } from "@/lib/ai-response";
 import {
   createWorkspaceTools,
@@ -42,10 +43,12 @@ import {
   isAiPromptTooLargeError,
   isAiRateLimitError,
   isSlimCompileFixPrompt,
+  isToolChoiceNoneViolationError,
   isUnknownToolCallError,
   logAiApiError,
   PROMPT_TOO_LARGE_MESSAGE,
   shouldTreatCompileFix429AsRateLimit,
+  TOOL_CHOICE_NONE_RETRY_HINT,
   UNKNOWN_TOOL_RETRY_HINT,
 } from "@/lib/ai-tool-errors";
 import { PRODUCT } from "@/lib/product";
@@ -117,11 +120,7 @@ const WRITING_ACTION_PROMPTS: Record<string, string> = {
     "Fix the compile errors using get_file to read small line ranges, then fix_compile_errors or apply_edit with exact search/replace. Apply surgical LaTeX fixes, then explain what you changed.",
 };
 
-const FOLLOW_UP_SYSTEM_SUFFIX = `
-
-The previous turn already ran tools and returned results in the conversation.
-Write a helpful reply for the user using those tool results.
-Do not call tools again.`;
+const COMPILE_FIX_MAX_STEPS = 8;
 
 function getLastUserMessage(messages: ChatRequest["messages"]): string {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -194,11 +193,8 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
 
 async function resolveAssistantContent<TOOLS extends ToolSet>(options: {
   result: GenerateTextResult<TOOLS, unknown>;
-  model: ReturnType<ReturnType<typeof createOpenAI>>;
-  systemPrompt: string;
-  messages: { role: "user" | "assistant"; content: string }[];
 }): Promise<string> {
-  const { result, model, systemPrompt, messages } = options;
+  const { result } = options;
   const trimmed = result.text.trim();
   if (trimmed) return result.text;
 
@@ -206,17 +202,12 @@ async function resolveAssistantContent<TOOLS extends ToolSet>(options: {
     return "I couldn't generate a response. Please try again.";
   }
 
-  const followUp = await generateText({
-    model,
-    system: `${systemPrompt}${FOLLOW_UP_SYSTEM_SUFFIX}`,
-    messages: [...messages, ...result.response.messages],
-    maxRetries: 0,
-  });
-
-  if (followUp.text.trim()) return followUp.text;
-
   const fallback = formatToolResultsAsAssistantMessage(result);
   if (fallback) return fallback;
+
+  if (usedClientEditTools(result)) {
+    return "I applied the suggested edits. Recompile to check whether the errors are resolved.";
+  }
 
   return "I searched but couldn't format the results. Please try asking again.";
 }
@@ -355,18 +346,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       system: systemPrompt,
       messages,
       maxRetries: 0,
-      maxSteps: compileFixRequest ? 4 : 8,
+      maxSteps: compileFixRequest ? COMPILE_FIX_MAX_STEPS : 8,
       tools: compileFixRequest
         ? workspaceTools
         : { ...pluginTools, ...workspaceTools },
     });
 
-    const content = await resolveAssistantContent({
-      result,
-      model,
-      systemPrompt,
-      messages,
-    });
+    const content = await resolveAssistantContent({ result });
 
     return { result, content, systemPrompt };
   }
@@ -404,6 +390,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       );
     } else if (APICallError.isInstance(error)) {
       logAiApiError({ compileFix: false }, error);
+    }
+
+    if (isToolChoiceNoneViolationError(error)) {
+      try {
+        const retry = await runGenerateText(initialMode, {
+          retryHint: TOOL_CHOICE_NONE_RETRY_HINT,
+        });
+        const actions = collectClientActionsFromToolResults(retry.result);
+        const appliedActions = toAppliedActionSummaries(actions);
+
+        await incrementAiUsage(session.user.id);
+
+        return NextResponse.json({
+          content: retry.content,
+          ...(actions.length > 0 ? { actions, appliedActions } : {}),
+        });
+      } catch (retryError) {
+        console.error("AI tool-choice-none retry failed:", retryError);
+        return NextResponse.json(
+          { error: formatAiRequestError(retryError) },
+          { status: 502 }
+        );
+      }
     }
 
     if (isUnknownToolCallError(error)) {

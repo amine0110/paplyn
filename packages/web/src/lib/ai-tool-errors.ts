@@ -37,6 +37,11 @@ const UNKNOWN_TOOL_PATTERNS = [
   "tool call validation failed",
 ] as const;
 
+const TOOL_CHOICE_NONE_PATTERNS = ["tool choice is none"] as const;
+
+export const TOOL_CHOICE_NONE_MESSAGE =
+  "The assistant hit a tool-handling glitch. Please try again — your edits should apply on retry.";
+
 function messageIncludesAny(message: string, patterns: readonly string[]): boolean {
   return patterns.some((pattern) => message.includes(pattern));
 }
@@ -125,15 +130,27 @@ export function logAiApiError(context: AiApiErrorLogContext, error: unknown): vo
   });
 }
 
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
 export function isUnknownToolCallError(error: unknown): boolean {
-  if (!APICallError.isInstance(error)) return false;
-  const msg = error.message.toLowerCase();
+  const msg = errorMessage(error).toLowerCase();
   return UNKNOWN_TOOL_PATTERNS.some((pattern) => msg.includes(pattern));
+}
+
+export function isToolChoiceNoneViolationError(error: unknown): boolean {
+  const msg = errorMessage(error).toLowerCase();
+  return TOOL_CHOICE_NONE_PATTERNS.some((pattern) => msg.includes(pattern));
 }
 
 export function formatAiRequestError(error: unknown): string {
   if (isUnknownToolCallError(error)) {
     return "The assistant tried to use an unavailable tool. Please try again — edits should apply on retry.";
+  }
+  if (isToolChoiceNoneViolationError(error)) {
+    return TOOL_CHOICE_NONE_MESSAGE;
   }
   if (APICallError.isInstance(error) && error.message) {
     return error.message;
@@ -142,3 +159,5 @@ export function formatAiRequestError(error: unknown): string {
 }
 
 export const UNKNOWN_TOOL_RETRY_HINT = `Important: only call workspace tools that are explicitly listed for this request (list_files, get_file, fix_compile_errors, apply_edit, insert_at_cursor, replace_selection, and any plugin tools shown above). Do not call any other tool names.`;
+
+export const TOOL_CHOICE_NONE_RETRY_HINT = `Important: use get_file and fix_compile_errors or apply_edit to fix the compile errors, then reply with a short summary of what you changed. After edits are applied, do not call tools again in the same turn.`;
