@@ -432,7 +432,7 @@ export function AiSidebar({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-7 px-2 text-[11px] text-ink-muted hover:text-ink"
+                      className="h-7 px-2 text-[11px] text-ink-muted"
                       onClick={() => onReplace?.(extractInsertableContent(msg.content))}
                     >
                       Replace selection
@@ -441,7 +441,7 @@ export function AiSidebar({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 px-2 text-[11px] text-ink-muted hover:text-ink"
+                    className="h-7 px-2 text-[11px] text-ink-muted"
                     onClick={() => onInsert(extractInsertableContent(msg.content))}
                   >
                     Insert at cursor

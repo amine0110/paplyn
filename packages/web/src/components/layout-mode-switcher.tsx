@@ -8,6 +8,11 @@ import {
 } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 import type { WorkspaceLayoutMode } from "@/lib/workspace-layout";
+import {
+  CHROME_SEGMENT,
+  CHROME_SEGMENT_ACTIVE,
+  CHROME_SEGMENT_INACTIVE,
+} from "@/lib/chrome-interactive";
 
 const MODES: {
   value: WorkspaceLayoutMode;
@@ -42,10 +47,8 @@ export function LayoutModeSwitcher({ mode, onChange, className }: LayoutModeSwit
           type="button"
           onClick={() => onChange(value)}
           className={cn(
-            "inline-flex items-center justify-center gap-1 rounded-sm px-2 py-1 text-xs transition-colors",
-            mode === value
-              ? "bg-accent text-white"
-              : "text-ink-muted hover:bg-canvas-dark hover:text-ink"
+            CHROME_SEGMENT,
+            mode === value ? CHROME_SEGMENT_ACTIVE : CHROME_SEGMENT_INACTIVE
           )}
           aria-pressed={mode === value}
           title={label}

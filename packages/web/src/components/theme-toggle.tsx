@@ -4,6 +4,11 @@ import { Monitor, Moon, Sun } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 import { useTheme } from "@/components/theme-provider";
 import type { ThemePreference } from "@/lib/theme";
+import {
+  CHROME_SEGMENT,
+  CHROME_SEGMENT_ACTIVE,
+  CHROME_SEGMENT_INACTIVE,
+} from "@/lib/chrome-interactive";
 
 const OPTIONS: { value: ThemePreference; label: string; icon: typeof Sun }[] = [
   { value: "light", label: "Light", icon: Sun },
@@ -34,10 +39,8 @@ export function ThemeToggle({ compact = false, className }: ThemeToggleProps) {
           type="button"
           onClick={() => setTheme(value)}
           className={cn(
-            "inline-flex items-center justify-center gap-1 rounded-sm px-2 py-1 text-xs transition-colors",
-            theme === value
-              ? "bg-accent text-white"
-              : "text-ink-muted hover:bg-canvas-dark hover:text-ink"
+            CHROME_SEGMENT,
+            theme === value ? CHROME_SEGMENT_ACTIVE : CHROME_SEGMENT_INACTIVE
           )}
           aria-pressed={theme === value}
           title={label}

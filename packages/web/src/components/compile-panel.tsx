@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertCircle, AlertTriangle } from "lucide-react";
+import { CHROME_LINK, CHROME_MENU_ITEM } from "@/lib/chrome-interactive";
 
 interface CompileError {
   line?: number;
@@ -44,7 +45,7 @@ export function CompilePanel({ log, errors, onJumpToLine, showLog, onToggleLog }
             </span>
           )}
         </div>
-        <button onClick={onToggleLog} className="text-xs text-ink-muted hover:text-ink">
+        <button onClick={onToggleLog} className={`text-xs ${CHROME_LINK} px-1 py-0.5`}>
           {showLog ? "Hide log" : "Show log"}
         </button>
       </div>
@@ -59,7 +60,7 @@ export function CompilePanel({ log, errors, onJumpToLine, showLog, onToggleLog }
             <button
               key={i}
               onClick={() => err.line && onJumpToLine(err.line, err.file)}
-              className="w-full text-left px-3 py-1.5 text-sm hover:bg-canvas-dark border-b border-border/50 flex items-start gap-2"
+              className={`${CHROME_MENU_ITEM} px-3 py-1.5 text-sm border-b border-border/50 flex items-start gap-2`}
             >
               {err.severity === "error" ? (
                 <AlertCircle className="h-3.5 w-3.5 text-error shrink-0 mt-0.5" />

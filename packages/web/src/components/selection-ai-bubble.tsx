@@ -5,6 +5,7 @@ import type { EditorView } from "@codemirror/view";
 import { Sparkles } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 import type { AiPendingRequest } from "@/components/ai-sidebar";
+import { CHROME_CHIP } from "@/lib/chrome-interactive";
 
 export type SelectionAiAction =
   | "rephrase"
@@ -166,7 +167,10 @@ export function SelectionAiBubble({ editorView, onAction, className }: Selection
         <button
           key={action}
           type="button"
-          className="rounded-full px-2.5 py-1.5 text-[11px] font-medium text-ink hover:bg-canvas-dark transition-colors whitespace-nowrap sm:py-1"
+          className={cn(
+            CHROME_CHIP,
+            "px-2.5 py-1.5 text-[11px] whitespace-nowrap sm:py-1"
+          )}
           onClick={() => {
             onAction({
               message: ACTION_MESSAGES[action],

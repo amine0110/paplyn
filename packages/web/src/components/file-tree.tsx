@@ -4,6 +4,11 @@ import { useState } from "react";
 import { FilePlus, FolderPlus, Trash2, Upload, ChevronRight, ChevronDown, File, Folder, Pencil, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buildFileTree, folderPathFromFile, joinPath, normalizePath, type FileTreeNode } from "@/lib/project-files";
+import {
+  CHROME_DESTRUCTIVE_ICON,
+  CHROME_HOVER,
+  CHROME_ICON_BTN_SM,
+} from "@/lib/chrome-interactive";
 
 export interface FileNode {
   path: string;
@@ -137,7 +142,7 @@ function renderNodes(
           className={`flex items-center gap-1.5 mx-1 px-2 py-1 rounded-sm cursor-pointer group text-[13px] ${
             active === node.path
               ? "bg-accent/10 text-ink font-medium border-l-2 border-accent pl-[6px]"
-              : "hover:bg-canvas-dark text-ink-muted border-l-2 border-transparent pl-[6px]"
+              : `${CHROME_HOVER} text-ink-muted border-l-2 border-transparent pl-[6px]`
           }`}
           style={{ paddingLeft: `${indent * 10 + 6}px` }}
           onClick={() => onSelect(node.path)}
@@ -147,14 +152,14 @@ function renderNodes(
           {canEdit && (
             <>
               <button
-                className="opacity-0 group-hover:opacity-100 p-0.5 hover:text-accent"
+                className={`opacity-0 group-hover:opacity-100 ${CHROME_ICON_BTN_SM} hover:text-accent`}
                 title="Rename or move"
                 onClick={(e) => { e.stopPropagation(); handleRename(node); }}
               >
                 <Pencil className="h-3 w-3" />
               </button>
               <button
-                className="opacity-0 group-hover:opacity-100 p-0.5 hover:text-error"
+                className={`opacity-0 group-hover:opacity-100 ${CHROME_DESTRUCTIVE_ICON}`}
                 title="Delete"
                 onClick={(e) => { e.stopPropagation(); onDelete(node.path); }}
               >
@@ -170,7 +175,7 @@ function renderNodes(
     return (
       <div key={node.path}>
         <div
-          className="flex items-center gap-1 mx-1 px-2 py-1 rounded-sm cursor-pointer hover:bg-canvas-dark text-ink-muted text-[13px] group"
+          className={`flex items-center gap-1 mx-1 px-2 py-1 rounded-sm cursor-pointer ${CHROME_HOVER} text-ink-muted text-[13px] group`}
           style={{ paddingLeft: `${indent * 10 + 6}px` }}
           onClick={() => toggle(node.path)}
         >
@@ -180,14 +185,14 @@ function renderNodes(
           {canEdit && (
             <>
               <button
-                className="opacity-0 group-hover:opacity-100 p-0.5 hover:text-accent"
+                className={`opacity-0 group-hover:opacity-100 ${CHROME_ICON_BTN_SM} hover:text-accent`}
                 title="Rename folder"
                 onClick={(e) => { e.stopPropagation(); handleRename(node); }}
               >
                 <Pencil className="h-3 w-3" />
               </button>
               <button
-                className="opacity-0 group-hover:opacity-100 p-0.5 hover:text-error"
+                className={`opacity-0 group-hover:opacity-100 ${CHROME_DESTRUCTIVE_ICON}`}
                 title="Delete folder"
                 onClick={(e) => { e.stopPropagation(); onDeleteFolder(node.path); }}
               >
