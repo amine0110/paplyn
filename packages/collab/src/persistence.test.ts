@@ -5,8 +5,10 @@ import {
   decodeStoredState,
   encodeDocState,
   encodeStoredState,
+  filterSyncableTextFiles,
   getTextFilesFromDoc,
   isDocEmpty,
+  isSyncableTextPath,
 } from "./persistence.js";
 
 describe("Yjs persistence helpers", () => {
@@ -79,5 +81,22 @@ describe("Yjs persistence helpers", () => {
     const files = getTextFilesFromDoc(doc);
     expect(files).toEqual([{ path: "main.tex", content: ytext.toString() }]);
     expect(files[0].content).toBe("\\documentclass{IEEEtran}");
+  });
+
+  it("filterSyncableTextFiles excludes pdf paths and existing binary rows", () => {
+    const doc = new Y.Doc();
+    doc.getText("main.tex").insert(0, "\\documentclass{article}");
+    doc.getText("dv-voice-assitant-demo-script.pdf").insert(0, "corrupt-if-synced");
+    doc.getText("refs.bib").insert(0, "@article{key}");
+
+    const all = getTextFilesFromDoc(doc);
+    expect(all.map((f) => f.path)).toContain("dv-voice-assitant-demo-script.pdf");
+
+    const syncable = filterSyncableTextFiles(all, new Set(["uploaded.png"]));
+    expect(syncable.map((f) => f.path)).toEqual(["main.tex", "refs.bib"]);
+    expect(isSyncableTextPath("dv-voice-assitant-demo-script.pdf")).toBe(false);
+    expect(isSyncableTextPath("uploaded.png")).toBe(false);
+    expect(isSyncableTextPath("notes")).toBe(true);
+    expect(isSyncableTextPath("chapter.tex")).toBe(true);
   });
 });

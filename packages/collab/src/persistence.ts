@@ -37,6 +37,58 @@ export function isDocEmpty(doc: Y.Doc): boolean {
   return doc.store.clients.size === 0;
 }
 
+/** File extensions synced from Y.Text into HTTP `project_file`. */
+export const SYNCABLE_TEXT_EXTENSIONS = new Set(["tex", "bib", "cls", "sty", "txt", "md"]);
+
+/** Extensions treated as binary — never overwrite `project_file` from Y.Text. */
+export const BINARY_PATH_EXTENSIONS = new Set([
+  "pdf",
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "zip",
+  "gz",
+  "tar",
+  "bz2",
+  "7z",
+  "ico",
+  "bmp",
+  "svg",
+  "eps",
+  "ps",
+  "dvi",
+  "aux",
+  "log",
+  "fls",
+  "fdb_latexmk",
+  "synctex",
+]);
+
+export function getPathExtension(path: string): string {
+  const base = path.split("/").pop() ?? path;
+  const dot = base.lastIndexOf(".");
+  return dot === -1 ? "" : base.slice(dot + 1).toLowerCase();
+}
+
+/** True when the path looks like a binary asset (by extension). */
+export function isBinaryCollabPath(path: string): boolean {
+  const ext = getPathExtension(path);
+  return ext.length > 0 && BINARY_PATH_EXTENSIONS.has(ext);
+}
+
+/**
+ * True when a Y.Text path may be upserted into HTTP `project_file`.
+ * Allows typical LaTeX source paths plus extensionless files.
+ */
+export function isSyncableTextPath(path: string): boolean {
+  if (isBinaryCollabPath(path)) return false;
+  const ext = getPathExtension(path);
+  if (!ext) return true;
+  return SYNCABLE_TEXT_EXTENSIONS.has(ext);
+}
+
 /** Extract text file paths and contents from all Y.Text shared types in a room doc. */
 export function getTextFilesFromDoc(doc: Y.Doc): Array<{ path: string; content: string }> {
   const files: Array<{ path: string; content: string }> = [];
@@ -48,13 +100,33 @@ export function getTextFilesFromDoc(doc: Y.Doc): Array<{ path: string; content: 
   return files;
 }
 
+/** Drop Y.Text entries that must not be written into HTTP `project_file`. */
+export function filterSyncableTextFiles(
+  files: Array<{ path: string; content: string }>,
+  binaryPathsInDb: Set<string>
+): Array<{ path: string; content: string }> {
+  return files.filter((file) => {
+    if (binaryPathsInDb.has(file.path)) return false;
+    return isSyncableTextPath(file.path);
+  });
+}
+
+async function loadBinaryProjectPaths(sql: postgres.Sql, projectId: string): Promise<Set<string>> {
+  const rows = await sql<{ path: string }[]>`
+    SELECT path FROM project_file
+    WHERE project_id = ${projectId} AND is_binary = true
+  `;
+  return new Set(rows.map((row) => row.path));
+}
+
 /** Upsert HTTP `project_file` rows from the current Yjs room document. */
 export async function syncProjectFilesFromDoc(
   sql: postgres.Sql,
   projectId: string,
   doc: Y.Doc
 ): Promise<void> {
-  const files = getTextFilesFromDoc(doc);
+  const binaryPaths = await loadBinaryProjectPaths(sql, projectId);
+  const files = filterSyncableTextFiles(getTextFilesFromDoc(doc), binaryPaths);
   for (const file of files) {
     const id = randomUUID();
     await sql`
