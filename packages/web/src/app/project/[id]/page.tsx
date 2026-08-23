@@ -916,29 +916,18 @@ export default function ProjectPage() {
           <MobileWorkspaceTabs activeTab={mobileTab} onChange={handleMobileTabChange} />
         </main>
 
-        {showAi && isNarrow && (
-          <div className="absolute inset-0 z-30 flex flex-col min-h-0 bg-surface">
-            <AiSidebar
-              projectId={projectId}
-              activeFile={activeFile}
-              selectedText={selectedText}
-              compileErrors={compileErrors.map((e) => e.message)}
-              onInsert={handleInsertAtCursor}
-              onReplace={handleReplaceSelection}
-              onCitePaper={canEdit ? handleCitePaper : undefined}
-              applyActionsContext={canEdit ? aiApplyActionsContext : undefined}
-              onClose={() => setShowAi(false)}
-              variant="sheet"
-              pendingRequest={aiPendingRequest}
-              onPendingRequestConsumed={() => setAiPendingRequest(null)}
-            />
-          </div>
-        )}
-
-        {showAi && !isNarrow && (
+        {showAi && (
           <>
-            <div className="absolute inset-0 bg-ink/10 z-20" onClick={() => setShowAi(false)} />
-            <aside className="absolute right-0 top-0 bottom-0 w-[380px] z-30 shadow-2xl">
+            {!isNarrow && (
+              <div className="absolute inset-0 bg-ink/10 z-20" onClick={() => setShowAi(false)} />
+            )}
+            <div
+              className={
+                isNarrow
+                  ? "absolute inset-0 z-30 flex flex-col min-h-0 bg-surface"
+                  : "absolute right-0 top-0 bottom-0 w-[380px] z-30 shadow-2xl"
+              }
+            >
               <AiSidebar
                 projectId={projectId}
                 activeFile={activeFile}
@@ -949,10 +938,11 @@ export default function ProjectPage() {
                 onCitePaper={canEdit ? handleCitePaper : undefined}
                 applyActionsContext={canEdit ? aiApplyActionsContext : undefined}
                 onClose={() => setShowAi(false)}
+                variant={isNarrow ? "sheet" : "sidebar"}
                 pendingRequest={aiPendingRequest}
                 onPendingRequestConsumed={() => setAiPendingRequest(null)}
               />
-            </aside>
+            </div>
           </>
         )}
 
