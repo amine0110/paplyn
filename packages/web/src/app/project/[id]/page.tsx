@@ -38,6 +38,11 @@ import { LayoutModeSwitcher } from "@/components/layout-mode-switcher";
 import { MobileWorkspaceTabs } from "@/components/mobile-workspace-tabs";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
+import {
+  CHROME_ICON_BTN_MD,
+  CHROME_ICON_BTN_SM,
+  CHROME_MENU_ITEM,
+} from "@/lib/chrome-interactive";
 import { useMediaQuery } from "@/lib/use-media-query";
 import {
   Play,
@@ -700,12 +705,12 @@ export default function ProjectPage() {
     <div className="h-[100dvh] flex flex-col bg-canvas overflow-hidden">
       <header className="h-11 shrink-0 flex items-center justify-between gap-2 px-3 sm:px-4 border-b border-border bg-paper/90 backdrop-blur-sm pt-[env(safe-area-inset-top,0px)]">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <Link href="/dashboard" className="text-ink-faint hover:text-ink transition-colors" title="Back to manuscripts">
+          <Link href="/dashboard" className={CHROME_ICON_BTN_MD} title="Back to manuscripts">
             <ChevronLeft className="h-4 w-4" />
           </Link>
           <button
             onClick={() => setShowOutline(!showOutline)}
-            className="text-ink-faint hover:text-ink transition-colors hidden sm:block lg:hidden"
+            className={`${CHROME_ICON_BTN_MD} hidden sm:block lg:hidden`}
             title={showOutline ? "Hide outline" : "Show outline"}
           >
             {showOutline ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
@@ -791,7 +796,7 @@ export default function ProjectPage() {
                   <button
                     type="button"
                     role="menuitem"
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-canvas-dark"
+                    className={`${CHROME_MENU_ITEM} px-3 py-2 text-sm`}
                     onClick={() => {
                       setShowMobileMenu(false);
                       setShowShare(true);
@@ -803,7 +808,7 @@ export default function ProjectPage() {
                     <button
                       type="button"
                       role="menuitem"
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-canvas-dark"
+                      className={`${CHROME_MENU_ITEM} px-3 py-2 text-sm`}
                       onClick={() => {
                         setShowMobileMenu(false);
                         setShowHistory(true);
@@ -816,7 +821,7 @@ export default function ProjectPage() {
                     <button
                       type="button"
                       role="menuitem"
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-canvas-dark"
+                      className={`${CHROME_MENU_ITEM} px-3 py-2 text-sm`}
                       onClick={() => {
                         setShowMobileMenu(false);
                         setShowSettings(true);
@@ -843,7 +848,7 @@ export default function ProjectPage() {
               <span className="text-xs font-medium tracking-wide uppercase text-ink-faint">Outline</span>
               <button
                 onClick={() => setShowOutline(false)}
-                className="text-ink-faint hover:text-ink p-0.5"
+                className={CHROME_ICON_BTN_SM}
                 title="Collapse outline"
               >
                 <PanelLeftClose className="h-3.5 w-3.5" />
@@ -868,7 +873,7 @@ export default function ProjectPage() {
         {!showOutline && (
           <button
             onClick={() => setShowOutline(true)}
-            className="hidden lg:flex absolute left-0 top-3 z-10 ml-1 p-1.5 rounded-r-md bg-paper border border-l-0 border-border text-ink-faint hover:text-ink shadow-sm"
+            className={`hidden lg:flex absolute left-0 top-3 z-10 ml-1 ${CHROME_ICON_BTN_MD} rounded-r-md bg-paper border border-l-0 border-border shadow-sm`}
             title="Show outline"
           >
             <PanelLeftOpen className="h-3.5 w-3.5" />
@@ -879,7 +884,7 @@ export default function ProjectPage() {
           <aside className="hidden sm:flex lg:hidden absolute inset-y-0 left-0 w-64 z-30 bg-paper border-r border-border shadow-lg flex-col">
             <div className="flex items-center justify-between px-3 py-2 border-b border-border-light">
               <span className="text-xs font-medium tracking-wide uppercase text-ink-faint">Outline</span>
-              <button onClick={() => setShowOutline(false)} className="text-ink-faint hover:text-ink p-0.5">
+              <button onClick={() => setShowOutline(false)} className={CHROME_ICON_BTN_SM}>
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>

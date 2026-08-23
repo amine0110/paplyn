@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { History, RotateCcw, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CHROME_HOVER } from "@/lib/chrome-interactive";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Project, ProjectFile } from "@/lib/schema";
@@ -160,7 +161,7 @@ export function HistoryDialog({
             revisions.map((revision) => (
               <div
                 key={revision.id}
-                className="p-3 flex items-start justify-between gap-3 hover:bg-paper/50"
+                className={`p-3 flex items-start justify-between gap-3 ${CHROME_HOVER}`}
               >
                 <div className="min-w-0">
                   <p className="font-medium text-sm truncate">{revision.label}</p>

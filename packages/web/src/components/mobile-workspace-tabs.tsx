@@ -3,6 +3,7 @@
 import { BookOpen, Files, LayoutTemplate } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 import type { MobileWorkspaceTab } from "@/lib/workspace-layout";
+import { CHROME_TAB_INACTIVE } from "@/lib/chrome-interactive";
 
 const TABS: {
   value: MobileWorkspaceTab;
@@ -32,9 +33,7 @@ export function MobileWorkspaceTabs({ activeTab, onChange }: MobileWorkspaceTabs
           onClick={() => onChange(value)}
           className={cn(
             "flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[44px] py-2 text-[11px] transition-colors min-w-0",
-            activeTab === value
-              ? "text-accent"
-              : "text-ink-muted hover:text-ink"
+            activeTab === value ? "text-accent" : CHROME_TAB_INACTIVE
           )}
           aria-current={activeTab === value ? "page" : undefined}
         >

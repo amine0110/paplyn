@@ -72,6 +72,61 @@
   }
 }
 
+/* Shared interactive affordances for app chrome (topbar, toolbars, sidebars) */
+@layer components {
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
+  }
+
+  .chrome-hover {
+    @apply transition-colors hover:bg-accent/10 dark:hover:bg-accent/15;
+  }
+
+  .chrome-icon-btn {
+    @apply inline-flex items-center justify-center rounded-md transition-colors text-ink-faint hover:text-ink hover:bg-accent/10 dark:hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
+  }
+
+  .chrome-icon-btn-sm {
+    @apply inline-flex items-center justify-center rounded-md p-0.5 transition-colors text-ink-faint hover:text-ink hover:bg-accent/10 dark:hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
+  }
+
+  .chrome-icon-btn-md {
+    @apply inline-flex items-center justify-center rounded-md p-1.5 transition-colors text-ink-faint hover:text-ink hover:bg-accent/10 dark:hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
+  }
+
+  .chrome-chip {
+    @apply rounded-full font-medium text-ink transition-colors hover:bg-accent/10 dark:hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
+  }
+
+  .chrome-menu-item {
+    @apply w-full text-left transition-colors hover:bg-accent/10 dark:hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-inset;
+  }
+
+  .chrome-segment {
+    @apply inline-flex items-center justify-center gap-1 rounded-sm px-2 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
+  }
+
+  .chrome-segment-inactive {
+    @apply text-ink-muted transition-colors hover:bg-accent/10 dark:hover:bg-accent/15 hover:text-ink;
+  }
+
+  .chrome-segment-active {
+    @apply bg-accent text-white;
+  }
+
+  .chrome-tab-inactive {
+    @apply text-ink-muted transition-colors hover:bg-accent/10 dark:hover:bg-accent/15 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
+  }
+
+  .chrome-destructive-icon {
+    @apply inline-flex items-center justify-center rounded-md p-0.5 transition-colors text-ink-faint hover:bg-error/10 hover:text-error dark:hover:bg-error/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
+  }
+
+  .chrome-link {
+    @apply transition-colors text-ink-muted hover:text-ink hover:bg-accent/10 dark:hover:bg-accent/15 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
+  }
+}
+
 /* CodeMirror workspace editor */
 .cm-editor {
   height: 100%;
