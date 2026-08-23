@@ -1,12 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { createRequire } from "node:module";
 import * as Yesm from "yjs";
-import Y from "./yjs.js";
+import Y, { YJS_CJS_PATH } from "./yjs.js";
 import type postgres from "postgres";
 import {
   PERSIST_ACK_FIELD,
   PERSIST_META_MAP,
+  PersistEmptyWipeError,
   PersistExtractError,
+  assertNoEmptyWipeUpserts,
   assertSyncableFilesExtracted,
   getSyncableTextPathsFromDoc,
   getTextFilesFromDoc,
@@ -15,7 +17,7 @@ import {
 } from "./persistence.js";
 
 const require = createRequire(import.meta.url);
-const Ycjs = require("yjs") as typeof import("yjs");
+const Ycjs = require(YJS_CJS_PATH) as typeof import("yjs");
 
 function createCjsDocWithTex(path: string, content: string) {
   const doc = new Ycjs.Doc();
@@ -25,13 +27,18 @@ function createCjsDocWithTex(path: string, content: string) {
 
 function createMockSql(options: {
   binaryPaths?: string[];
+  textFiles?: Array<{ path: string; content: string }>;
   failUpsert?: boolean;
 } = {}): postgres.Sql {
   const binaryPaths = new Set(options.binaryPaths ?? []);
+  const textFiles = new Map((options.textFiles ?? []).map((f) => [f.path, f.content]));
   const sql = (async (strings: TemplateStringsArray, ...values: unknown[]) => {
     const query = strings.join("");
     if (query.includes("SELECT path FROM project_file") && query.includes("is_binary = true")) {
       return [...binaryPaths].map((path) => ({ path }));
+    }
+    if (query.includes("SELECT path, content FROM project_file") && query.includes("is_binary = false")) {
+      return [...textFiles.entries()].map(([path, content]) => ({ path, content }));
     }
     if (query.includes("INSERT INTO project_file")) {
       if (options.failUpsert) {
@@ -130,5 +137,80 @@ describe("persist ack guard", () => {
     expect(err.expectedSyncablePaths).toBe(2);
     expect(err.extractedFiles).toBe(0);
     expect(err.message).toContain("dual Yjs realm");
+  });
+});
+
+describe("empty HTTP wipe guard", () => {
+  it("assertNoEmptyWipeUpserts throws when extracted content is empty but room Y.Text is non-empty", () => {
+    const doc = new Y.Doc();
+    doc.getText("main.tex").insert(0, "x".repeat(311_498));
+
+    expect(() =>
+      assertNoEmptyWipeUpserts(doc, [{ path: "main.tex", content: "" }], new Map())
+    ).toThrow(PersistEmptyWipeError);
+  });
+
+  it("assertNoEmptyWipeUpserts throws when extracted content is empty but HTTP project_file is non-empty", () => {
+    const doc = new Y.Doc();
+
+    expect(() =>
+      assertNoEmptyWipeUpserts(
+        doc,
+        [{ path: "references.bib", content: "" }],
+        new Map([["references.bib", "@article{key}"]])
+      )
+    ).toThrow(PersistEmptyWipeError);
+  });
+
+  it("does not signal persist ack when poisoned extraction would wipe room content", async () => {
+    const doc = new Y.Doc();
+    const ytext = doc.getText("main.tex");
+    ytext.insert(0, "x".repeat(311_498));
+    const bib = doc.getText("references.bib");
+    bib.insert(0, "@article{key}");
+
+    // Dual-realm poison: duck-type passes, length > 0, but toString() returns "".
+    Object.defineProperty(ytext, "toString", { value: () => "" });
+    Object.defineProperty(bib, "toString", { value: () => "" });
+
+    expect(getTextFilesFromDoc(doc)).toEqual([
+      { path: "main.tex", content: "" },
+      { path: "references.bib", content: "" },
+    ]);
+    expect(ytext.length).toBeGreaterThan(0);
+
+    await expect(
+      persistRoomState(
+        createMockSql({
+          textFiles: [
+            { path: "main.tex", content: "x".repeat(100) },
+            { path: "references.bib", content: "@article{key}" },
+          ],
+        }),
+        "llm-similarity",
+        doc
+      )
+    ).rejects.toThrow(PersistEmptyWipeError);
+    expect(doc.getMap(PERSIST_META_MAP).get(PERSIST_ACK_FIELD)).toBeUndefined();
+  });
+
+  it("allows empty upsert when both room and HTTP are already empty", async () => {
+    const doc = new Y.Doc();
+    doc.getText("main.tex");
+
+    const result = await syncProjectFilesFromDoc(
+      createMockSql({ textFiles: [{ path: "main.tex", content: "" }] }),
+      "project-1",
+      doc
+    );
+    expect(result.writtenCount).toBe(1);
+  });
+
+  it("PersistEmptyWipeError captures path and lengths", () => {
+    const err = new PersistEmptyWipeError("main.tex", 311_498, 42);
+    expect(err.path).toBe("main.tex");
+    expect(err.roomTextLength).toBe(311_498);
+    expect(err.existingHttpLength).toBe(42);
+    expect(err.message).toContain("refuse empty HTTP upsert");
   });
 });

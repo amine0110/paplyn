@@ -1,19 +1,21 @@
 import { describe, it, expect } from "vitest";
 import { createRequire } from "node:module";
 import * as Yesm from "yjs";
-import Y from "./yjs.js";
+import Y, { YJS_CJS_PATH } from "./yjs.js";
 import { applyDocState, encodeDocState } from "./persistence.js";
 
 const require = createRequire(import.meta.url);
-/** CJS yjs — same entry point y-websocket/bin/utils loads. */
-const Ycjs = require("yjs") as typeof import("yjs");
+/** CJS yjs — same dist/yjs.cjs entry y-websocket loads via require('yjs'). */
+const Ycjs = require(YJS_CJS_PATH) as typeof import("yjs");
 
 describe("Yjs single realm (server)", () => {
-  it("server yjs module is the same CJS instance y-websocket uses", () => {
+  it("server yjs module loads dist/yjs.cjs — same constructors as y-websocket", () => {
+    expect(YJS_CJS_PATH).toContain("dist/yjs.cjs");
     expect(Y.Doc).toBe(Ycjs.Doc);
     expect(Y.Text).toBe(Ycjs.Text);
     expect(Y.encodeStateAsUpdate).toBe(Ycjs.encodeStateAsUpdate);
     expect(Y.applyUpdate).toBe(Ycjs.applyUpdate);
+    expect(require.resolve("yjs")).toBe(YJS_CJS_PATH);
   });
 
   it("ESM yjs is a different realm — do not use for server doc encode/apply", () => {

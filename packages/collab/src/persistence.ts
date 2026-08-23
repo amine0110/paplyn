@@ -129,6 +129,19 @@ export class PersistExtractError extends Error {
   }
 }
 
+export class PersistEmptyWipeError extends Error {
+  constructor(
+    readonly path: string,
+    readonly roomTextLength: number,
+    readonly existingHttpLength: number
+  ) {
+    super(
+      `[collab] refuse empty HTTP upsert for ${path}: room Y.Text length=${roomTextLength}, existing project_file length=${existingHttpLength}`
+    );
+    this.name = "PersistEmptyWipeError";
+  }
+}
+
 export type SyncProjectFilesResult = {
   extractedCount: number;
   syncableCount: number;
@@ -162,12 +175,50 @@ export function assertSyncableFilesExtracted(
   }
 }
 
+/** Y.Text character length in the room doc, or 0 when missing / not text-like. */
+export function getRoomTextLength(doc: Doc, filePath: string): number {
+  const shared = doc.get(filePath, Y.Text);
+  if (!isYTextLike(shared)) return 0;
+  return shared.length;
+}
+
+/**
+ * Block HTTP upserts that would wipe non-empty room or project_file content with "".
+ * Duck-type extraction can return length-0 strings while Y.Text still holds content.
+ */
+export function assertNoEmptyWipeUpserts(
+  doc: Doc,
+  files: Array<{ path: string; content: string }>,
+  existingByPath: Map<string, string>
+): void {
+  for (const file of files) {
+    if (file.content.length > 0) continue;
+
+    const roomTextLength = getRoomTextLength(doc, file.path);
+    const existingHttpLength = existingByPath.get(file.path)?.length ?? 0;
+    if (roomTextLength > 0 || existingHttpLength > 0) {
+      throw new PersistEmptyWipeError(file.path, roomTextLength, existingHttpLength);
+    }
+  }
+}
+
 async function loadBinaryProjectPaths(sql: postgres.Sql, projectId: string): Promise<Set<string>> {
   const rows = await sql<{ path: string }[]>`
     SELECT path FROM project_file
     WHERE project_id = ${projectId} AND is_binary = true
   `;
   return new Set(rows.map((row) => row.path));
+}
+
+async function loadTextProjectFileContents(
+  sql: postgres.Sql,
+  projectId: string
+): Promise<Map<string, string>> {
+  const rows = await sql<{ path: string; content: string }[]>`
+    SELECT path, content FROM project_file
+    WHERE project_id = ${projectId} AND is_binary = false
+  `;
+  return new Map(rows.map((row) => [row.path, row.content]));
 }
 
 /** Upsert HTTP `project_file` rows from the current Yjs room document. */
@@ -180,6 +231,9 @@ export async function syncProjectFilesFromDoc(
   const extracted = getTextFilesFromDoc(doc);
   const files = filterSyncableTextFiles(extracted, binaryPaths);
   assertSyncableFilesExtracted(doc, extracted, binaryPaths);
+
+  const existingByPath = await loadTextProjectFileContents(sql, projectId);
+  assertNoEmptyWipeUpserts(doc, files, existingByPath);
 
   for (const file of files) {
     const id = randomUUID();
@@ -218,6 +272,11 @@ export async function persistRoomState(sql: postgres.Sql, roomId: string, doc: D
         `[collab] persist extract failed for room ${roomId}:`,
         err.message,
         `(expected ${err.expectedSyncablePaths} syncable paths, extracted ${err.extractedFiles} files)`
+      );
+    } else if (err instanceof PersistEmptyWipeError) {
+      console.error(
+        `[collab] persist empty-wipe blocked for room ${roomId}:`,
+        err.message
       );
     } else {
       console.error(`[collab] persist room state failed for room ${roomId}:`, err);
