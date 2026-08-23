@@ -3,7 +3,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection } from "@codemirror/view";
-import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+import { defaultKeymap, indentWithTab } from "@codemirror/commands";
 import { syntaxHighlighting, bracketMatching, StreamLanguage } from "@codemirror/language";
 import { search, searchKeymap } from "@codemirror/search";
 import { autocompletion, completionKeymap } from "@codemirror/autocomplete";
@@ -23,7 +23,14 @@ import {
   getOfflineEditorInitialDoc,
   seedYTextIfEmpty,
 } from "@/lib/collab-seed";
-import { createSaveStatusTracker, PERSIST_ACK_FIELD, PERSIST_META_MAP, type SaveStatus } from "@/lib/save-status";
+import { buildCollabEditorSyncExtensions } from "@/lib/latex-editor-extensions";
+import {
+  COLLAB_SAVE_MAX_WAIT_MS,
+  createSaveStatusTracker,
+  PERSIST_ACK_FIELD,
+  PERSIST_META_MAP,
+  type SaveStatus,
+} from "@/lib/save-status";
 
 const latexHighlightLight = HighlightStyle.define([
   { tag: t.keyword, color: "#2d6a6a" },
@@ -100,12 +107,20 @@ export function LatexEditor({
     let provider: WebsocketProvider | null = null;
     const collabEnabled = Boolean(collabToken);
     const saveStatusTracker = onSaveStatusChange
-      ? createSaveStatusTracker(onSaveStatusChange)
+      ? createSaveStatusTracker(onSaveStatusChange, {
+          ackTimeoutMs: collabEnabled ? COLLAB_SAVE_MAX_WAIT_MS : 0,
+          isConnected: () => !collabEnabled || (provider?.wsconnected ?? false),
+        })
       : null;
 
     if (collabToken) {
       provider = new WebsocketProvider(collabBaseUrl, projectId, ydoc, {
         params: { token: collabToken },
+      });
+      provider.on("status", (event: { status: string }) => {
+        if (event.status === "disconnected") {
+          saveStatusTracker?.onConnectionLost();
+        }
       });
       const payload = parseCollabToken(collabToken);
       if (payload) {
@@ -157,11 +172,14 @@ export function LatexEditor({
       ? getCollabEditorInitialDoc(ytext.toString())
       : getOfflineEditorInitialDoc(ytext.toString(), initialContent);
 
+    const { extensions: syncExtensions, keymapExtensions, undoManager } =
+      buildCollabEditorSyncExtensions(collabEnabled, ytext, provider?.awareness ?? null);
+
     const extensions = [
       lineNumbers(),
       highlightActiveLine(),
       drawSelection(),
-      history(),
+      ...syncExtensions,
       bracketMatching(),
       latexLang,
       syntaxHighlighting(highlightStyle),
@@ -171,7 +189,7 @@ export function LatexEditor({
         activateOnTyping: true,
         maxRenderedOptions: 24,
       }),
-      keymap.of([...completionKeymap, ...searchKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab]),
+      keymap.of([...completionKeymap, ...searchKeymap, ...defaultKeymap, ...keymapExtensions, indentWithTab]),
       EditorView.lineWrapping,
       EditorView.editable.of(canEdit),
       EditorView.updateListener.of((update) => {
@@ -237,10 +255,6 @@ export function LatexEditor({
       spellcheckCompartment.of(spellcheckExtensions(readStoredSpellcheckEnabled())),
     ];
 
-    if (provider) {
-      extensions.push(yCollab(ytext, provider.awareness));
-    }
-
     const state = EditorState.create({
       doc: initialDoc,
       extensions,
@@ -260,6 +274,7 @@ export function LatexEditor({
         metaMap.unobserve(metaObserver);
       }
       saveStatusTracker?.destroy();
+      undoManager?.destroy();
       view.destroy();
       provider?.destroy();
       ydoc.destroy();
