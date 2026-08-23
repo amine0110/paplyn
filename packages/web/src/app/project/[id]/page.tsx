@@ -78,6 +78,11 @@ import {
   shouldShowStaleProofBanner,
 } from "@/lib/proof-stale-state";
 import {
+  createCompileScheduler,
+  scheduleCompileAfterAppliedActions,
+} from "@/lib/schedule-compile-after-ai-actions";
+import type { AiClientAction } from "@/lib/ai-client-actions";
+import {
   effectiveLayoutMode,
   layoutModeToMobileTab,
   layoutShowsProof,
@@ -142,6 +147,7 @@ export default function ProjectPage() {
   const editorViewRef = useRef<EditorView | null>(null);
   const [editorView, setEditorView] = useState<EditorView | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const compileSchedulerRef = useRef<ReturnType<typeof createCompileScheduler> | null>(null);
 
   useEffect(() => {
     const mode = readStoredLayoutMode();
@@ -273,7 +279,14 @@ export default function ProjectPage() {
     [activeFile, saveFile]
   );
 
-  async function compile() {
+  const clearPendingEditorSave = useCallback(() => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+  }, []);
+
+  const compile = useCallback(async () => {
     const hadPdfBeforeCompile = pdfData !== null;
     setCompiling(true);
     setCompileErrors([]);
@@ -324,7 +337,34 @@ export default function ProjectPage() {
     } finally {
       setCompiling(false);
     }
-  }
+  }, [openProof, pdfData, projectId]);
+
+  useEffect(() => {
+    compileSchedulerRef.current = createCompileScheduler(compile);
+  }, [compile]);
+
+  const handleCompileFixActionsApplied = useCallback(
+    async (applied: AiClientAction[]) => {
+      const scheduler = compileSchedulerRef.current;
+      if (!scheduler) return;
+
+      await scheduleCompileAfterAppliedActions({
+        isCompileFixTurn: true,
+        applied,
+        activeFile,
+        flushContext: {
+          activeFile,
+          editorView,
+          saveFile: async (path, content) => {
+            await saveFile(path, content, false);
+          },
+          clearPendingEditorSave,
+        },
+        compileScheduler: scheduler,
+      });
+    },
+    [activeFile, clearPendingEditorSave, editorView, saveFile]
+  );
 
   async function createFile(path: string) {
     if (!canEdit) return;
@@ -984,6 +1024,7 @@ export default function ProjectPage() {
                 variant={isNarrow ? "sheet" : "sidebar"}
                 pendingRequest={aiPendingRequest}
                 onPendingRequestConsumed={() => setAiPendingRequest(null)}
+                onCompileFixActionsApplied={canEdit ? handleCompileFixActionsApplied : undefined}
               />
             </div>
           </>

@@ -47,5 +47,13 @@ describe("Fix with AI compile-error UI", () => {
     expect(src).toMatch(/onFixWithAi=\{handleFixCompileWithAi\}/);
     expect(src).toContain("setShowAi(true)");
     expect(src).toContain("pendingRequest={aiPendingRequest}");
+    expect(src).toContain("onCompileFixActionsApplied");
+    expect(src).toContain("scheduleCompileAfterAppliedActions");
+  });
+
+  it("ai sidebar schedules compile after compile-fix actions apply", () => {
+    const src = readSource("components/ai-sidebar.tsx");
+    expect(src).toContain("onCompileFixActionsApplied");
+    expect(src).toContain("isCompileFixTurn: fixIntent");
   });
 });
