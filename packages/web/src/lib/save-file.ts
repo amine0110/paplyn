@@ -5,6 +5,8 @@ export type SaveFileResult =
 export type SaveProjectFileOptions = {
   /** Retry once after a failed attempt (network or HTTP error). */
   retry?: boolean;
+  /** Injectable fetch for tests. */
+  fetchFn?: typeof fetch;
 };
 
 /**
@@ -17,12 +19,13 @@ export async function saveProjectFile(
   isBinary = false,
   options?: SaveProjectFileOptions
 ): Promise<SaveFileResult> {
+  const fetchFn = options?.fetchFn ?? fetch;
   const url = `/api/projects/${projectId}/files`;
   const body = JSON.stringify({ path, content, isBinary });
 
   const attempt = async (): Promise<SaveFileResult> => {
     try {
-      const res = await fetch(url, {
+      const res = await fetchFn(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body,

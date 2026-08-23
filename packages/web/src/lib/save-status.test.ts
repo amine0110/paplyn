@@ -113,6 +113,36 @@ describe("save status helpers", () => {
     expect(changes).toEqual(["saved", "saving", "failed"]);
   });
 
+  it("onAckTimeout can handle fallback and mark saved without failing", async () => {
+    const changes: string[] = [];
+    const tracker = createSaveStatusTracker((status) => changes.push(status), {
+      ackTimeoutMs: COLLAB_SAVE_MAX_WAIT_MS,
+      isSynced: () => true,
+      onAckTimeout: () => {
+        tracker.markSaved();
+        return true;
+      },
+    });
+
+    tracker.onDocUpdate("local", "remote-provider");
+    vi.advanceTimersByTime(COLLAB_SAVE_MAX_WAIT_MS);
+
+    expect(changes).toEqual(["saved", "saving", "saved"]);
+  });
+
+  it("onAckTimeout returning true skips automatic markFailed", () => {
+    const changes: string[] = [];
+    const tracker = createSaveStatusTracker((status) => changes.push(status), {
+      ackTimeoutMs: COLLAB_SAVE_MAX_WAIT_MS,
+      isSynced: () => true,
+      onAckTimeout: () => true,
+    });
+    tracker.onDocUpdate("local", "remote-provider");
+    vi.advanceTimersByTime(COLLAB_SAVE_MAX_WAIT_MS);
+
+    expect(changes).toEqual(["saved", "saving"]);
+  });
+
   it("cancels ack timeout when markSaved arrives in time", () => {
     const changes: string[] = [];
     const tracker = createSaveStatusTracker((status) => changes.push(status), {

@@ -32,6 +32,7 @@ import {
   PERSIST_META_MAP,
   type SaveStatus,
 } from "@/lib/save-status";
+import { runCollabSaveFallback } from "@/lib/collab-save-fallback";
 
 const latexHighlightLight = HighlightStyle.define([
   { tag: t.keyword, color: "#2d6a6a" },
@@ -104,6 +105,8 @@ export function LatexEditor({
 
     const ydoc = new Y.Doc();
     const ytext = ydoc.getText(filePath);
+    const latestContentRef = { current: initialContent };
+    let fallbackInFlight = false;
 
     let provider: WebsocketProvider | null = null;
     const collabEnabled = Boolean(collabToken);
@@ -114,6 +117,25 @@ export function LatexEditor({
           isSynced: () => !collabEnabled || (provider?.synced ?? false),
           isConnected: () => !collabEnabled || (provider?.wsconnected ?? false),
           connectionLostGraceMs: COLLAB_CONNECTION_LOST_MS,
+          onAckTimeout: collabEnabled
+            ? () => {
+                if (fallbackInFlight) return true;
+                fallbackInFlight = true;
+                void runCollabSaveFallback({
+                  projectId,
+                  path: filePath,
+                  content: latestContentRef.current,
+                }).then((ok) => {
+                  fallbackInFlight = false;
+                  if (ok) {
+                    saveStatusTracker?.markSaved();
+                  } else {
+                    saveStatusTracker?.markFailed();
+                  }
+                });
+                return true;
+              }
+            : undefined,
         })
       : null;
 
@@ -195,6 +217,7 @@ export function LatexEditor({
     const initialDoc = collabEnabled
       ? getCollabEditorInitialDoc(ytext.toString())
       : getOfflineEditorInitialDoc(ytext.toString(), initialContent);
+    latestContentRef.current = initialDoc;
 
     const { extensions: syncExtensions, keymapExtensions, undoManager } =
       buildCollabEditorSyncExtensions(collabEnabled, ytext, provider?.awareness ?? null);
@@ -219,6 +242,7 @@ export function LatexEditor({
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
           const content = update.state.doc.toString();
+          latestContentRef.current = content;
           saveContent(content);
           reportStats(content);
         }
