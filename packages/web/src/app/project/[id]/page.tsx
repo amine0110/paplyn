@@ -71,6 +71,7 @@ import type { EditorView } from "@codemirror/view";
 import type { Project } from "@/lib/schema";
 import type { DocumentStats } from "@/lib/document-stats";
 import { countDocumentStats } from "@/lib/document-stats";
+import type { SaveStatus } from "@/lib/save-status";
 import type { AiPaper } from "@/lib/ai-types";
 import {
   appendBibEntry,
@@ -137,6 +138,7 @@ export default function ProjectPage() {
     words: 0,
     characters: 0,
   });
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
 
   const [showOutline, setShowOutline] = useState(true);
   const [layoutMode, setLayoutMode] = useState<WorkspaceLayoutMode>("editor");
@@ -654,6 +656,7 @@ export default function ProjectPage() {
             view.dom.addEventListener("keyup", syncSelection);
           }}
           onStatsChange={setDocumentStats}
+          onSaveStatusChange={canEdit ? setSaveStatus : undefined}
           jumpToLine={jumpToLine}
         />
       );
@@ -680,6 +683,8 @@ export default function ProjectPage() {
               filePath={activeFile}
               wordCount={documentStats.words}
               characterCount={documentStats.characters}
+              saveStatus={saveStatus}
+              showSaveStatus={canEdit}
             />
           )}
         </>

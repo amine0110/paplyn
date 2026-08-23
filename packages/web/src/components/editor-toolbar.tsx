@@ -13,6 +13,7 @@ import { setSpellcheckEnabled } from "@/lib/latex-spellcheck";
 import { CHROME_TOOLBAR_BTN } from "@/lib/chrome-interactive";
 import { cn } from "@/components/ui/cn";
 import { ArrowDownToLine, Search, SpellCheck } from "lucide-react";
+import { getSaveStatusLabel, type SaveStatus } from "@/lib/save-status";
 
 interface EditorToolbarProps {
   editorView: EditorView | null;
@@ -147,14 +148,29 @@ interface EditorStatusBarProps {
   filePath: string | null;
   wordCount: number;
   characterCount: number;
+  saveStatus?: SaveStatus;
+  showSaveStatus?: boolean;
 }
 
-export function EditorStatusBar({ filePath, wordCount, characterCount }: EditorStatusBarProps) {
+export function EditorStatusBar({
+  filePath,
+  wordCount,
+  characterCount,
+  saveStatus = "saved",
+  showSaveStatus = false,
+}: EditorStatusBarProps) {
   if (!filePath) return null;
 
   return (
-    <div className="flex items-center justify-end px-3 py-1 border-t border-border-light bg-paper text-[11px] text-ink-faint font-mono shrink-0 tabular-nums">
-      {wordCount.toLocaleString()} words · {characterCount.toLocaleString()} characters
+    <div className="flex items-center justify-between px-3 py-1 border-t border-border-light bg-paper text-[11px] text-ink-faint font-mono shrink-0 tabular-nums">
+      {showSaveStatus && (
+        <span className={saveStatus === "saving" ? "text-ink-muted" : "text-ink-faint"}>
+          {getSaveStatusLabel(saveStatus)}
+        </span>
+      )}
+      <span className={showSaveStatus ? "" : "ml-auto"}>
+        {wordCount.toLocaleString()} words · {characterCount.toLocaleString()} characters
+      </span>
     </div>
   );
 }
