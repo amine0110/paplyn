@@ -27,12 +27,9 @@ export interface ReplaceSelectionAction extends AiClientActionBase {
 export interface ApplyEditAction extends AiClientActionBase {
   type: "apply_edit";
   file: string;
-  /** Exact substring to replace in the file. Must appear once when provided. */
-  search?: string;
+  /** Exact substring to replace in the file. Must appear once. */
+  search: string;
   replace: string;
-  /** 1-based inclusive line range alternative to search/replace. */
-  startLine?: number;
-  endLine?: number;
 }
 
 export interface FixCompileErrorsEdit {
@@ -129,22 +126,6 @@ function applySearchReplace(
   return { ok: true, content: content.replace(search, replace) };
 }
 
-function applyLineRangeEdit(
-  content: string,
-  startLine: number,
-  endLine: number,
-  newText: string
-): { ok: true; content: string } | { ok: false; reason: string } {
-  const lines = content.split("\n");
-  if (startLine < 1 || endLine < startLine || endLine > lines.length) {
-    return { ok: false, reason: "line range out of bounds" };
-  }
-  const before = lines.slice(0, startLine - 1);
-  const after = lines.slice(endLine);
-  const next = [...before, newText, ...after].join("\n");
-  return { ok: true, content: next };
-}
-
 /** Server-side validation before returning an action to the client. */
 export function validateClientAction(
   raw: RawAiClientAction,
@@ -189,33 +170,19 @@ export function validateClientAction(
       const replace = capEditText(raw.replace);
       if (!replace) return null;
 
-      const content = ctx.texFiles.get(file) ?? "";
       const searchTrimmed = raw.search?.trim() ?? "";
-      const hasSearch = searchTrimmed.length > 0;
-      const startLine = raw.startLine ?? 0;
-      const endLine = raw.endLine ?? 0;
-      const hasLineRange = startLine > 0 && endLine > 0;
-      let preview: { ok: true; content: string } | { ok: false; reason: string };
+      if (!searchTrimmed || searchTrimmed.length > MAX_CLIENT_EDIT_CHARS) return null;
 
-      if (hasSearch) {
-        if (searchTrimmed.length > MAX_CLIENT_EDIT_CHARS) return null;
-        preview = applySearchReplace(content, searchTrimmed, replace);
-      } else if (hasLineRange) {
-        preview = applyLineRangeEdit(content, startLine, endLine, replace);
-      } else {
-        return null;
-      }
-
+      const content = ctx.texFiles.get(file) ?? "";
+      const preview = applySearchReplace(content, searchTrimmed, replace);
       if (!preview.ok) return null;
 
       return {
         action: {
           type: "apply_edit",
           file,
-          search: hasSearch ? searchTrimmed : undefined,
+          search: searchTrimmed,
           replace,
-          startLine: hasLineRange ? startLine : undefined,
-          endLine: hasLineRange ? endLine : undefined,
           label: `Applied edit to ${file}`,
         },
       };
@@ -251,15 +218,8 @@ export function applyActionToFileContent(
   content: string,
   action: ApplyEditAction
 ): string | null {
-  if (action.search) {
-    const result = applySearchReplace(content, action.search, action.replace);
-    return result.ok ? result.content : null;
-  }
-  if (action.startLine != null && action.endLine != null) {
-    const result = applyLineRangeEdit(content, action.startLine, action.endLine, action.replace);
-    return result.ok ? result.content : null;
-  }
-  return null;
+  const result = applySearchReplace(content, action.search, action.replace);
+  return result.ok ? result.content : null;
 }
 
 export function describeAppliedAction(action: AiClientAction): string {

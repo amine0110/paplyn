@@ -125,36 +125,9 @@ export async function applyAiClientActions(
           break;
         }
         case "apply_edit": {
-          if (action.search) {
-            const ok = await applyFileEdit(ctx, action.file, action.search, action.replace);
-            if (ok) applied.push(action);
-            else skipped.push({ action, reason: "Could not apply edit" });
-          } else if (action.startLine != null && action.endLine != null) {
-            const content = ctx.fileContents[action.file];
-            if (content == null) {
-              skipped.push({ action, reason: "File not found" });
-              break;
-            }
-            const updated = applyActionToFileContent(content, action);
-            if (updated == null) {
-              skipped.push({ action, reason: "Line range edit failed" });
-              break;
-            }
-            if (ctx.activeFile === action.file && ctx.editorView) {
-              const lines = content.split("\n");
-              const startOffset =
-                lines.slice(0, action.startLine - 1).join("\n").length +
-                (action.startLine > 1 ? 1 : 0);
-              const endOffset =
-                lines.slice(0, action.endLine).join("\n").length;
-              applyToActiveEditor(ctx.editorView, startOffset, endOffset, action.replace);
-            } else {
-              await ctx.saveFile(action.file, updated);
-            }
-            applied.push(action);
-          } else {
-            skipped.push({ action, reason: "Missing search or line range" });
-          }
+          const ok = await applyFileEdit(ctx, action.file, action.search, action.replace);
+          if (ok) applied.push(action);
+          else skipped.push({ action, reason: "Could not apply edit" });
           break;
         }
         case "fix_compile_errors": {
