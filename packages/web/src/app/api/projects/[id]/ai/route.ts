@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createOpenAI } from "@ai-sdk/openai";
-import { generateText, APICallError, type GenerateTextResult, type ToolSet } from "ai";
+import {
+  streamText,
+  APICallError,
+  type GenerateTextResult,
+  type StepResult,
+  type StreamTextResult,
+  type ToolSet,
+} from "ai";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { projectFile, organization } from "@/lib/schema";
@@ -16,10 +23,14 @@ import {
 import { buildAiFileContext } from "@/lib/ai-file-context";
 import {
   buildAiCompileFixContext,
+  buildCompileFixTargetHint,
+  COMPILE_FIX_MAX_GET_FILE_CALLS,
+  getPrimaryCompileErrorLocation,
   normalizeAiCompileErrors,
   selectCompileFixMessages,
   type AiCompileError,
 } from "@/lib/ai-compile-fix-context";
+import { buildCompileFixNoEditMessage } from "@/lib/ai-compile-fix-failure";
 import { detectFixCompileIntent } from "@/lib/ai-compile-fix-intent";
 import { getPluginActionPrompt, resolveAiPlugins } from "@/lib/ai-plugins";
 import {
@@ -51,6 +62,15 @@ import {
   TOOL_CHOICE_NONE_RETRY_HINT,
   UNKNOWN_TOOL_RETRY_HINT,
 } from "@/lib/ai-tool-errors";
+import {
+  AI_STREAM_CONTENT_TYPE,
+  encodeAiStreamEvent,
+  type AiStreamDoneEvent,
+} from "@/lib/ai-stream";
+import {
+  formatToolProgressDone,
+  formatToolProgressStart,
+} from "@/lib/ai-tool-progress";
 import { PRODUCT } from "@/lib/product";
 import { checkAiLimit, incrementAiUsage } from "@/lib/usage";
 import { z } from "zod";
@@ -103,6 +123,8 @@ type CompileFixMetrics = {
   errorCount: number;
 };
 
+type GetFileCall = { path: string; startLine: number; endLine: number };
+
 const WRITING_ACTION_PROMPTS: Record<string, string> = {
   tighten:
     "Tighten the selected text: remove redundancy and improve concision while preserving meaning and LaTeX syntax.",
@@ -142,8 +164,17 @@ function buildSystemPrompt(options: {
   pluginSystemPrompt: string;
   mode: AiContextMode;
   retryHint?: string;
+  compileFixTargetHint?: string;
 }): string {
-  const { data, compileErrors, fileContext, pluginSystemPrompt, mode, retryHint } = options;
+  const {
+    data,
+    compileErrors,
+    fileContext,
+    pluginSystemPrompt,
+    mode,
+    retryHint,
+    compileFixTargetHint,
+  } = options;
   const compileFix = mode !== "full";
 
   let systemPrompt = compileFix
@@ -173,6 +204,10 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
       "\n\nWhen fixing errors, call get_file for small line ranges around cited lines. Prefer replace_lines when errors cite a line number — large templates often have no unique apply_edit substrings. Use fix_compile_errors or apply_edit only when search matches exactly once. If apply_edit is rejected, use replace_lines for the cited line range.";
   }
 
+  if (compileFixTargetHint) {
+    systemPrompt += `\n\n${compileFixTargetHint}`;
+  }
+
   if (data.action) {
     const actionPrompt =
       getPluginActionPrompt(data.action) ?? WRITING_ACTION_PROMPTS[data.action];
@@ -192,11 +227,57 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
   return systemPrompt;
 }
 
+async function toGenerateTextResult<TOOLS extends ToolSet>(
+  streamResult: StreamTextResult<TOOLS, unknown>
+): Promise<GenerateTextResult<TOOLS, unknown>> {
+  const [text, steps] = await Promise.all([streamResult.text, streamResult.steps]);
+  const toolCalls = steps.flatMap((step) => step.toolCalls);
+  const toolResults = steps.flatMap((step) => step.toolResults);
+
+  return {
+    text,
+    toolCalls,
+    toolResults,
+    steps,
+    finishReason: steps.at(-1)?.finishReason ?? "stop",
+    usage: steps.reduce(
+      (acc, step) => ({
+        promptTokens: (acc.promptTokens ?? 0) + (step.usage?.promptTokens ?? 0),
+        completionTokens: (acc.completionTokens ?? 0) + (step.usage?.completionTokens ?? 0),
+        totalTokens: (acc.totalTokens ?? 0) + (step.usage?.totalTokens ?? 0),
+      }),
+      { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+    ),
+    warnings: await streamResult.warnings,
+    request: await streamResult.request,
+    response: await streamResult.response,
+    experimental_providerMetadata: undefined,
+    providerMetadata: undefined,
+    logprobs: undefined,
+    reasoning: undefined,
+    reasoningDetails: await streamResult.reasoningDetails,
+    sources: [],
+    files: [],
+  } as unknown as GenerateTextResult<TOOLS, unknown>;
+}
+
 async function resolveAssistantContent<TOOLS extends ToolSet>(options: {
   result: GenerateTextResult<TOOLS, unknown>;
+  compileFixRequest: boolean;
+  compileErrors: AiCompileError[];
+  getFileCalls: GetFileCall[];
 }): Promise<string> {
-  const { result } = options;
+  const { result, compileFixRequest, compileErrors, getFileCalls } = options;
   const trimmed = result.text.trim();
+
+  if (compileFixRequest && !usedClientEditTools(result)) {
+    return buildCompileFixNoEditMessage({
+      errors: compileErrors,
+      getFileCalls,
+      steps: result.steps as StepResult<ToolSet>[],
+    });
+  }
+
   if (trimmed) return result.text;
 
   if (!hadToolActivity(result)) {
@@ -276,17 +357,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const compileErrors = normalizeAiCompileErrors(requestData.compileErrors);
   const compileFixRequest = isCompileFixRequest(requestData);
+  const primaryErrorLocation = compileFixRequest
+    ? getPrimaryCompileErrorLocation(compileErrors)
+    : null;
 
   const { tools: pluginTools, systemPrompt: pluginSystemPrompt, plugins } = resolveAiPlugins();
 
   const texFileMap = new Map(texFiles.map((f) => [f.path, f.content]));
   const hasSelection = Boolean(requestData.selectedText?.trim());
+  const getFileCalls: GetFileCall[] = [];
 
-  const workspaceTools = createWorkspaceTools({
-    texFiles: texFileMap,
-    activeFile: requestData.activeFile,
-    hasSelection,
-  });
+  const workspaceTools = createWorkspaceTools(
+    {
+      texFiles: texFileMap,
+      activeFile: requestData.activeFile,
+      hasSelection,
+    },
+    compileFixRequest
+      ? {
+          maxGetFileCalls: COMPILE_FIX_MAX_GET_FILE_CALLS,
+          onGetFileCall: (call) => {
+            getFileCalls.push(call);
+          },
+        }
+      : {}
+  );
 
   const openai = createOpenAI({
     apiKey: aiConfig.apiKey,
@@ -297,7 +392,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const compileFixMetricsRef: { current: CompileFixMetrics | null } = { current: null };
 
-  async function runGenerateText(mode: AiContextMode, options?: { retryHint?: string }) {
+  async function runStreamText(mode: AiContextMode, options?: { retryHint?: string }) {
     const fileContext =
       mode === "full"
         ? buildAiFileContext(texFiles, {
@@ -314,6 +409,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       ? selectCompileFixMessages(requestData.messages)
       : requestData.messages;
 
+    const compileFixTargetHint =
+      compileFixRequest && primaryErrorLocation
+        ? buildCompileFixTargetHint(primaryErrorLocation)
+        : undefined;
+
     const systemPrompt = buildSystemPrompt({
       data: requestData,
       compileErrors,
@@ -321,6 +421,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       pluginSystemPrompt,
       mode: compileFixRequest ? mode : "full",
       retryHint: options?.retryHint,
+      compileFixTargetHint,
     });
 
     if (compileFixRequest) {
@@ -339,10 +440,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         errorCount: compileErrors.length,
         fileContextLength: fileContext.length,
         slim: isSlimCompileFixPrompt(systemPrompt.length, messagesChars),
+        primaryErrorLocation,
       });
     }
 
-    const result = await generateText({
+    const streamResult = streamText({
       model,
       system: systemPrompt,
       messages,
@@ -353,109 +455,177 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         : { ...pluginTools, ...workspaceTools },
     });
 
-    const content = await resolveAssistantContent({ result });
-
-    return { result, content, systemPrompt };
+    return { streamResult, systemPrompt };
   }
 
   const initialMode: AiContextMode = compileFixRequest ? "compile-fix-minimal" : "full";
 
-  try {
-    const generation = await runGenerateText(initialMode);
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let closed = false;
+      const close = () => {
+        if (closed) return;
+        closed = true;
+        controller.close();
+      };
 
-    const usedPlugins = collectUsedPlugins(generation.result, plugins);
-    const papers = collectPapersFromToolResults(generation.result);
-    const actions = collectClientActionsFromToolResults(generation.result);
-    const appliedActions = toAppliedActionSummaries(actions);
+      const emit = (event: Parameters<typeof encodeAiStreamEvent>[0]) => {
+        controller.enqueue(encodeAiStreamEvent(event));
+      };
 
-    await incrementAiUsage(session.user.id);
+      const emitProgress = (message: string) => {
+        emit({ type: "progress", message });
+      };
 
-    return NextResponse.json({
-      content: generation.content,
-      ...(usedPlugins.length > 0 ? { usedPlugins } : {}),
-      ...(papers.length > 0 ? { papers } : {}),
-      ...(actions.length > 0 ? { actions, appliedActions } : {}),
-    });
-  } catch (error) {
-    const compileFixMetrics = compileFixMetricsRef.current;
-    if (compileFixMetrics) {
-      logAiApiError(
-        {
-          compileFix: true,
-          mode: compileFixMetrics.mode,
-          systemPromptChars: compileFixMetrics.systemPromptChars,
-          messagesChars: compileFixMetrics.messagesChars,
-          errorCount: compileFixMetrics.errorCount,
-        },
-        error
-      );
-    } else if (APICallError.isInstance(error)) {
-      logAiApiError({ compileFix: false }, error);
-    }
+      const runOnce = async (retryHint?: string) => {
+        const { streamResult } = await runStreamText(initialMode, { retryHint });
 
-    if (isToolChoiceNoneViolationError(error)) {
-      try {
-        const retry = await runGenerateText(initialMode, {
-          retryHint: TOOL_CHOICE_NONE_RETRY_HINT,
+        for await (const part of streamResult.fullStream) {
+          if (part.type === "tool-call") {
+            const args =
+              typeof part.args === "object" && part.args !== null
+                ? (part.args as Record<string, unknown>)
+                : {};
+            const startMessage = formatToolProgressStart(part.toolName, args);
+            if (startMessage) emitProgress(startMessage);
+          }
+
+          if (part.type === "tool-result") {
+            const doneMessage = formatToolProgressDone(part.toolName, part.result);
+            if (doneMessage) emitProgress(doneMessage);
+          }
+        }
+
+        const result = await toGenerateTextResult(streamResult);
+        const content = await resolveAssistantContent({
+          result,
+          compileFixRequest,
+          compileErrors,
+          getFileCalls,
         });
-        const actions = collectClientActionsFromToolResults(retry.result);
+
+        const usedPlugins = collectUsedPlugins(result, plugins);
+        const papers = collectPapersFromToolResults(result);
+        const actions = collectClientActionsFromToolResults(result);
         const appliedActions = toAppliedActionSummaries(actions);
 
         await incrementAiUsage(session.user.id);
 
-        return NextResponse.json({
-          content: retry.content,
+        const doneEvent: AiStreamDoneEvent = {
+          type: "done",
+          content,
+          ...(usedPlugins.length > 0 ? { usedPlugins } : {}),
+          ...(papers.length > 0 ? { papers } : {}),
           ...(actions.length > 0 ? { actions, appliedActions } : {}),
-        });
-      } catch (retryError) {
-        console.error("AI tool-choice-none retry failed:", retryError);
-        return NextResponse.json(
-          { error: formatAiRequestError(retryError) },
-          { status: 502 }
-        );
-      }
-    }
+        };
+        emit(doneEvent);
+      };
 
-    if (isUnknownToolCallError(error)) {
       try {
-        const retry = await runGenerateText(initialMode, {
-          retryHint: UNKNOWN_TOOL_RETRY_HINT,
-        });
-        const actions = collectClientActionsFromToolResults(retry.result);
-        const appliedActions = toAppliedActionSummaries(actions);
+        await runOnce();
+      } catch (error) {
+        const compileFixMetrics = compileFixMetricsRef.current;
+        if (compileFixMetrics) {
+          logAiApiError(
+            {
+              compileFix: true,
+              mode: compileFixMetrics.mode,
+              systemPromptChars: compileFixMetrics.systemPromptChars,
+              messagesChars: compileFixMetrics.messagesChars,
+              errorCount: compileFixMetrics.errorCount,
+            },
+            error
+          );
+        } else if (APICallError.isInstance(error)) {
+          logAiApiError({ compileFix: false }, error);
+        }
 
-        await incrementAiUsage(session.user.id);
+        if (isToolChoiceNoneViolationError(error)) {
+          try {
+            emitProgress("Retrying with tools enabled…");
+            await runOnce(TOOL_CHOICE_NONE_RETRY_HINT);
+            return;
+          } catch (retryError) {
+            console.error("AI tool-choice-none retry failed:", retryError);
+            emit({
+              type: "error",
+              error: formatAiRequestError(retryError),
+              status: 502,
+            });
+            return;
+          }
+        }
 
-        return NextResponse.json({
-          content: retry.content,
-          ...(actions.length > 0 ? { actions, appliedActions } : {}),
+        if (isUnknownToolCallError(error)) {
+          try {
+            emitProgress("Retrying with valid tools…");
+            await runOnce(UNKNOWN_TOOL_RETRY_HINT);
+            return;
+          } catch (retryError) {
+            console.error("AI unknown-tool retry failed:", retryError);
+            emit({
+              type: "error",
+              error: formatAiRequestError(retryError),
+              status: 502,
+            });
+            return;
+          }
+        }
+
+        if (isAiRateLimitError(error)) {
+          const retryAfter = getRetryAfterSeconds(error);
+          emit({
+            type: "error",
+            error: AI_RATE_LIMIT_MESSAGE,
+            status: 429,
+            ...(retryAfter != null ? { retryAfter } : {}),
+          });
+          return;
+        }
+
+        if (
+          compileFixMetrics &&
+          shouldTreatCompileFix429AsRateLimit(
+            error,
+            compileFixMetrics.systemPromptChars,
+            compileFixMetrics.messagesChars
+          )
+        ) {
+          const retryAfter = getRetryAfterSeconds(error);
+          emit({
+            type: "error",
+            error: AI_RATE_LIMIT_MESSAGE,
+            status: 429,
+            ...(retryAfter != null ? { retryAfter } : {}),
+          });
+          return;
+        }
+
+        if (isAiPromptTooLargeError(error)) {
+          emit({
+            type: "error",
+            error: PROMPT_TOO_LARGE_MESSAGE,
+            status: 429,
+          });
+          return;
+        }
+
+        console.error("AI request failed:", error);
+        emit({
+          type: "error",
+          error: formatAiRequestError(error),
+          status: 502,
         });
-      } catch (retryError) {
-        console.error("AI unknown-tool retry failed:", retryError);
-        return NextResponse.json(
-          { error: formatAiRequestError(retryError) },
-          { status: 502 }
-        );
+      } finally {
+        close();
       }
-    }
+    },
+  });
 
-    if (isAiRateLimitError(error)) {
-      return rateLimitResponse(error);
-    }
-    if (
-      compileFixMetrics &&
-      shouldTreatCompileFix429AsRateLimit(
-        error,
-        compileFixMetrics.systemPromptChars,
-        compileFixMetrics.messagesChars
-      )
-    ) {
-      return rateLimitResponse(error);
-    }
-    if (isAiPromptTooLargeError(error)) {
-      return NextResponse.json({ error: PROMPT_TOO_LARGE_MESSAGE }, { status: 429 });
-    }
-    console.error("AI request failed:", error);
-    return NextResponse.json({ error: formatAiRequestError(error) }, { status: 502 });
-  }
+  return new Response(stream, {
+    headers: {
+      "Content-Type": AI_STREAM_CONTENT_TYPE,
+      "Cache-Control": "no-cache",
+    },
+  });
 }
