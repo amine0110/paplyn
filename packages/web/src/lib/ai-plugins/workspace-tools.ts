@@ -149,7 +149,17 @@ After applying edits, briefly explain what changed in your reply.`;
 
 export const COMPILE_FIX_WORKSPACE_SUFFIX = `Focus on fixing compile errors. Use get_file with small line ranges around cited error lines. Prefer replace_lines when errors cite a line number (e.g. bare \\usepackage on line 3) — large concatenated templates often have no unique substrings for apply_edit. Use fix_compile_errors or apply_edit only when search text matches exactly once. Keep edits minimal.`;
 
-export function createWorkspaceTools(ctx: ValidateActionContext) {
+export interface WorkspaceToolsOptions {
+  /** Cap get_file calls (compile-fix fast path). */
+  maxGetFileCalls?: number;
+  /** Called after each get_file invocation. */
+  onGetFileCall?: (call: { path: string; startLine: number; endLine: number }) => void;
+}
+
+export function createWorkspaceTools(
+  ctx: ValidateActionContext,
+  options: WorkspaceToolsOptions = {}
+) {
   const wrap =
     (
       type:
@@ -183,6 +193,35 @@ export function createWorkspaceTools(ctx: ValidateActionContext) {
       };
     };
 
+  const { maxGetFileCalls, onGetFileCall } = options;
+  let getFileCallCount = 0;
+
+  const wrapGetFile = async ({
+    path,
+    startLine,
+    endLine,
+  }: {
+    path: string;
+    startLine: number;
+    endLine: number;
+  }) => {
+    if (maxGetFileCalls != null && getFileCallCount >= maxGetFileCalls) {
+      return {
+        path,
+        content: "",
+        startLine,
+        endLine,
+        totalLines: 0,
+        note: "",
+        error: `get_file limit reached (${maxGetFileCalls} calls). Use replace_lines or apply_edit now.`,
+      };
+    }
+
+    getFileCallCount += 1;
+    onGetFileCall?.({ path, startLine, endLine });
+    return readTexFile(ctx.texFiles, path, startLine, endLine);
+  };
+
   return {
     list_files: tool({
       description:
@@ -211,7 +250,7 @@ export function createWorkspaceTools(ctx: ValidateActionContext) {
           .describe("Last line to read (1-based inclusive)"),
       }),
       execute: async ({ path, startLine, endLine }) =>
-        readTexFile(ctx.texFiles, path, startLine, endLine),
+        wrapGetFile({ path, startLine, endLine }),
     }),
     insert_at_cursor: tool({
       description:

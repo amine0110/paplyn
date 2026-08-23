@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   buildAiCompileFixContext,
+  buildCompileFixTargetHint,
+  buildGetFileWindow,
   extractLineSnippet,
   formatCompileErrorLines,
+  getPrimaryCompileErrorLocation,
   normalizeAiCompileErrors,
   parseFileLineFromMessage,
+  resolveCompileErrorLocation,
   selectCompileFixMessages,
 } from "./ai-compile-fix-context";
 
@@ -71,6 +75,53 @@ describe("parseFileLineFromMessage", () => {
       line: 42,
     });
     expect(parseFileLineFromMessage("on input line 17.")).toBeNull();
+  });
+});
+
+describe("resolveCompileErrorLocation", () => {
+  it("uses structured file and line when present", () => {
+    expect(
+      resolveCompileErrorLocation({
+        message: "Missing } inserted",
+        file: "main.tex",
+        line: 12,
+      })
+    ).toEqual({ file: "main.tex", line: 12 });
+  });
+
+  it("parses file:line from message text", () => {
+    expect(
+      resolveCompileErrorLocation({
+        message: "main.tex:42: Undefined control sequence",
+      })
+    ).toEqual({ file: "main.tex", line: 42 });
+  });
+});
+
+describe("getPrimaryCompileErrorLocation", () => {
+  it("returns the first error with a location", () => {
+    expect(
+      getPrimaryCompileErrorLocation([
+        { message: "Generic failure" },
+        { message: "main.tex:5: Missing bracket", file: "main.tex", line: 5 },
+      ])
+    ).toEqual({ file: "main.tex", line: 5 });
+  });
+});
+
+describe("buildGetFileWindow", () => {
+  it("centers a window around the cited line", () => {
+    expect(buildGetFileWindow(12, 10)).toEqual({ startLine: 2, endLine: 22 });
+    expect(buildGetFileWindow(3, 10)).toEqual({ startLine: 1, endLine: 13 });
+  });
+});
+
+describe("buildCompileFixTargetHint", () => {
+  it("instructs the model to read a small window first", () => {
+    const hint = buildCompileFixTargetHint({ file: "main.tex", line: 12 });
+    expect(hint).toContain("main.tex:12");
+    expect(hint).toContain('get_file(path="main.tex", startLine=2, endLine=22)');
+    expect(hint).toContain("FIRST tool call");
   });
 });
 

@@ -19,6 +19,12 @@ const FILE_LINE_MESSAGE_RE = /([^\s():/\\]+\.tex):(\d+)/i;
 const MAX_COMPILE_ERROR_MESSAGE_LENGTH = 400;
 const MAX_COMPILE_ERRORS = 25;
 
+/** Lines above/below a cited error line for the first targeted get_file call. */
+export const COMPILE_FIX_LINE_RADIUS = 10;
+
+/** Maximum get_file calls allowed per compile-fix request. */
+export const COMPILE_FIX_MAX_GET_FILE_CALLS = 2;
+
 function truncateCompileErrorMessage(message: string): string {
   if (message.length <= MAX_COMPILE_ERROR_MESSAGE_LENGTH) return message;
   return `${message.slice(0, MAX_COMPILE_ERROR_MESSAGE_LENGTH)}…`;
@@ -56,6 +62,47 @@ export function formatCompileErrorLines(errors: AiCompileError[]): string {
       return error.message;
     })
     .join("\n");
+}
+
+export function resolveCompileErrorLocation(
+  error: AiCompileError
+): { file: string; line: number } | null {
+  if (error.file && error.line != null) {
+    return { file: error.file, line: error.line };
+  }
+  return parseFileLineFromMessage(error.message);
+}
+
+export function getPrimaryCompileErrorLocation(
+  errors: AiCompileError[]
+): { file: string; line: number } | null {
+  for (const error of errors) {
+    const location = resolveCompileErrorLocation(error);
+    if (location) return location;
+  }
+  return null;
+}
+
+export function buildGetFileWindow(
+  line: number,
+  radius = COMPILE_FIX_LINE_RADIUS
+): { startLine: number; endLine: number } {
+  return {
+    startLine: Math.max(1, line - radius),
+    endLine: line + radius,
+  };
+}
+
+export function buildCompileFixTargetHint(location: {
+  file: string;
+  line: number;
+}): string {
+  const { startLine, endLine } = buildGetFileWindow(location.line);
+  return (
+    `Primary error location: ${location.file}:${location.line}. ` +
+    `Your FIRST tool call must be get_file(path="${location.file}", startLine=${startLine}, endLine=${endLine}). ` +
+    `Then call replace_lines or apply_edit on that line. Do not read other line ranges before attempting an edit.`
+  );
 }
 
 export function parseFileLineFromMessage(

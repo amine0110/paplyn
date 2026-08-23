@@ -79,6 +79,20 @@ describe("workspace-tools", () => {
     expect(result.error).toBe("");
   });
 
+  it("caps get_file calls when maxGetFileCalls is set", async () => {
+    const tools = createWorkspaceTools(
+      { texFiles, hasSelection: false },
+      { maxGetFileCalls: 2 }
+    );
+
+    await tools.get_file.execute({ path: "main.tex", startLine: 1, endLine: 1 });
+    await tools.get_file.execute({ path: "main.tex", startLine: 2, endLine: 2 });
+    const blocked = await tools.get_file.execute({ path: "main.tex", startLine: 3, endLine: 3 });
+
+    expect(blocked.error).toContain("get_file limit reached");
+    expect(blocked.content).toBe("");
+  });
+
   it("caps oversized line windows and notes how to read more", () => {
     const result = readTexFile(longTexFiles, "main.tex", 1, 150);
 

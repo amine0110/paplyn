@@ -12,6 +12,7 @@ import { AiMarkdown } from "@/components/ai-markdown";
 import type { AiAppliedAction, AiClientAction, AiPaper, AiUsedPlugin } from "@/lib/ai-types";
 import { loadingLabelForAction } from "@/lib/ai-plugins/client-meta";
 import { applyAiClientActions, type ApplyAiActionsContext } from "@/lib/apply-ai-client-actions";
+import { consumeAiStream } from "@/lib/ai-stream";
 import { useSpeechRecognition } from "@/lib/use-speech-recognition";
 import { parseVoiceCommand, speechStatusMessage } from "@/lib/voice-commands";
 
@@ -210,7 +211,9 @@ export function AiSidebar({
         return;
       }
 
-      const data = await res.json();
+      const data = await consumeAiStream(res, (message) => {
+        setLoadingMessage(message);
+      });
       const assistantContent = typeof data.content === "string" ? data.content.trim() : "";
       if (!assistantContent) {
         setMessages((prev) => [
@@ -244,8 +247,12 @@ export function AiSidebar({
           ...(appliedActions?.length ? { appliedActions } : {}),
         },
       ]);
-    } catch {
-      setMessages((prev) => [...prev, { role: "assistant", content: "Failed to connect to AI service." }]);
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "Failed to connect to AI service.";
+      setMessages((prev) => [...prev, { role: "assistant", content: message }]);
     } finally {
       setLoading(false);
     }
