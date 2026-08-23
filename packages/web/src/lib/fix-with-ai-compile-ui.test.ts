@@ -54,6 +54,9 @@ describe("Fix with AI compile-error UI", () => {
     expect(src).toMatch(/onFixWithAi=\{handleFixCompileWithAi\}/);
     expect(src).toContain("setShowAi(true)");
     expect(src).toContain("pendingRequest={aiPendingRequest}");
+    expect(src).toContain("buildCompileFixAutoRetryRequest");
+    expect(src).toContain("compile-fix-auto-retry");
+    expect(src).toContain("onCompileFixSessionStart");
     expect(src).toContain("onCompileFixActionsApplied");
     expect(src).toContain("scheduleCompileAfterAppliedActions");
   });

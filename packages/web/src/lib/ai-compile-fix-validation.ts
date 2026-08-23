@@ -74,6 +74,50 @@ export type LaTeXPreambleValidation =
   | { ok: true }
   | { ok: false; reason: string };
 
+/** Count non-comment \\documentclass lines before the first \\begin{document}. */
+export function countDocumentClassLinesBeforeBeginDocument(content: string): number {
+  const lines = content.split("\n");
+  let count = 0;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("%")) continue;
+    if (trimmed.includes("\\begin{document}")) break;
+    if (DOCUMENTCLASS_RE.test(trimmed)) count += 1;
+  }
+
+  return count;
+}
+
+/** Count non-comment \\documentclass lines in the first document copy. */
+export function countDocumentClassLinesInFirstCopy(content: string): number {
+  const firstCopyEnd = getFirstLaTeXCopyEndLine(content);
+  const lines = content.split("\n");
+  const limit = Math.min(firstCopyEnd, lines.length);
+  let count = 0;
+
+  for (let i = 0; i < limit; i += 1) {
+    const trimmed = lines[i].trim();
+    if (!trimmed || trimmed.startsWith("%")) continue;
+    if (DOCUMENTCLASS_RE.test(trimmed)) count += 1;
+  }
+
+  return count;
+}
+
+/** Rule 0: exactly one \\documentclass before \\begin{document} (no duplicate preamble inserts). */
+export function validateNoDuplicateDocumentClass(content: string): LaTeXPreambleValidation {
+  const count = countDocumentClassLinesBeforeBeginDocument(content);
+  if (count <= 1) return { ok: true };
+
+  return {
+    ok: false,
+    reason:
+      `Edit would leave ${count} \\documentclass lines before \\begin{document}. ` +
+      `Keep exactly one \\documentclass as the first non-comment line — repair the cited line instead of inserting another.`,
+  };
+}
+
 /** Rule 1: first non-comment line must be \\documentclass or \\RequirePackage. */
 export function validateLaTeXPreambleOrder(content: string): LaTeXPreambleValidation {
   const first = getFirstNonCommentLine(content);
@@ -169,6 +213,9 @@ export function validateCompileFixEdit(
         `(ends at line ${firstCopyEnd}). Only edit the first \\documentclass…\\end{document} block.`,
     };
   }
+
+  const duplicateDocumentClass = validateNoDuplicateDocumentClass(previewContent);
+  if (!duplicateDocumentClass.ok) return duplicateDocumentClass;
 
   const preamble = validateLaTeXPreambleOrder(previewContent);
   if (!preamble.ok) return preamble;

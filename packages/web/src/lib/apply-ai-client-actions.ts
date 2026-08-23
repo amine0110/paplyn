@@ -5,6 +5,7 @@ import {
   applyReplaceLinesToFileContent,
   lineRangeToOffsets,
 } from "@/lib/ai-client-actions";
+import { validateCompileFixEdit } from "@/lib/ai-compile-fix-validation";
 
 export interface ApplyAiActionsContext {
   activeFile: string | null;
@@ -13,6 +14,8 @@ export interface ApplyAiActionsContext {
   hasSelection: boolean;
   saveFile: (path: string, content: string) => Promise<void>;
   onSwitchFile?: (path: string) => void;
+  /** When true, reject edits that break compile-fix preamble guards. */
+  compileFix?: boolean;
 }
 
 export interface ApplyAiActionsResult {
@@ -60,6 +63,25 @@ function applyToActiveEditor(
   dispatchEditorChange(view, from, to, text);
 }
 
+function rejectCompileFixPreview(
+  ctx: ApplyAiActionsContext,
+  content: string,
+  replace: string,
+  previewContent: string,
+  startLine?: number,
+  endLine?: number
+): string | null {
+  if (!ctx.compileFix) return null;
+  const check = validateCompileFixEdit({
+    content,
+    replace,
+    previewContent,
+    startLine,
+    endLine,
+  });
+  return check.ok ? null : check.reason;
+}
+
 async function applyFileEdit(
   ctx: ApplyAiActionsContext,
   file: string,
@@ -77,6 +99,9 @@ async function applyFileEdit(
     label: "",
   });
   if (updated == null) return false;
+
+  const compileFixReject = rejectCompileFixPreview(ctx, content, replace, updated);
+  if (compileFixReject) return false;
 
   if (ctx.activeFile === file && ctx.editorView) {
     const index = content.indexOf(search);
@@ -111,6 +136,16 @@ async function applyLinesEdit(
   };
   const updated = applyReplaceLinesToFileContent(content, action);
   if (updated == null) return false;
+
+  const compileFixReject = rejectCompileFixPreview(
+    ctx,
+    content,
+    replace,
+    updated,
+    startLine,
+    endLine
+  );
+  if (compileFixReject) return false;
 
   if (ctx.activeFile === file && ctx.editorView) {
     const range = lineRangeToOffsets(content, startLine, endLine);

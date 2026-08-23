@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  countDocumentClassLinesBeforeBeginDocument,
   formatCompileFixLineChangeSummary,
   getDocumentClassLine,
   getFirstLaTeXCopyEndLine,
   getFirstNonCommentLine,
   validateCompileFixEdit,
   validateLaTeXPreambleOrder,
+  validateNoDuplicateDocumentClass,
   validateNoInventedPackages,
 } from "./ai-compile-fix-validation";
 
@@ -79,6 +81,23 @@ describe("validateNoInventedPackages", () => {
     if (!result.ok) {
       expect(result.reason).toContain("cite");
       expect(result.reason).toContain("do not invent");
+    }
+  });
+});
+
+describe("validateNoDuplicateDocumentClass", () => {
+  it("rejects two documentclass lines in the first copy", () => {
+    const content = [
+      "\\documentclass[conference]{IEEEtran}",
+      "\\documentclass[conference]{IEEEtran}",
+      "\\begin{document}",
+      "\\end{document}",
+    ].join("\n");
+    expect(countDocumentClassLinesBeforeBeginDocument(content)).toBe(2);
+    const result = validateNoDuplicateDocumentClass(content);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toContain("2 \\documentclass");
     }
   });
 });

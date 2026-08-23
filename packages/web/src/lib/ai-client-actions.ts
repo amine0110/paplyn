@@ -636,6 +636,39 @@ export function applyReplaceLinesToFileContent(
   return result.ok ? result.content : null;
 }
 
+/** Apply one validated client action to file content (for cumulative compile-fix validation). */
+export function applyValidatedClientActionToContent(
+  content: string,
+  action: AiClientAction
+): string | null {
+  switch (action.type) {
+    case "apply_edit": {
+      const updated = applyActionToFileContent(content, action);
+      return updated;
+    }
+    case "replace_lines": {
+      return applyReplaceLinesToFileContent(content, action);
+    }
+    case "fix_compile_errors": {
+      let next = content;
+      for (const edit of action.edits) {
+        const updated = applyActionToFileContent(next, {
+          type: "apply_edit",
+          file: edit.file,
+          search: edit.search,
+          replace: edit.replace,
+          label: "",
+        });
+        if (updated == null) return null;
+        next = updated;
+      }
+      return next;
+    }
+    default:
+      return null;
+  }
+}
+
 export function describeAppliedAction(action: AiClientAction): string {
   return action.label;
 }

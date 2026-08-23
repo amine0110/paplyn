@@ -32,6 +32,8 @@ interface Message {
 export interface AiPendingRequest {
   message: string;
   action?: string;
+  /** When true, preserves compile-fix auto-retry session (one automatic retry). */
+  autoCompileFixRetry?: boolean;
 }
 
 interface AiSidebarProps {
@@ -52,6 +54,8 @@ interface AiSidebarProps {
   onPendingRequestConsumed?: () => void;
   /** Called after compile-fix actions are applied to the workspace (before auto-compile). */
   onCompileFixActionsApplied?: (applied: AiClientAction[]) => void | Promise<void>;
+  /** Called when a user-initiated compile-fix turn starts (not automatic retries). */
+  onCompileFixSessionStart?: () => void;
 }
 
 const SCROLL_THRESHOLD_PX = 80;
@@ -103,6 +107,7 @@ export function AiSidebar({
   pendingRequest,
   onPendingRequestConsumed,
   onCompileFixActionsApplied,
+  onCompileFixSessionStart,
 }: AiSidebarProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -177,6 +182,7 @@ export function AiSidebar({
       const result = await applyAiClientActions(actions, {
         ...applyActionsContext,
         hasSelection: Boolean(selectedText),
+        compileFix: options?.isCompileFixTurn,
       });
       if (options?.isCompileFixTurn && result.applied.length > 0) {
         await onCompileFixActionsApplied?.(result.applied);
@@ -195,11 +201,19 @@ export function AiSidebar({
     [applyActionsContext, onCompileFixActionsApplied, selectedText]
   );
 
-  async function sendMessage(content: string, action?: string) {
+  async function sendMessage(
+    content: string,
+    action?: string,
+    options?: { autoCompileFixRetry?: boolean }
+  ) {
     if (!content.trim() && !action) return;
 
     const fixIntent = detectFixCompileIntent(content, action);
     const effectiveAction = fixIntent ? "explain-errors" : action;
+
+    if (fixIntent && !options?.autoCompileFixRetry) {
+      onCompileFixSessionStart?.();
+    }
 
     if (fixIntent && compileErrors.length === 0) {
       const userMsg: Message = { role: "user", content: content || action || "" };
@@ -359,7 +373,9 @@ export function AiSidebar({
 
   useEffect(() => {
     if (!pendingRequest) return;
-    void sendMessage(pendingRequest.message, pendingRequest.action);
+    void sendMessage(pendingRequest.message, pendingRequest.action, {
+      autoCompileFixRetry: pendingRequest.autoCompileFixRetry,
+    });
     onPendingRequestConsumed?.();
     // Only fire when a new pending request is supplied.
     // eslint-disable-next-line react-hooks/exhaustive-deps
