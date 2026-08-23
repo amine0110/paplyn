@@ -83,6 +83,11 @@ services:
       STRIPE_PRICE_STUDENT: ${STRIPE_PRICE_STUDENT:-}
       STRIPE_PRICE_RESEARCHER: ${STRIPE_PRICE_RESEARCHER:-}
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     depends_on:
       postgres:
         condition: service_healthy
