@@ -34,7 +34,7 @@ describe("workspace-tools", () => {
     });
   });
 
-  it("get_file returns a numbered line window", async () => {
+  it("get_file returns a raw line window without line-number prefixes", async () => {
     const tools = createWorkspaceTools({ texFiles, hasSelection: false });
     const result = await tools.get_file.execute({
       path: "main.tex",
@@ -43,7 +43,7 @@ describe("workspace-tools", () => {
     });
 
     expect(result.path).toBe("main.tex");
-    expect(result.content).toBe("2: \\usepackage{amsmath}\n3: \\begin{document}");
+    expect(result.content).toBe("\\usepackage{amsmath}\n\\begin{document}");
     expect(result.startLine).toBe(2);
     expect(result.endLine).toBe(3);
     expect(result.totalLines).toBe(5);
@@ -75,7 +75,7 @@ describe("workspace-tools", () => {
     });
 
     expect(result.path).toBe("main.tex");
-    expect(result.content).toBe("1: \\documentclass{article}");
+    expect(result.content).toBe("\\documentclass{article}");
     expect(result.error).toBe("");
   });
 
@@ -87,11 +87,11 @@ describe("workspace-tools", () => {
     expect(result.totalLines).toBe(150);
     expect(result.note).toContain(`Window capped to ${GET_FILE_MAX_LINES} lines`);
     expect(result.content.split("\n")).toHaveLength(GET_FILE_MAX_LINES);
-    expect(result.content).toContain("1: Line 1");
-    expect(result.content).toContain(`${GET_FILE_MAX_LINES}: Line ${GET_FILE_MAX_LINES}`);
+    expect(result.content).toContain("Line 1");
+    expect(result.content).toContain(`Line ${GET_FILE_MAX_LINES}`);
   });
 
-  it("apply_edit rejects empty search via validation wrapper", async () => {
+  it("apply_edit rejects empty search with a actionable reason", async () => {
     const tools = createWorkspaceTools({ texFiles, hasSelection: false });
     const result = await tools.apply_edit.execute({
       file: "main.tex",
@@ -101,7 +101,28 @@ describe("workspace-tools", () => {
 
     expect(result).toEqual({
       kind: "client-action-rejected",
-      reason: "Edit could not be validated. Check file path, search text, and size limits.",
+      reason:
+        "Search text is empty or exceeds size limits. Retry with an exact unnumbered substring from get_file that appears once.",
+    });
+  });
+
+  it("apply_edit accepts search with legacy line-number prefixes from get_file", async () => {
+    const tools = createWorkspaceTools({ texFiles, hasSelection: false });
+    const result = await tools.apply_edit.execute({
+      file: "main.tex",
+      search: "2: \\usepackage{amsmath}",
+      replace: "\\usepackage{amsmath,amssymb}",
+    });
+
+    expect(result).toEqual({
+      kind: "client-action",
+      action: {
+        type: "apply_edit",
+        file: "main.tex",
+        search: "\\usepackage{amsmath}",
+        replace: "\\usepackage{amsmath,amssymb}",
+        label: "Applied edit to main.tex",
+      },
     });
   });
 });

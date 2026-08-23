@@ -116,10 +116,7 @@ export function readTexFile(
     notes.push(`Lines 1-${windowStart - 1} not shown.`);
   }
 
-  const content = lines
-    .slice(windowStart - 1, windowEnd)
-    .map((text, offset) => `${windowStart + offset}: ${text}`)
-    .join("\n");
+  const content = lines.slice(windowStart - 1, windowEnd).join("\n");
 
   return {
     path: normalized,
@@ -134,7 +131,7 @@ export function readTexFile(
 
 export const WORKSPACE_SYSTEM_PROMPT = `You have workspace tools to list, read, and edit the user's LaTeX project:
 - list_files — list all .tex file paths in the project
-- get_file — read a line range from one .tex file (startLine/endLine are 1-based inclusive; max ${GET_FILE_MAX_LINES} lines per call)
+- get_file — read a line range from one .tex file (content is raw file text; line numbers are in startLine/endLine/totalLines; max ${GET_FILE_MAX_LINES} lines per call)
 - apply_edit — surgical search/replace in a file (search must match exactly once)
 - fix_compile_errors — batch search/replace fixes for compile errors
 - insert_at_cursor — insert LaTeX at the user's cursor
@@ -147,7 +144,7 @@ Keep each edit under ${8_000} characters. Prefer minimal, surgical changes.
 If an edit is ambiguous (multiple matches, unclear target), ask the user instead of guessing.
 After applying edits, briefly explain what changed in your reply.`;
 
-export const COMPILE_FIX_WORKSPACE_SUFFIX = `Focus on fixing compile errors. Use get_file with small line ranges around cited error lines, then fix_compile_errors or apply_edit with exact search/replace from the returned content. Keep edits minimal.`;
+export const COMPILE_FIX_WORKSPACE_SUFFIX = `Focus on fixing compile errors. Use get_file with small line ranges around cited error lines, then fix_compile_errors or apply_edit with exact search/replace copied from the returned content (raw text, no line-number prefixes). Keep edits minimal. If an edit is rejected, retry with a different exact substring that appears once in the file.`;
 
 export function createWorkspaceTools(ctx: ValidateActionContext) {
   const wrap =
@@ -157,10 +154,10 @@ export function createWorkspaceTools(ctx: ValidateActionContext) {
         { type, ...args } as Parameters<typeof validateClientAction>[0],
         ctx
       );
-      if (!validated) {
+      if ("rejected" in validated) {
         return {
           kind: "client-action-rejected" as const,
-          reason: "Edit could not be validated. Check file path, search text, and size limits.",
+          reason: validated.reason,
         };
       }
       return {

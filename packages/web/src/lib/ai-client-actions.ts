@@ -101,6 +101,57 @@ export interface ValidatedAction {
   warning?: string;
 }
 
+export interface RejectedAction {
+  rejected: true;
+  reason: string;
+}
+
+export type ValidateClientActionResult = ValidatedAction | RejectedAction;
+
+/** Strip one leading `N: ` prefix per line (legacy get_file numbered output). */
+export function stripLineNumberPrefixes(text: string): string {
+  return text
+    .split("\n")
+    .map((line) => line.replace(/^\s*\d+:\s?/, ""))
+    .join("\n");
+}
+
+function resolveUniqueSearch(
+  content: string,
+  search: string
+): { search: string } | { ok: false; reason: string } {
+  const trimmed = search.trim();
+  if (!trimmed) {
+    return { ok: false, reason: "search text is empty" };
+  }
+
+  let occurrences = countOccurrences(content, trimmed);
+  if (occurrences === 1) {
+    return { search: trimmed };
+  }
+
+  if (occurrences === 0) {
+    const stripped = stripLineNumberPrefixes(trimmed);
+    if (stripped !== trimmed) {
+      occurrences = countOccurrences(content, stripped);
+      if (occurrences === 1) {
+        return { search: stripped };
+      }
+    }
+    return {
+      ok: false,
+      reason:
+        "search text not found in file. Retry with an exact unnumbered substring from get_file that appears once.",
+    };
+  }
+
+  return {
+    ok: false,
+    reason:
+      "search text is ambiguous (multiple matches). Retry with a longer exact substring that appears once.",
+  };
+}
+
 function validateFilePath(
   file: string,
   texFiles: Map<string, string>
@@ -115,26 +166,30 @@ function applySearchReplace(
   content: string,
   search: string,
   replace: string
-): { ok: true; content: string } | { ok: false; reason: string } {
-  const occurrences = countOccurrences(content, search);
-  if (occurrences === 0) {
-    return { ok: false, reason: "search text not found in file" };
+): { ok: true; content: string; search: string } | { ok: false; reason: string } {
+  const resolved = resolveUniqueSearch(content, search);
+  if ("ok" in resolved) {
+    return { ok: false, reason: resolved.reason };
   }
-  if (occurrences > 1) {
-    return { ok: false, reason: "search text is ambiguous (multiple matches)" };
-  }
-  return { ok: true, content: content.replace(search, replace) };
+  const { search: resolvedSearch } = resolved;
+  return {
+    ok: true,
+    content: content.replace(resolvedSearch, replace),
+    search: resolvedSearch,
+  };
 }
 
 /** Server-side validation before returning an action to the client. */
 export function validateClientAction(
   raw: RawAiClientAction,
   ctx: ValidateActionContext
-): ValidatedAction | null {
+): ValidateClientActionResult {
   switch (raw.type) {
     case "insert_at_cursor": {
       const text = capEditText(raw.text);
-      if (!text) return null;
+      if (!text) {
+        return { rejected: true, reason: "Insert text is empty or exceeds size limits." };
+      }
       return {
         action: {
           type: "insert_at_cursor",
@@ -145,7 +200,9 @@ export function validateClientAction(
     }
     case "replace_selection": {
       const text = capEditText(raw.text);
-      if (!text) return null;
+      if (!text) {
+        return { rejected: true, reason: "Replacement text is empty or exceeds size limits." };
+      }
       if (!ctx.hasSelection) {
         return {
           action: {
@@ -166,22 +223,37 @@ export function validateClientAction(
     }
     case "apply_edit": {
       const file = validateFilePath(raw.file, ctx.texFiles);
-      if (!file) return null;
+      if (!file) {
+        return {
+          rejected: true,
+          reason: "File path is invalid or not in this project. Use list_files to discover paths.",
+        };
+      }
       const replace = capEditText(raw.replace);
-      if (!replace) return null;
+      if (!replace) {
+        return { rejected: true, reason: "Replacement text is empty or exceeds size limits." };
+      }
 
       const searchTrimmed = raw.search?.trim() ?? "";
-      if (!searchTrimmed || searchTrimmed.length > MAX_CLIENT_EDIT_CHARS) return null;
+      if (!searchTrimmed || searchTrimmed.length > MAX_CLIENT_EDIT_CHARS) {
+        return {
+          rejected: true,
+          reason:
+            "Search text is empty or exceeds size limits. Retry with an exact unnumbered substring from get_file that appears once.",
+        };
+      }
 
       const content = ctx.texFiles.get(file) ?? "";
       const preview = applySearchReplace(content, searchTrimmed, replace);
-      if (!preview.ok) return null;
+      if (!preview.ok) {
+        return { rejected: true, reason: preview.reason };
+      }
 
       return {
         action: {
           type: "apply_edit",
           file,
-          search: searchTrimmed,
+          search: preview.search,
           replace,
           label: `Applied edit to ${file}`,
         },
@@ -189,17 +261,35 @@ export function validateClientAction(
     }
     case "fix_compile_errors": {
       const edits: FixCompileErrorsEdit[] = [];
+      const rejections: string[] = [];
       for (const edit of raw.edits ?? []) {
         const file = validateFilePath(edit.file, ctx.texFiles);
-        if (!file) continue;
+        if (!file) {
+          rejections.push(`invalid file "${edit.file}"`);
+          continue;
+        }
         const replace = capEditText(edit.replace);
-        if (!replace || !edit.search || edit.search.length > MAX_CLIENT_EDIT_CHARS) continue;
+        if (!replace || !edit.search || edit.search.length > MAX_CLIENT_EDIT_CHARS) {
+          rejections.push(`invalid edit for ${file}`);
+          continue;
+        }
         const content = ctx.texFiles.get(file) ?? "";
         const preview = applySearchReplace(content, edit.search, replace);
-        if (!preview.ok) continue;
-        edits.push({ file, search: edit.search, replace });
+        if (!preview.ok) {
+          rejections.push(`${file}: ${preview.reason}`);
+          continue;
+        }
+        edits.push({ file, search: preview.search, replace });
       }
-      if (edits.length === 0) return null;
+      if (edits.length === 0) {
+        return {
+          rejected: true,
+          reason:
+            rejections.length > 0
+              ? `No valid edits: ${rejections.join("; ")}`
+              : "No valid compile-error edits. Use get_file and retry with exact unnumbered substrings that appear once.",
+        };
+      }
       return {
         action: {
           type: "fix_compile_errors",
@@ -209,7 +299,7 @@ export function validateClientAction(
       };
     }
     default:
-      return null;
+      return { rejected: true, reason: "Unknown client action type." };
   }
 }
 

@@ -120,7 +120,8 @@ const WRITING_ACTION_PROMPTS: Record<string, string> = {
     "Fix the compile errors using get_file to read small line ranges, then fix_compile_errors or apply_edit with exact search/replace. Apply surgical LaTeX fixes, then explain what you changed.",
 };
 
-const COMPILE_FIX_MAX_STEPS = 8;
+const COMPILE_FIX_MAX_STEPS = 12;
+const CHAT_MAX_STEPS = 10;
 
 function getLastUserMessage(messages: ChatRequest["messages"]): string {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -169,7 +170,7 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
 
   if (compileFix && compileErrors.length > 0) {
     systemPrompt +=
-      "\n\nWhen fixing errors, call get_file for small line ranges around cited lines, then fix_compile_errors or apply_edit with exact search/replace from the returned content.";
+      "\n\nWhen fixing errors, call get_file for small line ranges around cited lines, then fix_compile_errors or apply_edit with exact search/replace copied from the returned content (raw text, no line-number prefixes). If an edit is rejected, retry with a different exact substring.";
   }
 
   if (data.action) {
@@ -346,7 +347,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       system: systemPrompt,
       messages,
       maxRetries: 0,
-      maxSteps: compileFixRequest ? COMPILE_FIX_MAX_STEPS : 8,
+      maxSteps: compileFixRequest ? COMPILE_FIX_MAX_STEPS : CHAT_MAX_STEPS,
       tools: compileFixRequest
         ? workspaceTools
         : { ...pluginTools, ...workspaceTools },
