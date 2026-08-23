@@ -33,6 +33,12 @@ describe("AI sidebar chat UX", () => {
     expect(src).toContain("setHasStreamProgress(true)");
   });
 
+  it("shows tool read chips separately from the assistant message bubble", () => {
+    const src = readSource("components/ai-sidebar.tsx");
+    expect(src).toContain("ToolReadChip");
+    expect(src).toContain("toolReads");
+  });
+
   it("defines chat enter and typing animations in globals.css", () => {
     const css = readSource("app/globals.css");
     expect(css).toContain(".ai-message-enter");

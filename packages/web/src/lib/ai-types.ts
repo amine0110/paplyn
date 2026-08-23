@@ -29,6 +29,11 @@ export interface AiAppliedAction {
   file?: string;
 }
 
+export interface AiToolRead {
+  label: string;
+  path: string;
+}
+
 export interface AiChatResponse {
   content: string;
   usedPlugins?: AiUsedPlugin[];
@@ -36,6 +41,8 @@ export interface AiChatResponse {
   /** Editor actions for the client to apply (collab-safe via existing save paths). */
   actions?: AiClientAction[];
   appliedActions?: AiAppliedAction[];
+  /** Small chips for get_file reads (not shown in the message bubble). */
+  toolReads?: AiToolRead[];
 }
 
 export interface LiteratureToolPayload {

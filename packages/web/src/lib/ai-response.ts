@@ -1,5 +1,11 @@
 import type { GenerateTextResult, ToolSet } from "ai";
-import type { AiAppliedAction, AiPaper, AiUsedPlugin, LiteratureToolPayload } from "@/lib/ai-types";
+import type {
+  AiAppliedAction,
+  AiPaper,
+  AiToolRead,
+  AiUsedPlugin,
+  LiteratureToolPayload,
+} from "@/lib/ai-types";
 import {
   isClientActionPayload,
   isClientActionRejectedPayload,
@@ -12,6 +18,10 @@ import { getPluginByToolName, pluginDisplayName } from "@/lib/ai-plugins";
 import type { AiPlugin } from "@/lib/ai-plugins/types";
 
 const LITERATURE_TOOL_NAME = "search_literature";
+const READ_ONLY_TOOL_NAMES = new Set(["get_file", "list_files"]);
+
+export const NO_EDIT_FALLBACK_MESSAGE =
+  "I looked through the project but didn't change any files. Try rephrasing your request or pointing me to the file and section.";
 
 /** Tool call/result shapes for reading generateText output without a concrete ToolSet. */
 type LooseToolCall = { toolName: string };
@@ -135,16 +145,22 @@ function stringifyToolResult(result: unknown): string | null {
   return null;
 }
 
-function collectToolResultSummaries(result: LooseGenerateTextResult): string[] {
+function collectToolResultSummaries(
+  result: LooseGenerateTextResult,
+  options?: { includeReadOnly?: boolean }
+): string[] {
+  const includeReadOnly = options?.includeReadOnly ?? true;
   const summaries: string[] = [];
 
   for (const toolResult of result.toolResults) {
+    if (!includeReadOnly && READ_ONLY_TOOL_NAMES.has(toolResult.toolName)) continue;
     const summary = summarizeToolResult(toolResult.toolName, toolResult.result);
     if (summary) summaries.push(summary);
   }
 
   for (const step of result.steps) {
     for (const toolResult of step.toolResults) {
+      if (!includeReadOnly && READ_ONLY_TOOL_NAMES.has(toolResult.toolName)) continue;
       const summary = summarizeToolResult(toolResult.toolName, toolResult.result);
       if (summary) summaries.push(summary);
     }
@@ -179,13 +195,80 @@ export function formatToolResultsAsAssistantMessage<TOOLS extends ToolSet>(
   result: GenerateTextResult<TOOLS, unknown>
 ): string | null {
   const loose = asLooseGenerateTextResult(result);
-  const summaries = collectToolResultSummaries(loose);
+  const summaries = collectToolResultSummaries(loose, { includeReadOnly: false });
   if (summaries.length === 0) return null;
 
   const literature = summaries.find((text) => text.includes("Found ") && text.includes("paper(s)"));
   if (literature) return literature;
 
   return summaries.join(". ");
+}
+
+export function formatAppliedActionsAsAssistantMessage(actions: AiClientAction[]): string | null {
+  const labels = actions.map((action) => action.label).filter((label) => label.trim().length > 0);
+  if (labels.length === 0) return null;
+  if (labels.length === 1) return labels[0]!;
+  return labels.join("; ");
+}
+
+export function collectToolReadChips<TOOLS extends ToolSet>(
+  result: GenerateTextResult<TOOLS, unknown>
+): AiToolRead[] {
+  const loose = asLooseGenerateTextResult(result);
+  const reads: AiToolRead[] = [];
+  const seen = new Set<string>();
+
+  for (const usage of collectToolUsages(loose)) {
+    if (usage.toolName !== "get_file" || !usage.toolResult) continue;
+    const summary = summarizeToolResult("get_file", usage.toolResult);
+    if (!summary || seen.has(summary)) continue;
+    seen.add(summary);
+    const path = isReadTexFileResult(usage.toolResult) ? usage.toolResult.path : "file";
+    reads.push({ label: summary, path });
+  }
+
+  return reads;
+}
+
+export function hadReadOnlyToolActivity<TOOLS extends ToolSet>(
+  result: GenerateTextResult<TOOLS, unknown>
+): boolean {
+  const loose = asLooseGenerateTextResult(result);
+  const names = READ_ONLY_TOOL_NAMES;
+  if (loose.toolCalls.some((call) => names.has(call.toolName))) return true;
+  if (loose.toolResults.some((tr) => names.has(tr.toolName))) return true;
+  return loose.steps.some(
+    (step) =>
+      step.toolCalls.some((call) => names.has(call.toolName)) ||
+      step.toolResults.some((tr) => names.has(tr.toolName))
+  );
+}
+
+export function resolveEmptyAssistantFallback<TOOLS extends ToolSet>(options: {
+  result: GenerateTextResult<TOOLS, unknown>;
+  actions: AiClientAction[];
+}): string {
+  const { result, actions } = options;
+
+  if (!hadToolActivity(result)) {
+    return "I couldn't generate a response. Please try again.";
+  }
+
+  const appliedSummary = formatAppliedActionsAsAssistantMessage(actions);
+  if (appliedSummary) return appliedSummary;
+
+  const fallback = formatToolResultsAsAssistantMessage(result);
+  if (fallback) return fallback;
+
+  if (usedClientEditTools(result)) {
+    return "I applied the suggested edits. Recompile to check whether the errors are resolved.";
+  }
+
+  if (hadReadOnlyToolActivity(result)) {
+    return NO_EDIT_FALLBACK_MESSAGE;
+  }
+
+  return "I searched but couldn't format the results. Please try asking again.";
 }
 
 export function hadToolActivity<TOOLS extends ToolSet>(

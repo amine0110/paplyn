@@ -8,7 +8,7 @@ import { extractInsertableContent, hasInsertableContent } from "@/lib/ai-insert-
 import { detectFixCompileIntent } from "@/lib/ai-compile-fix-intent";
 import type { AiCompileError } from "@/lib/ai-compile-fix-context";
 import { AiMarkdown } from "@/components/ai-markdown";
-import type { AiAppliedAction, AiClientAction, AiPaper, AiUsedPlugin } from "@/lib/ai-types";
+import type { AiAppliedAction, AiClientAction, AiPaper, AiToolRead, AiUsedPlugin } from "@/lib/ai-types";
 import { loadingLabelForAction } from "@/lib/ai-plugins/client-meta";
 import { applyAiClientActions, type ApplyAiActionsContext } from "@/lib/apply-ai-client-actions";
 import { consumeAiStream } from "@/lib/ai-stream";
@@ -27,6 +27,7 @@ interface Message {
   usedPlugins?: AiUsedPlugin[];
   papers?: AiPaper[];
   appliedActions?: AiAppliedAction[];
+  toolReads?: AiToolRead[];
 }
 
 export interface AiPendingRequest {
@@ -81,6 +82,14 @@ function AppliedActionChip({ action }: { action: AiAppliedAction }) {
   return (
     <span className="inline-flex max-w-full items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-800 dark:text-emerald-200 truncate">
       {action.label}
+    </span>
+  );
+}
+
+function ToolReadChip({ read }: { read: AiToolRead }) {
+  return (
+    <span className="inline-flex max-w-full items-center rounded-full border border-border/60 bg-canvas-dark/40 px-2 py-0.5 text-[10px] font-medium text-ink-faint truncate">
+      {read.label}
     </span>
   );
 }
@@ -309,6 +318,7 @@ export function AiSidebar({
 
       const usedPlugins = Array.isArray(data.usedPlugins) ? (data.usedPlugins as AiUsedPlugin[]) : undefined;
       const papers = Array.isArray(data.papers) ? (data.papers as AiPaper[]) : undefined;
+      const toolReads = Array.isArray(data.toolReads) ? (data.toolReads as AiToolRead[]) : undefined;
       const actions = Array.isArray(data.actions) ? (data.actions as AiClientAction[]) : [];
 
       let appliedActions: AiAppliedAction[] | undefined;
@@ -329,6 +339,7 @@ export function AiSidebar({
           ...(usedPlugins?.length ? { usedPlugins } : {}),
           ...(papers?.length ? { papers } : {}),
           ...(appliedActions?.length ? { appliedActions } : {}),
+          ...(toolReads?.length ? { toolReads } : {}),
         },
       ]);
     } catch (error) {
@@ -486,10 +497,14 @@ export function AiSidebar({
             >
               {msg.role === "assistant" &&
                 ((msg.usedPlugins && msg.usedPlugins.length > 0) ||
-                  (msg.appliedActions && msg.appliedActions.length > 0)) && (
+                  (msg.appliedActions && msg.appliedActions.length > 0) ||
+                  (msg.toolReads && msg.toolReads.length > 0)) && (
                   <div className="mb-1.5 flex flex-wrap gap-1">
                     {msg.usedPlugins?.map((plugin) => (
                       <PluginChip key={`${plugin.id}-${plugin.source ?? "default"}`} plugin={plugin} />
+                    ))}
+                    {msg.toolReads?.map((read, idx) => (
+                      <ToolReadChip key={`${read.path}-${idx}`} read={read} />
                     ))}
                     {msg.appliedActions?.map((action, idx) => (
                       <AppliedActionChip key={`${action.type}-${idx}`} action={action} />
