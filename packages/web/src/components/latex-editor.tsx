@@ -141,7 +141,7 @@ export function LatexEditor({
           saveStatusTracker?.onConnectionRestored();
         }
       });
-      provider.on("synced", (synced: boolean) => {
+      provider.on("sync", (synced: boolean) => {
         if (synced && viewRef.current) {
           enableEditingAfterSync(viewRef.current);
         }
