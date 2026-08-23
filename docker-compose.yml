@@ -67,6 +67,7 @@ services:
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NEXT_PUBLIC_COLLAB_URL: ${NEXT_PUBLIC_COLLAB_URL:-ws://localhost:1234}
       COLLAB_URL: ${COLLAB_URL:-ws://localhost:1234}
+      COLLAB_HTTP_URL: ${COLLAB_HTTP_URL:-http://collab:1234}
       NEXT_PUBLIC_DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-selfhosted}
       DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-selfhosted}
       COMPILER_URL: http://compiler:3001
