@@ -330,6 +330,11 @@ describe("ai-response helpers", () => {
     expect(WORKSPACE_SYSTEM_PROMPT).toContain("change requests get edits");
     expect(WORKSPACE_SYSTEM_PROMPT).toContain("apply_edit or replace_lines");
     expect(WORKSPACE_SYSTEM_PROMPT).toContain("Do not spend the whole turn reading overlapping get_file");
+    expect(WORKSPACE_SYSTEM_PROMPT).toContain("Add vs fill intent");
+    expect(WORKSPACE_SYSTEM_PROMPT).toContain("overwrite the existing value IN PLACE");
+    expect(WORKSPACE_SYSTEM_PROMPT).toContain("Do not duplicate");
     expect(WORKSPACE_CHAT_SUFFIX).toContain("apply_edit or replace_lines");
+    expect(WORKSPACE_CHAT_SUFFIX).toContain("add (insert new) from fill/replace");
+    expect(WORKSPACE_CHAT_SUFFIX).toContain("never stack a new line next to an unreplaced old value");
   });
 });

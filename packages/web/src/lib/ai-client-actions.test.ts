@@ -250,4 +250,50 @@ describe("ai-client-actions", () => {
     );
     expect("action" in result && result.action.type).toBe("replace_lines");
   });
+
+  it("rejects replace_lines that stacks a new macro below an unchanged duplicate line", () => {
+    const content = [
+      "\\textit{University} \\\\",
+      "",
+      "\\textit{University} \\\\",
+    ].join("\n");
+
+    const result = validateClientAction(
+      {
+        type: "replace_lines",
+        file: "main.tex",
+        startLine: 2,
+        endLine: 2,
+        replace: "\\textit{UMONS} \\\\",
+      },
+      { texFiles: new Map([["main.tex", content]]), hasSelection: false }
+    );
+
+    expect("rejected" in result && result.rejected).toBe(true);
+    if ("rejected" in result && result.rejected) {
+      expect(result.reason).toContain("stack");
+      expect(result.reason).toContain("in place");
+    }
+  });
+
+  it("accepts replace_lines that overwrites the line with the old value in place", () => {
+    const content = [
+      "\\textit{University} \\\\",
+      "",
+      "\\textit{University} \\\\",
+    ].join("\n");
+
+    const result = validateClientAction(
+      {
+        type: "replace_lines",
+        file: "main.tex",
+        startLine: 1,
+        endLine: 1,
+        replace: "\\textit{UMONS} \\\\",
+      },
+      { texFiles: new Map([["main.tex", content]]), hasSelection: false }
+    );
+
+    expect("action" in result && result.action.type).toBe("replace_lines");
+  });
 });

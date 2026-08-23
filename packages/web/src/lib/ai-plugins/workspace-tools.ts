@@ -196,6 +196,12 @@ export const WORKSPACE_SYSTEM_PROMPT = `You are a workspace agent for this LaTeX
 - replace_selection — replace the user's editor selection
 
 When the user states a fact about the paper or asks you to change something (affiliation, university, institution, author, title, abstract, adding/removing/rewording text, etc.), you MUST apply the change with apply_edit or replace_lines after locating the relevant span. Answer questions in prose; change requests get edits — do not only describe changes.
+
+Add vs fill intent (every field, every paper):
+- ADD / insert / append something new → insert a new line or span where it belongs.
+- FILL / replace / update / change, or the user states a fact about existing content ("the X is Y", "set X to Y", typos included) → overwrite the existing value IN PLACE. Replace the line or unique substring that already holds the old value. Do not duplicate. Do not leave the old value on the line above or beside the new one.
+- apply_edit when the search matches once. If rejected for multiple matches, use replace_lines on the specific line that contains the old value — not on a blank or following line.
+
 Do not spend the whole turn reading overlapping get_file windows of the same file. Read one useful window, then edit. If the field is not in that window, read a different range once — then edit or say you could not find it.
 
 Workflow: use list_files to discover paths, get_file to read small line windows, then replace_lines (when errors cite a line), apply_edit, or fix_compile_errors to make changes.
@@ -207,7 +213,7 @@ If apply_edit is rejected (0 or multiple matches), use replace_lines for the cit
 After applying edits, reply with a short human sentence about what changed. Never put raw tool logs in your reply.`;
 
 /** Extra guidance for general chat (non compile-fix) turns. */
-export const WORKSPACE_CHAT_SUFFIX = `Treat user messages that state or request a change to the paper as edit requests: locate the field in the project .tex files, apply_edit or replace_lines, then confirm briefly in your reply.`;
+export const WORKSPACE_CHAT_SUFFIX = `Treat user messages that state or request a change to the paper as edit requests: locate the field in the project .tex files, apply_edit or replace_lines, then confirm briefly in your reply. Distinguish add (insert new) from fill/replace (overwrite the existing value in place — never stack a new line next to an unreplaced old value).`;
 
 export const COMPILE_FIX_WORKSPACE_SUFFIX = `Focus on fixing compile errors in the FIRST document copy only (from the first \\\\documentclass through the first \\\\end{document}). pdflatex stops at the first \\\\end{document} — ignore duplicate templates pasted after it.
 
@@ -449,7 +455,7 @@ export function createWorkspaceTools(
     }),
     apply_edit: tool({
       description:
-        "Apply a surgical search/replace edit to a named .tex file. The search string must match exactly once. If rejected, use replace_lines when errors cite a line number.",
+        "Apply a surgical search/replace edit to a named .tex file. The search string must match exactly once. For fill/replace intent, search the existing value and replace it in place — do not leave the old text and add a duplicate nearby. If rejected (0 or multiple matches), use replace_lines on the line that holds the old value, not a blank or following line.",
       parameters: z.object({
         file: z.string().describe("Project .tex file path, e.g. main.tex"),
         search: z.string().describe("Exact substring to replace"),
@@ -459,7 +465,7 @@ export function createWorkspaceTools(
     }),
     replace_lines: tool({
       description:
-        "Replace a 1-based inclusive line range in a .tex file without unique substring search. Use when compile errors cite a line number or apply_edit is ambiguous.",
+        "Replace a 1-based inclusive line range in a .tex file without unique substring search. For fill/replace intent, target the line that already holds the old value and overwrite it — do not write the new value on the next line and leave the old one. Use when compile errors cite a line number or apply_edit is ambiguous (replace the specific matching line, not a sibling).",
       parameters: z.object({
         file: z.string().describe("Project .tex file path, e.g. main.tex"),
         startLine: z

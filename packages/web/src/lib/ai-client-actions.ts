@@ -1,5 +1,6 @@
 /** Client-side editor actions returned by the AI assistant API. */
 
+import { validateNoSiblingCommandStacking } from "@/lib/ai-edit-guards";
 import { validateCompileFixEdit } from "@/lib/ai-compile-fix-validation";
 
 export const MAX_CLIENT_EDIT_CHARS = 8_000;
@@ -335,6 +336,15 @@ function rejectCompileFixEdit(
   return { rejected: true, reason: check.reason };
 }
 
+function rejectSiblingCommandStacking(
+  content: string,
+  previewContent: string
+): RejectedAction | null {
+  const check = validateNoSiblingCommandStacking(content, previewContent);
+  if (check.ok) return null;
+  return { rejected: true, reason: check.reason };
+}
+
 function applySearchReplace(
   content: string,
   search: string,
@@ -511,6 +521,9 @@ export function validateClientAction(
         return preview;
       }
 
+      const stackingReject = rejectSiblingCommandStacking(content, preview.content);
+      if (stackingReject) return stackingReject;
+
       if (ctx.compileFix) {
         const compileFixReject = rejectCompileFixEdit(content, replace, preview.content);
         if (compileFixReject) return compileFixReject;
@@ -544,6 +557,9 @@ export function validateClientAction(
       if (!preview.ok) {
         return { rejected: true, reason: preview.reason };
       }
+
+      const stackingReject = rejectSiblingCommandStacking(content, preview.content);
+      if (stackingReject) return stackingReject;
 
       if (ctx.compileFix) {
         const compileFixReject = rejectCompileFixEdit(
@@ -585,6 +601,11 @@ export function validateClientAction(
         const preview = applySearchReplace(content, edit.search, replace);
         if ("rejected" in preview) {
           rejections.push(`${file}: ${preview.reason}`);
+          continue;
+        }
+        const stackingReject = rejectSiblingCommandStacking(content, preview.content);
+        if (stackingReject) {
+          rejections.push(`${file}: ${stackingReject.reason}`);
           continue;
         }
         if (ctx.compileFix) {

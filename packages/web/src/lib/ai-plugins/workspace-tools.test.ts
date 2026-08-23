@@ -360,4 +360,26 @@ describe("workspace-tools", () => {
       expect(result.reason).toContain("\\begin{document}");
     }
   });
+
+  it("rejects replace_lines that stack a value below an unchanged duplicate macro line", async () => {
+    const content = [
+      "\\textit{University} \\\\",
+      "",
+      "\\textit{University} \\\\",
+    ].join("\n");
+    const files = new Map([["main.tex", content]]);
+    const tools = createWorkspaceTools({ texFiles: files, hasSelection: false });
+
+    const result = await tools.replace_lines.execute({
+      file: "main.tex",
+      startLine: 2,
+      endLine: 2,
+      replace: "\\textit{UMONS} \\\\",
+    });
+
+    expect(result.kind).toBe("client-action-rejected");
+    if (result.kind === "client-action-rejected") {
+      expect(result.reason).toContain("in place");
+    }
+  });
 });
