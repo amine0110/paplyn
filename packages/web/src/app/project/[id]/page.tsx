@@ -42,7 +42,9 @@ import {
   CHROME_ICON_BTN_MD,
   CHROME_ICON_BTN_SM,
   CHROME_MENU_ITEM,
+  CHROME_TOOLBAR_BTN,
 } from "@/lib/chrome-interactive";
+import { cn } from "@/components/ui/cn";
 import { useMediaQuery } from "@/lib/use-media-query";
 import {
   Play,
@@ -742,36 +744,33 @@ export default function ProjectPage() {
             <span className="hidden sm:inline">Proof</span>
           </Button>
           {canEdit && (
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
+              type="button"
               onClick={() => setShowHistory(true)}
-              className="hidden sm:inline-flex"
+              className={cn(CHROME_TOOLBAR_BTN, "hidden sm:inline-flex h-8 px-3")}
             >
               <History className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">History</span>
-            </Button>
+            </button>
           )}
           {canEdit && (
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
+              type="button"
               onClick={() => setShowSettings(true)}
-              className="hidden sm:inline-flex"
+              className={cn(CHROME_TOOLBAR_BTN, "hidden sm:inline-flex h-8 px-3")}
             >
               <Settings className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Settings</span>
-            </Button>
+            </button>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
+          <button
+            type="button"
             onClick={() => setShowShare(true)}
-            className="hidden sm:inline-flex"
+            className={cn(CHROME_TOOLBAR_BTN, "hidden sm:inline-flex h-8 px-3")}
           >
             <Share2 className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Share</span>
-          </Button>
+          </button>
           <div className="relative sm:hidden">
             <Button
               variant="ghost"
@@ -953,7 +952,7 @@ export default function ProjectPage() {
 
         {!showAi && <AiAssistantFab onClick={() => setShowAi(true)} />}
 
-        {isTextEditorFile && !showAi && (
+        {isTextEditorFile && (
           <SelectionAiBubble editorView={editorView} onAction={handleSelectionAiAction} />
         )}
       </div>

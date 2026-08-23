@@ -10,6 +10,8 @@ import {
   readStoredSpellcheckEnabled,
 } from "@/lib/editor-preferences";
 import { setSpellcheckEnabled } from "@/lib/latex-spellcheck";
+import { CHROME_TOOLBAR_BTN } from "@/lib/chrome-interactive";
+import { cn } from "@/components/ui/cn";
 import { ArrowDownToLine, Search, SpellCheck } from "lucide-react";
 
 interface EditorToolbarProps {
@@ -75,30 +77,30 @@ export function EditorToolbar({ editorView, onGoToLine }: EditorToolbarProps) {
 
   return (
     <div className="flex items-center gap-1.5 px-3 py-1 border-b border-border-light bg-paper shrink-0">
-      <Button
+      <button
         type="button"
-        variant="ghost"
-        size="sm"
-        className="h-7 px-2 text-xs"
+        className={cn(CHROME_TOOLBAR_BTN, "h-7")}
         onClick={openSearch}
         disabled={!editorView}
         title="Find and replace (Ctrl+F)"
       >
         <Search className="h-3.5 w-3.5" />
         <span className="hidden sm:inline">Find</span>
-      </Button>
-      <Button
+      </button>
+      <button
         type="button"
-        variant={showGoToLine ? "secondary" : "ghost"}
-        size="sm"
-        className="h-7 px-2 text-xs"
+        className={cn(
+          CHROME_TOOLBAR_BTN,
+          "h-7",
+          showGoToLine && "bg-canvas-dark border border-border text-ink"
+        )}
         onClick={() => setShowGoToLine((open) => !open)}
         disabled={!editorView}
         title="Go to line (Ctrl+G)"
       >
         <ArrowDownToLine className="h-3.5 w-3.5" />
         <span className="hidden sm:inline">Go to line</span>
-      </Button>
+      </button>
 
       {showGoToLine && (
         <form onSubmit={submitGoToLine} className="flex items-center gap-1.5 ml-1">
@@ -118,11 +120,13 @@ export function EditorToolbar({ editorView, onGoToLine }: EditorToolbarProps) {
         </form>
       )}
 
-      <Button
+      <button
         type="button"
-        variant={spellcheckEnabled ? "secondary" : "ghost"}
-        size="sm"
-        className="h-7 px-2 text-xs"
+        className={cn(
+          CHROME_TOOLBAR_BTN,
+          "h-7",
+          spellcheckEnabled && "bg-canvas-dark border border-border text-ink"
+        )}
         onClick={toggleSpellcheck}
         disabled={!editorView}
         title="Toggle spellcheck"
@@ -130,7 +134,7 @@ export function EditorToolbar({ editorView, onGoToLine }: EditorToolbarProps) {
       >
         <SpellCheck className="h-3.5 w-3.5" />
         <span className="hidden sm:inline">Spellcheck</span>
-      </Button>
+      </button>
 
       <span className="ml-auto hidden md:inline text-[11px] text-ink-faint font-mono">
         Ctrl+F search · Ctrl+G line

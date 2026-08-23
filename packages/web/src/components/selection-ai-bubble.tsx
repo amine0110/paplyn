@@ -50,7 +50,7 @@ function getSelectionText(view: EditorView): string {
   return view.state.sliceDoc(from, to).trim();
 }
 
-function getBubblePosition(view: EditorView): BubblePosition | null {
+export function getBubblePosition(view: EditorView): BubblePosition | null {
   const { from, to } = view.state.selection.main;
   if (from === to) return null;
 
@@ -99,18 +99,22 @@ export function SelectionAiBubble({ editorView, onAction, className }: Selection
 
     syncFromEditor();
 
-    const onSelectionChange = () => syncFromEditor();
-    const onScroll = () => syncFromEditor();
+    const onSelectionChange = () => {
+      requestAnimationFrame(syncFromEditor);
+    };
+    const onScroll = () => requestAnimationFrame(syncFromEditor);
     const onResize = () => syncFromEditor();
 
     editorView.dom.addEventListener("mouseup", onSelectionChange);
     editorView.dom.addEventListener("keyup", onSelectionChange);
+    document.addEventListener("selectionchange", onSelectionChange);
     editorView.scrollDOM.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onResize);
 
     return () => {
       editorView.dom.removeEventListener("mouseup", onSelectionChange);
       editorView.dom.removeEventListener("keyup", onSelectionChange);
+      document.removeEventListener("selectionchange", onSelectionChange);
       editorView.scrollDOM.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onResize);
     };
@@ -149,7 +153,7 @@ export function SelectionAiBubble({ editorView, onAction, className }: Selection
       role="toolbar"
       aria-label="AI actions for selection"
       className={cn(
-        "fixed z-50 flex max-w-[min(100vw-1rem,28rem)] flex-wrap items-center justify-center gap-0.5 rounded-2xl border border-border bg-paper/95 px-1 py-1 shadow-lg backdrop-blur-sm sm:max-w-none sm:flex-nowrap sm:rounded-full",
+        "fixed z-[60] flex max-w-[min(100vw-1rem,28rem)] flex-wrap items-center justify-center gap-0.5 rounded-2xl border border-border bg-paper/95 px-1 py-1 shadow-lg backdrop-blur-sm sm:max-w-none sm:flex-nowrap sm:rounded-full",
         className
       )}
       style={{
