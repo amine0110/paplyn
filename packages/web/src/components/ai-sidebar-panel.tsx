@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/components/ui/cn";
+import { computeAiSidebarDragWidth } from "@/lib/ai-sidebar-resize";
 import {
   AI_SIDEBAR_WIDTH_DEFAULT,
-  clampAiSidebarWidth,
   persistAiSidebarWidth,
   readAiSidebarWidth,
 } from "@/lib/ui-preferences";
@@ -16,18 +16,25 @@ interface AiSidebarPanelProps {
 
 export function AiSidebarPanel({ children, className }: AiSidebarPanelProps) {
   const [width, setWidth] = useState(AI_SIDEBAR_WIDTH_DEFAULT);
+  const widthRef = useRef(AI_SIDEBAR_WIDTH_DEFAULT);
   const draggingRef = useRef(false);
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
 
   useEffect(() => {
-    setWidth(readAiSidebarWidth());
+    const stored = readAiSidebarWidth();
+    widthRef.current = stored;
+    setWidth(stored);
   }, []);
 
   const onPointerMove = useCallback((event: PointerEvent) => {
     if (!draggingRef.current) return;
-    const delta = startXRef.current - event.clientX;
-    const next = clampAiSidebarWidth(startWidthRef.current + delta);
+    const next = computeAiSidebarDragWidth(
+      startXRef.current,
+      event.clientX,
+      startWidthRef.current
+    );
+    widthRef.current = next;
     setWidth(next);
   }, []);
 
@@ -36,16 +43,16 @@ export function AiSidebarPanel({ children, className }: AiSidebarPanelProps) {
     draggingRef.current = false;
     document.body.style.removeProperty("user-select");
     document.body.style.removeProperty("cursor");
-    persistAiSidebarWidth(width);
+    persistAiSidebarWidth(widthRef.current);
     window.removeEventListener("pointermove", onPointerMove);
     window.removeEventListener("pointerup", endDrag);
-  }, [onPointerMove, width]);
+  }, [onPointerMove]);
 
   const onResizePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
     draggingRef.current = true;
     startXRef.current = event.clientX;
-    startWidthRef.current = width;
+    startWidthRef.current = widthRef.current;
     document.body.style.userSelect = "none";
     document.body.style.cursor = "col-resize";
     window.addEventListener("pointermove", onPointerMove);
@@ -54,6 +61,10 @@ export function AiSidebarPanel({ children, className }: AiSidebarPanelProps) {
 
   useEffect(() => {
     return () => {
+      if (draggingRef.current) {
+        document.body.style.removeProperty("user-select");
+        document.body.style.removeProperty("cursor");
+      }
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", endDrag);
     };

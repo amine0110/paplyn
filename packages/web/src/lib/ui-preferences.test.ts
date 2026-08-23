@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   applyThemeClass,
   readStoredTheme,
@@ -23,6 +23,8 @@ import {
   AI_SIDEBAR_WIDTH_MAX,
   AI_SIDEBAR_WIDTH_MIN,
   clampAiSidebarWidth,
+  persistAiSidebarWidth,
+  readAiSidebarWidth,
 } from "@/lib/ui-preferences";
 
 describe("theme", () => {
@@ -109,5 +111,28 @@ describe("ui-preferences ai sidebar width", () => {
     expect(clampAiSidebarWidth(380)).toBe(380);
     expect(clampAiSidebarWidth(700)).toBe(AI_SIDEBAR_WIDTH_MAX);
     expect(clampAiSidebarWidth(560)).toBe(560);
+  });
+
+  it("persists and reads the clamped sidebar width", () => {
+    const storage = new Map<string, string>();
+    const localStorage = {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        storage.set(key, value);
+      },
+    };
+
+    vi.stubGlobal("window", { localStorage });
+    vi.stubGlobal("localStorage", localStorage);
+
+    persistAiSidebarWidth(431);
+    expect(storage.get(AI_SIDEBAR_WIDTH_KEY)).toBe("431");
+    expect(readAiSidebarWidth()).toBe(431);
+
+    persistAiSidebarWidth(700);
+    expect(storage.get(AI_SIDEBAR_WIDTH_KEY)).toBe(String(AI_SIDEBAR_WIDTH_MAX));
+    expect(readAiSidebarWidth()).toBe(AI_SIDEBAR_WIDTH_MAX);
+
+    vi.unstubAllGlobals();
   });
 });
