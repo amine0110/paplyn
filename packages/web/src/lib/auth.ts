@@ -3,7 +3,10 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "./db";
 import * as schema from "./schema";
 import { config } from "./config";
-import { getSelfHostedTrustedOrigins } from "./urls";
+import { getSelfHostedTrustedOrigins, getServerAppUrl } from "./urls";
+import { sendPlicumEmail } from "./email/send";
+import { renderResetPasswordEmail } from "./email/templates";
+import { PRODUCT_NAME } from "./product";
 import { eq, count } from "drizzle-orm";
 
 export const auth = betterAuth({
@@ -19,6 +22,15 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 8,
+    sendResetPassword: async ({ user, url }) => {
+      const { subject, html, text } = renderResetPasswordEmail({
+        productName: PRODUCT_NAME,
+        userName: user.name,
+        resetUrl: url,
+        appUrl: getServerAppUrl(),
+      });
+      void sendPlicumEmail({ to: user.email, subject, html, text });
+    },
   },
   user: {
     additionalFields: {

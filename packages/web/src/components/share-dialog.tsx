@@ -61,6 +61,7 @@ export function ShareDialog({
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
   const [copied, setCopied] = useState<"project" | "invite" | null>(null);
+  const [inviteNotice, setInviteNotice] = useState<"sent" | "not-sent" | null>(null);
   const [error, setError] = useState("");
 
   const appOrigin = typeof window !== "undefined" ? window.location.origin : "";
@@ -112,7 +113,9 @@ export function ShareDialog({
 
     setCreating(true);
     setError("");
+    setInviteNotice(null);
 
+    const hadEmail = Boolean(shareEmail.trim());
     const body = shareEmail.trim()
       ? { email: shareEmail.trim(), role: shareRole }
       : { role: shareRole, linkOnly: true };
@@ -136,7 +139,12 @@ export function ShareDialog({
     setInviteLink(link);
     setInvites((prev) => [{ id: invite.id, email: invite.email, role: invite.role, link }, ...prev]);
     setShareEmail("");
-    await copyInviteLink(link);
+
+    if (hadEmail) {
+      setInviteNotice(invite.emailSent ? "sent" : "not-sent");
+    } else {
+      await copyInviteLink(link);
+    }
   }
 
   async function removeMember(memberId: string) {
@@ -241,9 +249,17 @@ export function ShareDialog({
                     placeholder={PRODUCT.emails.invitePlaceholder}
                   />
                   <p className="text-xs text-ink-faint">
-                    Leave blank to copy a link-only invite. Email invites are recorded for existing accounts.
+                    We&rsquo;ll email an invite link. Leave blank to copy a link-only invite instead.
                   </p>
                 </div>
+                {inviteNotice && (
+                  <p
+                    className={`text-sm ${inviteNotice === "sent" ? "text-accent" : "text-ink-muted"}`}
+                    role="status"
+                  >
+                    {inviteNotice === "sent" ? "Invite email sent." : "Invite created; email not sent."}
+                  </p>
+                )}
                 {inviteLink && (
                   <div className="flex gap-2">
                     <Input readOnly value={inviteLink} className="font-mono text-xs" />
@@ -254,7 +270,7 @@ export function ShareDialog({
                 )}
                 <Button type="submit" disabled={creating} className="w-full sm:w-auto">
                   <Link2 className="h-3.5 w-3.5" />
-                  {creating ? "Creating…" : shareEmail.trim() ? "Create invite" : "Copy invite link"}
+                  {creating ? "Creating…" : shareEmail.trim() ? "Send invite" : "Copy invite link"}
                 </Button>
               </form>
             </section>
