@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
-import * as Y from "yjs";
 import postgres from "postgres";
+import Y, { type Doc } from "./yjs.js";
 import { seedRoomFromProjectFiles } from "./room-seed.js";
 import { COLLAB_INTERNAL_PATHS, isYTextLike } from "./y-text.js";
 
@@ -14,12 +14,12 @@ export const PERSIST_ACK_FIELD = "persistedAt";
 export const PERSIST_ACK_ORIGIN = "persist-ack";
 
 /** Encode a Yjs document as a binary update suitable for storage. */
-export function encodeDocState(doc: Y.Doc): Uint8Array {
+export function encodeDocState(doc: Doc): Uint8Array {
   return Y.encodeStateAsUpdate(doc);
 }
 
 /** Restore a Yjs document from a stored binary update. */
-export function applyDocState(doc: Y.Doc, state: Uint8Array): void {
+export function applyDocState(doc: Doc, state: Uint8Array): void {
   Y.applyUpdate(doc, state);
 }
 
@@ -34,7 +34,7 @@ export function encodeStoredState(state: Uint8Array): string {
 }
 
 /** True when the document has no shared types with content. */
-export function isDocEmpty(doc: Y.Doc): boolean {
+export function isDocEmpty(doc: Doc): boolean {
   return doc.store.clients.size === 0;
 }
 
@@ -91,7 +91,7 @@ export function isSyncableTextPath(path: string): boolean {
 }
 
 /** Extract text file paths and contents from all Y.Text shared types in a room doc. */
-export function getTextFilesFromDoc(doc: Y.Doc): Array<{ path: string; content: string }> {
+export function getTextFilesFromDoc(doc: Doc): Array<{ path: string; content: string }> {
   const files: Array<{ path: string; content: string }> = [];
   doc.share.forEach((sharedType, path) => {
     if (COLLAB_INTERNAL_PATHS.has(path)) return;
@@ -103,7 +103,7 @@ export function getTextFilesFromDoc(doc: Y.Doc): Array<{ path: string; content: 
 
 /** Paths in the doc that should sync into HTTP `project_file`. */
 export function getSyncableTextPathsFromDoc(
-  doc: Y.Doc,
+  doc: Doc,
   binaryPathsInDb: Set<string> = new Set()
 ): string[] {
   const paths: string[] = [];
@@ -129,6 +129,19 @@ export class PersistExtractError extends Error {
   }
 }
 
+export class PersistEmptyWipeError extends Error {
+  constructor(
+    readonly path: string,
+    readonly roomTextLength: number,
+    readonly existingHttpLength: number
+  ) {
+    super(
+      `[collab] refuse empty HTTP upsert for ${path}: room Y.Text length=${roomTextLength}, existing project_file length=${existingHttpLength}`
+    );
+    this.name = "PersistEmptyWipeError";
+  }
+}
+
 export type SyncProjectFilesResult = {
   extractedCount: number;
   syncableCount: number;
@@ -151,7 +164,7 @@ export function filterSyncableTextFiles(
  * Guards the persist-ack path against silent 0-file writes (e.g. dual Yjs instanceof bugs).
  */
 export function assertSyncableFilesExtracted(
-  doc: Y.Doc,
+  doc: Doc,
   extracted: Array<{ path: string; content: string }>,
   binaryPathsInDb: Set<string>
 ): void {
@@ -159,6 +172,33 @@ export function assertSyncableFilesExtracted(
   const syncable = filterSyncableTextFiles(extracted, binaryPathsInDb);
   if (expectedPaths.length > 0 && syncable.length === 0) {
     throw new PersistExtractError(expectedPaths.length, extracted.length);
+  }
+}
+
+/** Y.Text character length in the room doc, or 0 when missing / not text-like. */
+export function getRoomTextLength(doc: Doc, filePath: string): number {
+  const shared = doc.get(filePath, Y.Text);
+  if (!isYTextLike(shared)) return 0;
+  return shared.length;
+}
+
+/**
+ * Block HTTP upserts that would wipe non-empty room or project_file content with "".
+ * Duck-type extraction can return length-0 strings while Y.Text still holds content.
+ */
+export function assertNoEmptyWipeUpserts(
+  doc: Doc,
+  files: Array<{ path: string; content: string }>,
+  existingByPath: Map<string, string>
+): void {
+  for (const file of files) {
+    if (file.content.length > 0) continue;
+
+    const roomTextLength = getRoomTextLength(doc, file.path);
+    const existingHttpLength = existingByPath.get(file.path)?.length ?? 0;
+    if (roomTextLength > 0 || existingHttpLength > 0) {
+      throw new PersistEmptyWipeError(file.path, roomTextLength, existingHttpLength);
+    }
   }
 }
 
@@ -170,16 +210,30 @@ async function loadBinaryProjectPaths(sql: postgres.Sql, projectId: string): Pro
   return new Set(rows.map((row) => row.path));
 }
 
+async function loadTextProjectFileContents(
+  sql: postgres.Sql,
+  projectId: string
+): Promise<Map<string, string>> {
+  const rows = await sql<{ path: string; content: string }[]>`
+    SELECT path, content FROM project_file
+    WHERE project_id = ${projectId} AND is_binary = false
+  `;
+  return new Map(rows.map((row) => [row.path, row.content]));
+}
+
 /** Upsert HTTP `project_file` rows from the current Yjs room document. */
 export async function syncProjectFilesFromDoc(
   sql: postgres.Sql,
   projectId: string,
-  doc: Y.Doc
+  doc: Doc
 ): Promise<SyncProjectFilesResult> {
   const binaryPaths = await loadBinaryProjectPaths(sql, projectId);
   const extracted = getTextFilesFromDoc(doc);
   const files = filterSyncableTextFiles(extracted, binaryPaths);
   assertSyncableFilesExtracted(doc, extracted, binaryPaths);
+
+  const existingByPath = await loadTextProjectFileContents(sql, projectId);
+  assertNoEmptyWipeUpserts(doc, files, existingByPath);
 
   for (const file of files) {
     const id = randomUUID();
@@ -200,17 +254,35 @@ export async function syncProjectFilesFromDoc(
   };
 }
 
-function signalPersistAck(doc: Y.Doc): void {
+function signalPersistAck(doc: Doc): void {
   doc.transact(() => {
     doc.getMap(PERSIST_META_MAP).set(PERSIST_ACK_FIELD, Date.now());
   }, PERSIST_ACK_ORIGIN);
 }
 
 /** Full persist pipeline: Yjs blob, HTTP project_file sync, then client ack. */
-export async function persistRoomState(sql: postgres.Sql, roomId: string, doc: Y.Doc): Promise<void> {
-  await saveRoomState(sql, roomId, encodeDocState(doc));
-  await syncProjectFilesFromDoc(sql, roomId, doc);
-  signalPersistAck(doc);
+export async function persistRoomState(sql: postgres.Sql, roomId: string, doc: Doc): Promise<void> {
+  try {
+    await saveRoomState(sql, roomId, encodeDocState(doc));
+    await syncProjectFilesFromDoc(sql, roomId, doc);
+    signalPersistAck(doc);
+  } catch (err) {
+    if (err instanceof PersistExtractError) {
+      console.error(
+        `[collab] persist extract failed for room ${roomId}:`,
+        err.message,
+        `(expected ${err.expectedSyncablePaths} syncable paths, extracted ${err.extractedFiles} files)`
+      );
+    } else if (err instanceof PersistEmptyWipeError) {
+      console.error(
+        `[collab] persist empty-wipe blocked for room ${roomId}:`,
+        err.message
+      );
+    } else {
+      console.error(`[collab] persist room state failed for room ${roomId}:`, err);
+    }
+    throw err;
+  }
 }
 
 type DebouncedSave = {
@@ -287,14 +359,14 @@ export async function saveRoomState(sql: postgres.Sql, roomId: string, state: Ui
 }
 
 export type CollabPersistence = {
-  bindState: (roomId: string, doc: Y.Doc) => Promise<void>;
-  writeState: (roomId: string, doc: Y.Doc) => Promise<void>;
+  bindState: (roomId: string, doc: Doc) => Promise<void>;
+  writeState: (roomId: string, doc: Doc) => Promise<void>;
 };
 
 export function createPostgresPersistence(sql: postgres.Sql): CollabPersistence {
   const debouncedByRoom = new Map<string, DebouncedSave>();
 
-  const persistRoom = async (roomId: string, doc: Y.Doc) => {
+  const persistRoom = async (roomId: string, doc: Doc) => {
     await persistRoomState(sql, roomId, doc);
   };
 
@@ -302,7 +374,12 @@ export function createPostgresPersistence(sql: postgres.Sql): CollabPersistence 
     async bindState(roomId, doc) {
       const stored = await loadRoomState(sql, roomId);
       if (stored && stored.length > 0) {
-        applyDocState(doc, stored);
+        try {
+          applyDocState(doc, stored);
+        } catch (err) {
+          console.error(`[collab] failed to apply stored room state for ${roomId}:`, err);
+          throw err;
+        }
       }
 
       // Authoritative seed from HTTP source of truth before clients sync.

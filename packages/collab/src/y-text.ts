@@ -1,4 +1,4 @@
-import * as Y from "yjs";
+import Y, { type Text } from "./yjs.js";
 
 /** Meta map written by collab persistence — not a project file. */
 export const COLLAB_INTERNAL_PATHS = new Set(["_meta"]);
@@ -20,7 +20,7 @@ export function isYTextLike(value: unknown): value is { toString(): string; leng
 }
 
 /** Replace all content in a Y.Text without leaving duplicate fragments. */
-export function replaceYTextContent(ytext: Y.Text, content: string): void {
+export function replaceYTextContent(ytext: Text, content: string): void {
   const doc = ytext.doc;
   const apply = () => {
     if (ytext.length > 0) {

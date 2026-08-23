@@ -1,5 +1,5 @@
-import * as Y from "yjs";
 import type postgres from "postgres";
+import type { Doc, Text } from "./yjs.js";
 import { replaceYTextContent } from "./y-text.js";
 
 export type ProjectFileRow = {
@@ -42,7 +42,7 @@ function isHttpNewerThanCollabRoom(file: ProjectFileRow, collabRoomUpdatedAt?: D
  * content if it differs — avoids ignoring a newer HTTP save forever (#66).
  */
 export function seedDocFromProjectFiles(
-  doc: Y.Doc,
+  doc: Doc,
   files: ProjectFileRow[],
   options: SeedRoomOptions = {}
 ): number {
@@ -70,7 +70,7 @@ export function seedDocFromProjectFiles(
 export async function seedRoomFromProjectFiles(
   sql: postgres.Sql,
   roomId: string,
-  doc: Y.Doc,
+  doc: Doc,
   options: SeedRoomOptions = {}
 ): Promise<number> {
   const files = await loadProjectFilesForRoom(sql, roomId);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import * as Y from "yjs";
+import Y, { type Text } from "./yjs.js";
 import { seedDocFromProjectFiles, type ProjectFileRow } from "./room-seed.js";
 
 const SAMPLE = "\\documentclass{article}\n\\begin{document}\nHi\\end{document}\n";
@@ -115,7 +115,7 @@ describe("seedDocFromProjectFiles", () => {
   });
 });
 
-function seedYTextIfEmpty(ytext: Y.Text, initialContent: string): boolean {
+function seedYTextIfEmpty(ytext: Text, initialContent: string): boolean {
   if (ytext.length > 0 || initialContent.length === 0) return false;
   ytext.insert(0, initialContent);
   return true;
