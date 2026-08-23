@@ -77,8 +77,9 @@ export interface ClientActionToolPayload {
 export interface ClientActionRejectedPayload {
   kind: "client-action-rejected";
   reason: string;
-  occurrences?: number;
+  matchCount?: number;
   matchLineNumbers?: number[];
+  searchPreview?: string;
   emptySearch?: boolean;
 }
 
@@ -126,7 +127,7 @@ export function countOccurrences(haystack: string, needle: string): number {
 export function findOccurrenceLineNumbers(
   content: string,
   needle: string,
-  max = 5
+  max = 10
 ): number[] {
   if (!needle) return [];
   const lineStarts: number[] = [];
@@ -165,8 +166,9 @@ export interface ValidatedAction {
 export interface RejectedAction {
   rejected: true;
   reason: string;
-  occurrences?: number;
+  matchCount?: number;
   matchLineNumbers?: number[];
+  searchPreview?: string;
   emptySearch?: boolean;
 }
 
@@ -180,21 +182,49 @@ export function stripLineNumberPrefixes(text: string): string {
     .join("\n");
 }
 
+export function buildSearchPreview(search: string, maxLen = 80): string {
+  const oneLine = search.replace(/\r\n/g, "\n").replace(/\n/g, "\\n");
+  if (oneLine.length <= maxLen) return oneLine;
+  return `${oneLine.slice(0, maxLen)}...`;
+}
+
+function collectSearchCandidates(search: string): string[] {
+  const candidates: string[] = [];
+  const seen = new Set<string>();
+  const add = (value: string) => {
+    if (!value || seen.has(value)) return;
+    seen.add(value);
+    candidates.push(value);
+  };
+
+  add(search);
+  add(stripLineNumberPrefixes(search));
+  const trimmed = search.trim();
+  if (trimmed !== search) {
+    add(trimmed);
+    add(stripLineNumberPrefixes(trimmed));
+  }
+
+  return candidates;
+}
+
 function buildSearchRejectReason(
-  occurrences: number,
+  matchCount: number,
   matchLineNumbers: number[],
-  emptySearch: boolean
+  emptySearch: boolean,
+  searchPreview: string
 ): string {
   if (emptySearch) {
-    return "search text is empty. Provide an exact substring from get_file, or use replace_lines when compile errors cite a line number.";
+    return "search text is empty. Use replace_lines when compile errors cite a line number.";
   }
-  if (occurrences === 0) {
-    return "search text not found in file (0 occurrences). Retry with a longer exact substring from get_file that appears once, or use replace_lines when you know the line number.";
+  const preview = searchPreview ? ` (search: "${searchPreview}")` : "";
+  if (matchCount === 0) {
+    return `search text not found in file (0 matches)${preview}. Use replace_lines when compile errors cite a line number.`;
   }
   const lineHint =
     matchLineNumbers.length > 0 ? ` at lines ${matchLineNumbers.join(", ")}` : "";
-  const more = occurrences > matchLineNumbers.length ? " (and more)" : "";
-  return `search text is ambiguous (${occurrences} occurrences${lineHint}${more}). Include more surrounding lines for a unique match, or use replace_lines for a known line range.`;
+  const more = matchCount > matchLineNumbers.length ? " (and more)" : "";
+  return `search text is ambiguous (${matchCount} matches${lineHint}${more})${preview}. Use replace_lines for the cited line range instead of apply_edit.`;
 }
 
 type ResolveUniqueSearchResult =
@@ -202,57 +232,73 @@ type ResolveUniqueSearchResult =
   | {
       ok: false;
       reason: string;
-      occurrences: number;
+      matchCount: number;
       matchLineNumbers: number[];
+      searchPreview: string;
       emptySearch: boolean;
     };
 
 function resolveUniqueSearch(content: string, search: string): ResolveUniqueSearchResult {
-  const trimmed = search.trim();
-  if (!trimmed) {
+  if (!search.trim()) {
     return {
       ok: false,
-      reason: buildSearchRejectReason(0, [], true),
-      occurrences: 0,
+      reason: buildSearchRejectReason(0, [], true, ""),
+      matchCount: 0,
       matchLineNumbers: [],
+      searchPreview: "",
       emptySearch: true,
     };
   }
 
-  let occurrences = countOccurrences(content, trimmed);
-  let needle = trimmed;
+  const candidates = collectSearchCandidates(search);
 
-  if (occurrences === 1) {
-    return { search: trimmed };
+  for (const needle of candidates) {
+    const count = countOccurrences(content, needle);
+    if (count === 1) {
+      return { search: needle };
+    }
   }
 
-  if (occurrences === 0) {
-    const stripped = stripLineNumberPrefixes(trimmed);
-    if (stripped !== trimmed) {
-      occurrences = countOccurrences(content, stripped);
-      if (occurrences === 1) {
-        return { search: stripped };
-      }
-      if (occurrences > 1) {
-        needle = stripped;
+  let bestNeedle = candidates[0];
+  let bestCount = 0;
+
+  const strippedFromRaw = stripLineNumberPrefixes(search);
+  const strippedCandidates: string[] = [];
+  if (strippedFromRaw !== search) strippedCandidates.push(strippedFromRaw);
+  const trimmed = search.trim();
+  const strippedFromTrimmed = stripLineNumberPrefixes(trimmed);
+  if (trimmed !== search && strippedFromTrimmed !== trimmed) {
+    strippedCandidates.push(strippedFromTrimmed);
+  }
+
+  for (const needle of strippedCandidates) {
+    const count = countOccurrences(content, needle);
+    if (count > 0) {
+      bestNeedle = needle;
+      bestCount = count;
+      break;
+    }
+  }
+
+  if (bestCount === 0) {
+    for (const needle of candidates) {
+      const count = countOccurrences(content, needle);
+      if (count > bestCount) {
+        bestCount = count;
+        bestNeedle = needle;
       }
     }
-    const matchLineNumbers = findOccurrenceLineNumbers(content, needle);
-    return {
-      ok: false,
-      reason: buildSearchRejectReason(occurrences, matchLineNumbers, false),
-      occurrences,
-      matchLineNumbers,
-      emptySearch: false,
-    };
   }
 
-  const matchLineNumbers = findOccurrenceLineNumbers(content, needle);
+  const matchLineNumbers = findOccurrenceLineNumbers(content, bestNeedle);
+  const searchPreview = buildSearchPreview(bestNeedle);
+
   return {
     ok: false,
-    reason: buildSearchRejectReason(occurrences, matchLineNumbers, false),
-    occurrences,
+    reason: buildSearchRejectReason(bestCount, matchLineNumbers, false, searchPreview),
+    matchCount: bestCount,
     matchLineNumbers,
+    searchPreview,
     emptySearch: false,
   };
 }
@@ -277,8 +323,9 @@ function applySearchReplace(
     return {
       rejected: true,
       reason: resolved.reason,
-      occurrences: resolved.occurrences,
+      matchCount: resolved.matchCount,
       matchLineNumbers: resolved.matchLineNumbers,
+      searchPreview: resolved.searchPreview,
       emptySearch: resolved.emptySearch,
     };
   }
@@ -421,9 +468,10 @@ export function validateClientAction(
       if (!searchTrimmed) {
         return {
           rejected: true,
-          reason: buildSearchRejectReason(0, [], true),
-          occurrences: 0,
+          reason: buildSearchRejectReason(0, [], true, ""),
+          matchCount: 0,
           matchLineNumbers: [],
+          searchPreview: "",
           emptySearch: true,
         };
       }
@@ -431,12 +479,12 @@ export function validateClientAction(
         return {
           rejected: true,
           reason:
-            "Search text exceeds size limits. Retry with a shorter exact substring from get_file, or use replace_lines for a known line range.",
+            "Search text exceeds size limits. Use replace_lines for a known line range instead.",
         };
       }
 
       const content = ctx.texFiles.get(file) ?? "";
-      const preview = applySearchReplace(content, searchTrimmed, replace);
+      const preview = applySearchReplace(content, raw.search, replace);
       if ("rejected" in preview) {
         return preview;
       }

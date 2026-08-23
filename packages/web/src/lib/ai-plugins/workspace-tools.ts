@@ -134,20 +134,20 @@ export const WORKSPACE_SYSTEM_PROMPT = `You have workspace tools to list, read, 
 - list_files — list all .tex file paths in the project
 - get_file — read a line range from one .tex file (content is raw file text; line numbers are in startLine/endLine/totalLines; max ${GET_FILE_MAX_LINES} lines per call)
 - apply_edit — surgical search/replace in a file (search must match exactly once)
-- replace_lines — replace a 1-based inclusive line range without unique substring search (prefer when compile errors cite a line number)
+- replace_lines — replace a 1-based inclusive line range without substring search (prefer when compile errors cite a line number)
 - fix_compile_errors — batch search/replace fixes for compile errors
 - insert_at_cursor — insert LaTeX at the user's cursor
 - replace_selection — replace the user's editor selection
 
-Workflow: use list_files to discover paths, get_file to read small line windows around errors, then apply_edit, replace_lines, or fix_compile_errors to make changes. Apply edits with tools — do not only describe changes in prose.
+Workflow: use list_files to discover paths, get_file to read small line windows around errors, then replace_lines (when errors cite a line), apply_edit, or fix_compile_errors to make changes. Apply edits with tools — do not only describe changes in prose.
 Only reference .tex files returned by list_files or get_file. Never invent file paths or citations.
 Never call tools that are not listed above.
 Keep each edit under ${8_000} characters. Prefer minimal, surgical changes.
-If apply_edit is rejected because search is not unique, include more surrounding lines in the search string or switch to replace_lines for a known line range.
-Prefer replace_lines when compile errors cite a specific line number.
+When compile errors cite a line number, use replace_lines — apply_edit often fails on repeated lines in large templates.
+If apply_edit is rejected (0 or multiple matches), use replace_lines for the cited line range.
 After applying edits, briefly explain what changed in your reply.`;
 
-export const COMPILE_FIX_WORKSPACE_SUFFIX = `Focus on fixing compile errors. Use get_file with small line ranges around cited error lines, then fix_compile_errors, apply_edit, or replace_lines. Prefer replace_lines when errors cite a line number (e.g. bare \\usepackage on line 3). For apply_edit, copy exact search/replace from get_file (raw text, no line-number prefixes). If apply_edit is rejected (0 or multiple matches), widen the search with more surrounding lines or use replace_lines for the cited line range. Keep edits minimal.`;
+export const COMPILE_FIX_WORKSPACE_SUFFIX = `Focus on fixing compile errors. Use get_file with small line ranges around cited error lines. Prefer replace_lines when errors cite a line number (e.g. bare \\usepackage on line 3) — large concatenated templates often have no unique substrings for apply_edit. Use fix_compile_errors or apply_edit only when search text matches exactly once. Keep edits minimal.`;
 
 export function createWorkspaceTools(ctx: ValidateActionContext) {
   const wrap =
@@ -168,12 +168,11 @@ export function createWorkspaceTools(ctx: ValidateActionContext) {
         return {
           kind: "client-action-rejected" as const,
           reason: validated.reason,
-          ...(validated.occurrences !== undefined
-            ? { occurrences: validated.occurrences }
-            : {}),
+          ...(validated.matchCount !== undefined ? { matchCount: validated.matchCount } : {}),
           ...(validated.matchLineNumbers && validated.matchLineNumbers.length > 0
             ? { matchLineNumbers: validated.matchLineNumbers }
             : {}),
+          ...(validated.searchPreview ? { searchPreview: validated.searchPreview } : {}),
           ...(validated.emptySearch ? { emptySearch: true } : {}),
         };
       }
@@ -232,7 +231,7 @@ export function createWorkspaceTools(ctx: ValidateActionContext) {
     }),
     apply_edit: tool({
       description:
-        "Apply a surgical search/replace edit to a named .tex file. The search string must match exactly once. If rejected (0 or multiple matches), widen search with surrounding lines or use replace_lines.",
+        "Apply a surgical search/replace edit to a named .tex file. The search string must match exactly once. If rejected, use replace_lines when errors cite a line number.",
       parameters: z.object({
         file: z.string().describe("Project .tex file path, e.g. main.tex"),
         search: z.string().describe("Exact substring to replace"),

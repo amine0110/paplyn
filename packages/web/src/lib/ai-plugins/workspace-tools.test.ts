@@ -101,9 +101,8 @@ describe("workspace-tools", () => {
 
     expect(result).toEqual({
       kind: "client-action-rejected",
-      reason:
-        "search text is empty. Provide an exact substring from get_file, or use replace_lines when compile errors cite a line number.",
-      occurrences: 0,
+      reason: "search text is empty. Use replace_lines when compile errors cite a line number.",
+      matchCount: 0,
       emptySearch: true,
     });
   });
@@ -122,9 +121,10 @@ describe("workspace-tools", () => {
     expect(result).toEqual({
       kind: "client-action-rejected",
       reason:
-        "search text is ambiguous (2 occurrences at lines 1, 2). Include more surrounding lines for a unique match, or use replace_lines for a known line range.",
-      occurrences: 2,
+        "search text is ambiguous (2 matches at lines 1, 2) (search: \"\\usepackage\"). Use replace_lines for the cited line range instead of apply_edit.",
+      matchCount: 2,
       matchLineNumbers: [1, 2],
+      searchPreview: "\\usepackage",
     });
   });
 

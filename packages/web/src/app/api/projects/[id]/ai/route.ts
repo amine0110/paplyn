@@ -117,7 +117,7 @@ const WRITING_ACTION_PROMPTS: Record<string, string> = {
   citation:
     "Suggest how to cite or reference the selected passage. Use search_literature when real papers are needed; never invent citations.",
   "explain-errors":
-    "Fix the compile errors using get_file to read small line ranges, then fix_compile_errors, apply_edit, or replace_lines. Prefer replace_lines when errors cite a line number. Apply surgical LaTeX fixes, then explain what you changed.",
+    "Fix the compile errors using get_file to read small line ranges, then replace_lines (when errors cite a line number), fix_compile_errors, or apply_edit. Prefer replace_lines for cited line numbers in large templates. Apply surgical LaTeX fixes, then explain what you changed.",
 };
 
 const COMPILE_FIX_MAX_STEPS = 12;
@@ -170,7 +170,7 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
 
   if (compileFix && compileErrors.length > 0) {
     systemPrompt +=
-      "\n\nWhen fixing errors, call get_file for small line ranges around cited lines, then fix_compile_errors, apply_edit, or replace_lines. Prefer replace_lines when errors cite a line number. For apply_edit, copy exact search/replace from get_file (raw text, no line-number prefixes). If apply_edit is rejected (0 or multiple matches), widen the search or use replace_lines for the cited line range.";
+      "\n\nWhen fixing errors, call get_file for small line ranges around cited lines. Prefer replace_lines when errors cite a line number — large templates often have no unique apply_edit substrings. Use fix_compile_errors or apply_edit only when search matches exactly once. If apply_edit is rejected, use replace_lines for the cited line range.";
   }
 
   if (data.action) {

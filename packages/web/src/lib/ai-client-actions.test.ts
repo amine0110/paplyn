@@ -38,9 +38,10 @@ describe("ai-client-actions", () => {
     expect(result).toEqual({
       rejected: true,
       reason:
-        "search text is ambiguous (2 occurrences at lines 1, 2). Include more surrounding lines for a unique match, or use replace_lines for a known line range.",
-      occurrences: 2,
+        "search text is ambiguous (2 matches at lines 1, 2) (search: \"foo\"). Use replace_lines for the cited line range instead of apply_edit.",
+      matchCount: 2,
       matchLineNumbers: [1, 2],
+      searchPreview: "foo",
       emptySearch: false,
     });
   });
@@ -57,12 +58,44 @@ describe("ai-client-actions", () => {
     );
     expect(result).toEqual({
       rejected: true,
-      reason:
-        "search text is empty. Provide an exact substring from get_file, or use replace_lines when compile errors cite a line number.",
-      occurrences: 0,
+      reason: "search text is empty. Use replace_lines when compile errors cite a line number.",
+      matchCount: 0,
       matchLineNumbers: [],
+      searchPreview: "",
       emptySearch: true,
     });
+  });
+
+  it("classifies prefix-stripped bare usepackage as ambiguous, not not-found", () => {
+    const bareLine = "\\usepackage  ";
+    const lines = [
+      "\\documentclass{article}",
+      bareLine,
+      "\\usepackage{amsmath}",
+      bareLine,
+      "\\usepackage{graphicx}",
+      bareLine,
+    ];
+    const files = new Map([["main.tex", lines.join("\n")]]);
+
+    const result = validateClientAction(
+      {
+        type: "apply_edit",
+        file: "main.tex",
+        search: `3: ${bareLine}`,
+        replace: "\\usepackage{amsmath}",
+      },
+      { texFiles: files, hasSelection: false }
+    );
+
+    expect("rejected" in result && result.rejected).toBe(true);
+    if ("rejected" in result && result.rejected) {
+      expect(result.matchCount).toBe(3);
+      expect(result.matchLineNumbers).toEqual([2, 4, 6]);
+      expect(result.searchPreview).toBe(bareLine);
+      expect(result.reason).toContain("ambiguous");
+      expect(result.reason).not.toContain("0 matches");
+    }
   });
 
   it("validates apply_edit with unique search", () => {
