@@ -6,6 +6,7 @@ import {
   lineRangeToOffsets,
 } from "@/lib/ai-client-actions";
 import { validateCompileFixEdit } from "@/lib/ai-compile-fix-validation";
+import { validateNoSiblingCommandStacking } from "@/lib/ai-edit-guards";
 
 export interface ApplyAiActionsContext {
   activeFile: string | null;
@@ -95,6 +96,14 @@ function rejectCompileFixPreview(
   return check.ok ? null : check.reason;
 }
 
+function rejectSiblingStackingPreview(
+  content: string,
+  previewContent: string
+): string | null {
+  const check = validateNoSiblingCommandStacking(content, previewContent);
+  return check.ok ? null : check.reason;
+}
+
 async function applyFileEdit(
   ctx: ApplyAiActionsContext,
   file: string,
@@ -112,6 +121,9 @@ async function applyFileEdit(
     label: "",
   });
   if (updated == null) return false;
+
+  const stackingReject = rejectSiblingStackingPreview(content, updated);
+  if (stackingReject) return false;
 
   const compileFixReject = rejectCompileFixPreview(ctx, content, replace, updated);
   if (compileFixReject) return false;
@@ -149,6 +161,9 @@ async function applyLinesEdit(
   };
   const updated = applyReplaceLinesToFileContent(content, action);
   if (updated == null) return false;
+
+  const stackingReject = rejectSiblingStackingPreview(content, updated);
+  if (stackingReject) return false;
 
   const compileFixReject = rejectCompileFixPreview(
     ctx,

@@ -259,4 +259,35 @@ describe("applyAiClientActions replace_lines ordering", () => {
     expect(result.skipped).toHaveLength(1);
     expect(countBeginDocumentInFirstCopy(fileContents["main.tex"])).toBe(1);
   });
+
+  it("skips replace_lines that stack a macro sibling below an unchanged duplicate line", async () => {
+    const content = [
+      "\\textit{University} \\\\",
+      "",
+      "\\textit{University} \\\\",
+    ].join("\n");
+    const fileContents: Record<string, string> = { "main.tex": content };
+    const actions: AiClientAction[] = [
+      {
+        type: "replace_lines",
+        file: "main.tex",
+        startLine: 2,
+        endLine: 2,
+        replace: "\\textit{UMONS} \\\\",
+        label: "Replaced line 2 in main.tex",
+      },
+    ];
+
+    const result = await applyAiClientActions(actions, {
+      activeFile: null,
+      editorView: null,
+      fileContents,
+      hasSelection: false,
+      saveFile: async () => {},
+    });
+
+    expect(result.applied).toHaveLength(0);
+    expect(result.skipped).toHaveLength(1);
+    expect(fileContents["main.tex"]).toBe(content);
+  });
 });
