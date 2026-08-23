@@ -22,7 +22,7 @@ describe("AI sidebar chat UX", () => {
     const src = readSource("components/ai-sidebar.tsx");
     expect(src).toContain("pendingRequest");
     expect(src).toMatch(
-      /void sendMessage\(pendingRequest\.message, pendingRequest\.action\)/
+      /void sendMessage\(pendingRequest\.message, pendingRequest\.action/
     );
     expect(src).toContain("onPendingRequestConsumed");
   });

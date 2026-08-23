@@ -17,6 +17,13 @@ import {
   mobileTabToLayoutMode,
   MOBILE_BREAKPOINT_PX,
 } from "@/lib/workspace-layout";
+import {
+  AI_SIDEBAR_WIDTH_DEFAULT,
+  AI_SIDEBAR_WIDTH_KEY,
+  AI_SIDEBAR_WIDTH_MAX,
+  AI_SIDEBAR_WIDTH_MIN,
+  clampAiSidebarWidth,
+} from "@/lib/ui-preferences";
 
 describe("theme", () => {
   it("defaults to system preference", () => {
@@ -84,5 +91,23 @@ describe("workspace layout", () => {
     expect(mobileTabToLayoutMode("proof")).toBe("proof");
     expect(mobileTabToLayoutMode("files")).toBe("editor");
     expect(mobileTabToLayoutMode("editor")).toBe("editor");
+  });
+});
+
+describe("ui-preferences ai sidebar width", () => {
+  it("uses a stable storage key", () => {
+    expect(AI_SIDEBAR_WIDTH_KEY).toBe("quire-ai-sidebar-width");
+  });
+
+  it("defaults to 380px", () => {
+    expect(AI_SIDEBAR_WIDTH_DEFAULT).toBe(380);
+  });
+
+  it("clamps sidebar width within min and max", () => {
+    expect(clampAiSidebarWidth(200)).toBe(AI_SIDEBAR_WIDTH_MIN);
+    expect(clampAiSidebarWidth(280)).toBe(280);
+    expect(clampAiSidebarWidth(380)).toBe(380);
+    expect(clampAiSidebarWidth(700)).toBe(AI_SIDEBAR_WIDTH_MAX);
+    expect(clampAiSidebarWidth(560)).toBe(560);
   });
 });

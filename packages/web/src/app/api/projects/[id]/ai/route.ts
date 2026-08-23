@@ -97,8 +97,12 @@ const chatSchema = z.object({
       "expand",
       "citation",
       "find-papers",
+      "correct",
+      "write",
     ])
     .optional(),
+  /** Inline selection bubble — require replace_selection, not file-wide edits. */
+  inlineSelection: z.boolean().optional(),
   compileErrors: z
     .array(
       z.union([
@@ -138,11 +142,21 @@ const WRITING_ACTION_PROMPTS: Record<string, string> = {
     "Shorten the selected text while preserving the key claims and LaTeX syntax.",
   expand:
     "Expand the selected text with useful detail and academic tone while keeping LaTeX syntax valid.",
+  correct:
+    "Correct spelling and orthography in the selected text only. Keep meaning and tone — do not rephrase or rewrite.",
+  write:
+    "Follow the user's instruction for the selected text. Replace the selection with the result while keeping valid LaTeX syntax.",
   citation:
     "Suggest how to cite or reference the selected passage. Use search_literature when real papers are needed; never invent citations.",
   "explain-errors":
     "Fix the compile errors using get_file to read small line ranges, then replace_lines (when errors cite a line number), fix_compile_errors, or apply_edit. Prefer replace_lines for cited line numbers in large templates. Apply surgical LaTeX fixes, then explain what you changed.",
 };
+
+const INLINE_SELECTION_SUFFIX =
+  "The user selected text in the editor. You MUST call replace_selection with the full replacement text for that exact selection. Do NOT use insert_at_cursor, apply_edit, or replace_lines on other spans. Do NOT leave the original selection in the document — replace it in place. Return only the replacement LaTeX in replace_selection (no duplicate of the old text).";
+
+const SELECTION_REPLACE_SUFFIX =
+  "The user has selected text in the editor. When rewriting the selection, call replace_selection with the replacement text. Do not insert above or below the selection.";
 
 const COMPILE_FIX_MAX_STEPS = 12;
 const CHAT_MAX_STEPS = 10;
@@ -226,6 +240,11 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
 
   if (!compileFix && data.selectedText) {
     systemPrompt += `\n\nSelected text in ${data.activeFile || "editor"}:\n${data.selectedText}`;
+    if (data.inlineSelection) {
+      systemPrompt += `\n\n${INLINE_SELECTION_SUFFIX}`;
+    } else {
+      systemPrompt += `\n\n${SELECTION_REPLACE_SUFFIX}`;
+    }
   }
 
   if (retryHint) {

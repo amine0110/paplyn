@@ -46,13 +46,13 @@ describe("Fix with AI compile-error UI", () => {
     expect(src).toContain("errorCount={errorList.length}");
   });
 
-  it("project page opens AI sidebar and sends compile-fix request", () => {
+  it("project page opens AI sidebar for compile-fix only", () => {
     const src = readSource("app/project/[id]/page.tsx");
     expect(src).toContain("buildCompileFixAiRequest");
     expect(src).toContain("handleFixCompileWithAi");
-    expect(src).toMatch(/handleSelectionAiAction\(buildCompileFixAiRequest\(\)\)/);
     expect(src).toMatch(/onFixWithAi=\{handleFixCompileWithAi\}/);
     expect(src).toContain("setShowAi(true)");
+    expect(src).not.toContain("handleSelectionAiAction");
     expect(src).toContain("pendingRequest={aiPendingRequest}");
     expect(src).toContain("buildCompileFixAutoRetryRequest");
     expect(src).toContain("compile-fix-auto-retry");

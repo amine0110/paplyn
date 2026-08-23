@@ -42,6 +42,76 @@ describe("normalizeInsertAtCursorText", () => {
   });
 });
 
+describe("applyAiClientActions selection range", () => {
+  it("replaces captured selection range for replace_selection", async () => {
+    let doc = "I can't beleive what you saide";
+    const from = 0;
+    const to = doc.length;
+
+    const editorView = {
+      state: {
+        doc: { toString: () => doc },
+        selection: { main: { from: 5, to: 5 } },
+      },
+      dispatch: (update: { changes: { from: number; to: number; insert: string } }) => {
+        doc =
+          doc.slice(0, update.changes.from) +
+          update.changes.insert +
+          doc.slice(update.changes.to);
+      },
+    };
+
+    const result = await applyAiClientActions(
+      [{ type: "replace_selection", text: "I can't believe what you said", label: "Replaced selection" }],
+      {
+        activeFile: "main.tex",
+        editorView: editorView as never,
+        fileContents: { "main.tex": doc },
+        hasSelection: true,
+        selectionRange: { from, to },
+        saveFile: async () => {},
+      }
+    );
+
+    expect(result.applied).toHaveLength(1);
+    expect(doc).toBe("I can't believe what you said");
+  });
+
+  it("inserts at cursor span when there is no selection", async () => {
+    let doc = "\\documentclass{article}";
+    const from = doc.length;
+    const to = doc.length;
+
+    const editorView = {
+      state: {
+        doc: { toString: () => doc },
+        selection: { main: { from, to } },
+      },
+      dispatch: (update: { changes: { from: number; to: number; insert: string } }) => {
+        doc =
+          doc.slice(0, update.changes.from) +
+          update.changes.insert +
+          doc.slice(update.changes.to);
+      },
+    };
+
+    const result = await applyAiClientActions(
+      [{ type: "insert_at_cursor", text: "% note", label: "Inserted text at cursor" }],
+      {
+        activeFile: "main.tex",
+        editorView: editorView as never,
+        fileContents: { "main.tex": doc },
+        hasSelection: false,
+        selectionRange: { from, to },
+        saveFile: async () => {},
+      }
+    );
+
+    expect(result.applied).toHaveLength(1);
+    expect(doc).toBe("\\documentclass{article}% note");
+  });
+});
+
 describe("applyAiClientActions replace_lines ordering", () => {
   it("applies multiple replace_lines bottom-up against original line numbers", async () => {
     const content = [

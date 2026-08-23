@@ -12,10 +12,23 @@ export interface ApplyAiActionsContext {
   editorView: EditorView | null;
   fileContents: Record<string, string>;
   hasSelection: boolean;
+  /** When set, editor actions apply at this range instead of the live selection. */
+  selectionRange?: { from: number; to: number };
   saveFile: (path: string, content: string) => Promise<void>;
   onSwitchFile?: (path: string) => void;
   /** When true, reject edits that break compile-fix preamble guards. */
   compileFix?: boolean;
+}
+
+function resolveEditorRange(
+  view: EditorView,
+  ctx: ApplyAiActionsContext
+): { from: number; to: number } {
+  if (ctx.selectionRange) {
+    return ctx.selectionRange;
+  }
+  const { from, to } = view.state.selection.main;
+  return { from, to };
 }
 
 export interface ApplyAiActionsResult {
@@ -185,9 +198,12 @@ export async function applyAiClientActions(
             skipped.push({ action, reason: "No active editor" });
             break;
           }
-          const { from, to } = view.state.selection.main;
+          const { from, to } = resolveEditorRange(view, ctx);
           const doc = view.state.doc.toString();
-          const text = normalizeInsertAtCursorText(action.text, doc, from);
+          const hasSpan = from !== to || ctx.hasSelection;
+          const text = hasSpan
+            ? action.text
+            : normalizeInsertAtCursorText(action.text, doc, from);
           applyToActiveEditor(view, from, to, text);
           applied.push(action);
           break;
@@ -198,12 +214,8 @@ export async function applyAiClientActions(
             skipped.push({ action, reason: "No active editor" });
             break;
           }
-          const { from, to } = view.state.selection.main;
-          if (from === to && !ctx.hasSelection) {
-            applyToActiveEditor(view, from, to, action.text);
-          } else {
-            applyToActiveEditor(view, from, to, action.text);
-          }
+          const { from, to } = resolveEditorRange(view, ctx);
+          applyToActiveEditor(view, from, to, action.text);
           applied.push(action);
           break;
         }
