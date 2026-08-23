@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import * as Y from "yjs";
 import postgres from "postgres";
 import { seedRoomFromProjectFiles } from "./room-seed.js";
+import { COLLAB_INTERNAL_PATHS, isYTextLike } from "./y-text.js";
 
 const SAVE_DEBOUNCE_MS = parseInt(process.env.COLLAB_SAVE_DEBOUNCE_MS || "2000", 10);
 const SAVE_MAX_WAIT_MS = parseInt(process.env.COLLAB_SAVE_MAX_WAIT_MS || "10000", 10);
@@ -93,12 +94,46 @@ export function isSyncableTextPath(path: string): boolean {
 export function getTextFilesFromDoc(doc: Y.Doc): Array<{ path: string; content: string }> {
   const files: Array<{ path: string; content: string }> = [];
   doc.share.forEach((sharedType, path) => {
-    if (sharedType instanceof Y.Text) {
-      files.push({ path, content: sharedType.toString() });
-    }
+    if (COLLAB_INTERNAL_PATHS.has(path)) return;
+    if (!isYTextLike(sharedType)) return;
+    files.push({ path, content: sharedType.toString() });
   });
   return files;
 }
+
+/** Paths in the doc that should sync into HTTP `project_file`. */
+export function getSyncableTextPathsFromDoc(
+  doc: Y.Doc,
+  binaryPathsInDb: Set<string> = new Set()
+): string[] {
+  const paths: string[] = [];
+  doc.share.forEach((sharedType, path) => {
+    if (COLLAB_INTERNAL_PATHS.has(path)) return;
+    if (!isYTextLike(sharedType)) return;
+    if (binaryPathsInDb.has(path)) return;
+    if (!isSyncableTextPath(path)) return;
+    paths.push(path);
+  });
+  return paths;
+}
+
+export class PersistExtractError extends Error {
+  constructor(
+    readonly expectedSyncablePaths: number,
+    readonly extractedFiles: number
+  ) {
+    super(
+      `[collab] persist extract returned ${extractedFiles} files for ${expectedSyncablePaths} syncable Y.Text paths (dual Yjs realm or corrupt doc)`
+    );
+    this.name = "PersistExtractError";
+  }
+}
+
+export type SyncProjectFilesResult = {
+  extractedCount: number;
+  syncableCount: number;
+  writtenCount: number;
+};
 
 /** Drop Y.Text entries that must not be written into HTTP `project_file`. */
 export function filterSyncableTextFiles(
@@ -109,6 +144,22 @@ export function filterSyncableTextFiles(
     if (binaryPathsInDb.has(file.path)) return false;
     return isSyncableTextPath(file.path);
   });
+}
+
+/**
+ * Fail fast when syncable Y.Text paths exist but extraction produced no upsertable files.
+ * Guards the persist-ack path against silent 0-file writes (e.g. dual Yjs instanceof bugs).
+ */
+export function assertSyncableFilesExtracted(
+  doc: Y.Doc,
+  extracted: Array<{ path: string; content: string }>,
+  binaryPathsInDb: Set<string>
+): void {
+  const expectedPaths = getSyncableTextPathsFromDoc(doc, binaryPathsInDb);
+  const syncable = filterSyncableTextFiles(extracted, binaryPathsInDb);
+  if (expectedPaths.length > 0 && syncable.length === 0) {
+    throw new PersistExtractError(expectedPaths.length, extracted.length);
+  }
 }
 
 async function loadBinaryProjectPaths(sql: postgres.Sql, projectId: string): Promise<Set<string>> {
@@ -124,9 +175,12 @@ export async function syncProjectFilesFromDoc(
   sql: postgres.Sql,
   projectId: string,
   doc: Y.Doc
-): Promise<void> {
+): Promise<SyncProjectFilesResult> {
   const binaryPaths = await loadBinaryProjectPaths(sql, projectId);
-  const files = filterSyncableTextFiles(getTextFilesFromDoc(doc), binaryPaths);
+  const extracted = getTextFilesFromDoc(doc);
+  const files = filterSyncableTextFiles(extracted, binaryPaths);
+  assertSyncableFilesExtracted(doc, extracted, binaryPaths);
+
   for (const file of files) {
     const id = randomUUID();
     await sql`
@@ -138,12 +192,25 @@ export async function syncProjectFilesFromDoc(
         updated_at = EXCLUDED.updated_at
     `;
   }
+
+  return {
+    extractedCount: extracted.length,
+    syncableCount: files.length,
+    writtenCount: files.length,
+  };
 }
 
 function signalPersistAck(doc: Y.Doc): void {
   doc.transact(() => {
     doc.getMap(PERSIST_META_MAP).set(PERSIST_ACK_FIELD, Date.now());
   }, PERSIST_ACK_ORIGIN);
+}
+
+/** Full persist pipeline: Yjs blob, HTTP project_file sync, then client ack. */
+export async function persistRoomState(sql: postgres.Sql, roomId: string, doc: Y.Doc): Promise<void> {
+  await saveRoomState(sql, roomId, encodeDocState(doc));
+  await syncProjectFilesFromDoc(sql, roomId, doc);
+  signalPersistAck(doc);
 }
 
 type DebouncedSave = {
@@ -200,6 +267,14 @@ export async function loadRoomState(sql: postgres.Sql, roomId: string): Promise<
   return decodeStoredState(rows[0].state);
 }
 
+export async function loadRoomUpdatedAt(sql: postgres.Sql, roomId: string): Promise<Date | null> {
+  const rows = await sql<{ updated_at: Date }[]>`
+    SELECT updated_at FROM collab_room WHERE room_id = ${roomId}
+  `;
+  if (rows.length === 0 || !rows[0].updated_at) return null;
+  return rows[0].updated_at;
+}
+
 export async function saveRoomState(sql: postgres.Sql, roomId: string, state: Uint8Array): Promise<void> {
   const encoded = encodeStoredState(state);
   await sql`
@@ -220,9 +295,7 @@ export function createPostgresPersistence(sql: postgres.Sql): CollabPersistence 
   const debouncedByRoom = new Map<string, DebouncedSave>();
 
   const persistRoom = async (roomId: string, doc: Y.Doc) => {
-    await saveRoomState(sql, roomId, encodeDocState(doc));
-    await syncProjectFilesFromDoc(sql, roomId, doc);
-    signalPersistAck(doc);
+    await persistRoomState(sql, roomId, doc);
   };
 
   return {
@@ -232,8 +305,9 @@ export function createPostgresPersistence(sql: postgres.Sql): CollabPersistence 
         applyDocState(doc, stored);
       }
 
-      // Authoritative one-time seed from HTTP source of truth before clients sync.
-      await seedRoomFromProjectFiles(sql, roomId, doc);
+      // Authoritative seed from HTTP source of truth before clients sync.
+      const collabRoomUpdatedAt = await loadRoomUpdatedAt(sql, roomId);
+      await seedRoomFromProjectFiles(sql, roomId, doc, { collabRoomUpdatedAt });
 
       const debounced = createDebouncedSave(
         async () => {

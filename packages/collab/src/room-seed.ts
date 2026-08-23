@@ -1,10 +1,17 @@
 import * as Y from "yjs";
 import type postgres from "postgres";
+import { replaceYTextContent } from "./y-text.js";
 
 export type ProjectFileRow = {
   path: string;
   content: string;
   is_binary: boolean;
+  updated_at?: Date | null;
+};
+
+export type SeedRoomOptions = {
+  /** When set, HTTP rows newer than this timestamp may replace stale Y.Text. */
+  collabRoomUpdatedAt?: Date | null;
 };
 
 /**
@@ -15,25 +22,47 @@ export async function loadProjectFilesForRoom(
   roomId: string
 ): Promise<ProjectFileRow[]> {
   return sql<ProjectFileRow[]>`
-    SELECT path, content, is_binary
+    SELECT path, content, is_binary, updated_at
     FROM project_file
     WHERE project_id = ${roomId} AND is_binary = false
   `;
+}
+
+function isHttpNewerThanCollabRoom(file: ProjectFileRow, collabRoomUpdatedAt?: Date | null): boolean {
+  if (!file.updated_at || !collabRoomUpdatedAt) return false;
+  return file.updated_at > collabRoomUpdatedAt;
 }
 
 /**
  * Seed empty Y.Text entries from HTTP-persisted project files.
  * Runs once per room bind on the collab server so tabs cannot race to insert
  * the same `initialContent` into Y.Text (concurrent Yjs inserts concatenate).
+ *
+ * When HTTP `project_file` is newer than the stored collab room blob, adopt HTTP
+ * content if it differs — avoids ignoring a newer HTTP save forever (#66).
  */
-export function seedDocFromProjectFiles(doc: Y.Doc, files: ProjectFileRow[]): number {
+export function seedDocFromProjectFiles(
+  doc: Y.Doc,
+  files: ProjectFileRow[],
+  options: SeedRoomOptions = {}
+): number {
   let seeded = 0;
   for (const file of files) {
     if (file.is_binary || !file.content) continue;
     const ytext = doc.getText(file.path);
-    if (ytext.length > 0) continue;
-    ytext.insert(0, file.content);
-    seeded += 1;
+    if (ytext.length === 0) {
+      ytext.insert(0, file.content);
+      seeded += 1;
+      continue;
+    }
+
+    if (
+      isHttpNewerThanCollabRoom(file, options.collabRoomUpdatedAt) &&
+      ytext.toString() !== file.content
+    ) {
+      replaceYTextContent(ytext, file.content);
+      seeded += 1;
+    }
   }
   return seeded;
 }
@@ -41,8 +70,9 @@ export function seedDocFromProjectFiles(doc: Y.Doc, files: ProjectFileRow[]): nu
 export async function seedRoomFromProjectFiles(
   sql: postgres.Sql,
   roomId: string,
-  doc: Y.Doc
+  doc: Y.Doc,
+  options: SeedRoomOptions = {}
 ): Promise<number> {
   const files = await loadProjectFilesForRoom(sql, roomId);
-  return seedDocFromProjectFiles(doc, files);
+  return seedDocFromProjectFiles(doc, files, options);
 }
