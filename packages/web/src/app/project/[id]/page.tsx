@@ -31,6 +31,7 @@ import { ShareDialog } from "@/components/share-dialog";
 import { HistoryDialog } from "@/components/history-dialog";
 import { CollabPresence } from "@/components/collab-presence";
 import { AiSidebar, type AiPendingRequest } from "@/components/ai-sidebar";
+import { buildCompileFixAiRequest } from "@/lib/ai-compile-fix-intent";
 import { AiAssistantFab } from "@/components/ai-assistant-fab";
 import { SelectionAiBubble } from "@/components/selection-ai-bubble";
 import { EditorStatusBar, EditorToolbar } from "@/components/editor-toolbar";
@@ -501,6 +502,10 @@ export default function ProjectPage() {
     setShowAi(true);
   }
 
+  function handleFixCompileWithAi() {
+    handleSelectionAiAction(buildCompileFixAiRequest());
+  }
+
   function handleJumpToLine(line: number, file?: string) {
     if (file && file !== activeFile) {
       setActiveFile(file);
@@ -651,6 +656,7 @@ export default function ProjectPage() {
         compileErrors={compileErrors}
         isStale={showStaleProofBanner}
         staleErrorCount={compileErrorCount}
+        onFixWithAi={handleFixCompileWithAi}
       />
     </div>
   );
@@ -948,6 +954,7 @@ export default function ProjectPage() {
             onJumpToLine={handleJumpToLine}
             showLog={showLog}
             onToggleLog={() => setShowLog(!showLog)}
+            onFixWithAi={handleFixCompileWithAi}
           />
           <MobileWorkspaceTabs activeTab={mobileTab} onChange={handleMobileTabChange} />
         </main>

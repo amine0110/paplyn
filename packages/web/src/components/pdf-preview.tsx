@@ -11,6 +11,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FixWithAiButton } from "@/components/fix-with-ai-button";
 import { downloadPdfBase64 } from "@/lib/project-files";
 import {
   buildPdfClickDomContext,
@@ -58,6 +59,7 @@ interface PdfPreviewProps {
   compileErrors?: CompileError[];
   isStale?: boolean;
   staleErrorCount?: number;
+  onFixWithAi?: () => void;
 }
 
 export function PdfPreview({
@@ -72,6 +74,7 @@ export function PdfPreview({
   compileErrors = [],
   isStale,
   staleErrorCount = 0,
+  onFixWithAi,
 }: PdfPreviewProps) {
   const [numPages, setNumPages] = useState(0);
   const [page, setPage] = useState(1);
@@ -174,7 +177,7 @@ export function PdfPreview({
           role="status"
         >
           <AlertCircle className="h-3.5 w-3.5 text-error shrink-0" />
-          <span className="text-ink">
+          <span className="text-ink flex-1 min-w-0">
             Showing last successful proof
             {staleErrorCount > 0 && (
               <span className="text-ink-muted">
@@ -183,6 +186,13 @@ export function PdfPreview({
               </span>
             )}
           </span>
+          {onFixWithAi && (
+            <FixWithAiButton
+              errorCount={staleErrorCount}
+              onClick={onFixWithAi}
+              className="ml-auto"
+            />
+          )}
         </div>
       )}
       <div className="flex items-center justify-center gap-1 sm:gap-3 py-2 shrink-0 overflow-x-auto px-2">
