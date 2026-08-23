@@ -166,7 +166,7 @@ export function EditorStatusBar({
       {showSaveStatus && (
         <span
           className={
-            saveStatus === "saving"
+            saveStatus === "saving" || saveStatus === "syncing"
               ? "text-ink-muted"
               : saveStatus === "failed"
                 ? "text-red-600"
