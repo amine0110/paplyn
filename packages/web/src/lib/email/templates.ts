@@ -1,4 +1,7 @@
+import { BRAND } from "@/components/plicum-wordmark";
 import { PRODUCT_NAME } from "@/lib/product";
+
+const DEFAULT_APP_URL = "https://plicum.com";
 
 const ACCENT = "#3d8585";
 const INK = "#1c1917";
@@ -16,16 +19,18 @@ export function escapeHtml(text: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function wordmarkHtml(productName: string): string {
-  const name = escapeHtml(productName);
+function wordmarkImageUrl(appUrl: string): string {
+  const base = (appUrl || DEFAULT_APP_URL).replace(/\/$/, "");
+  return `${base}${BRAND.wordmarkLight}`;
+}
+
+function wordmarkHtml(appUrl: string): string {
+  const src = escapeHtml(wordmarkImageUrl(appUrl));
   return `
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
       <tr>
-        <td style="width:28px;height:28px;background:${ACCENT};border-radius:6px;text-align:center;vertical-align:middle;">
-          <span style="display:inline-block;color:#ffffff;font-family:Georgia,'Times New Roman',serif;font-size:18px;font-weight:700;line-height:28px;">P</span>
-        </td>
-        <td style="padding-left:10px;vertical-align:middle;">
-          <span style="font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:600;color:${INK};letter-spacing:-0.02em;">${name}</span>
+        <td align="center" style="text-align:center;">
+          <img src="${src}" alt="Plicum" width="180" style="display:block;margin:0 auto;height:auto;border:0;outline:none;text-decoration:none;" />
         </td>
       </tr>
     </table>
@@ -36,10 +41,12 @@ function emailShell({
   productName,
   preheader,
   bodyHtml,
+  appUrl,
 }: {
   productName: string;
   preheader: string;
   bodyHtml: string;
+  appUrl: string;
 }): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -56,8 +63,8 @@ function emailShell({
       <td align="center">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
           <tr>
-            <td style="padding-bottom:24px;">
-              ${wordmarkHtml(productName)}
+            <td align="center" style="padding-bottom:24px;text-align:center;">
+              ${wordmarkHtml(appUrl)}
             </td>
           </tr>
           <tr>
@@ -82,7 +89,7 @@ function ctaButton(label: string, href: string): string {
   const safeLabel = escapeHtml(label);
   const safeHref = escapeHtml(href);
   return `
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:28px 0 20px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:28px auto 20px;">
       <tr>
         <td style="border-radius:8px;background:${ACCENT};">
           <a href="${safeHref}" style="display:inline-block;padding:12px 22px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">${safeLabel}</a>
@@ -113,6 +120,7 @@ export function renderInviteEmail({
   projectName,
   roleLabel,
   inviteUrl,
+  appUrl,
 }: InviteEmailParams): { subject: string; html: string; text: string } {
   const safeOwner = escapeHtml(ownerName);
   const safeProject = escapeHtml(projectName);
@@ -138,6 +146,7 @@ export function renderInviteEmail({
     productName,
     preheader: `${ownerName} invited you to ${projectName}`,
     bodyHtml,
+    appUrl,
   });
 
   const text = [
@@ -166,6 +175,7 @@ export function renderResetPasswordEmail({
   productName = PRODUCT_NAME,
   userName,
   resetUrl,
+  appUrl,
 }: ResetPasswordEmailParams): { subject: string; html: string; text: string } {
   const safeName = escapeHtml(userName);
 
@@ -188,6 +198,7 @@ export function renderResetPasswordEmail({
     productName,
     preheader: `Reset your ${productName} password`,
     bodyHtml,
+    appUrl,
   });
 
   const text = [
