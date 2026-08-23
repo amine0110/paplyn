@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { normalizeInsertAtCursorText } from "./apply-ai-client-actions";
+import { applyReplaceLinesToFileContent } from "./ai-client-actions";
+import { applyAiClientActions, normalizeInsertAtCursorText } from "./apply-ai-client-actions";
+import type { AiClientAction } from "./ai-client-actions";
 
 describe("normalizeInsertAtCursorText", () => {
   it("adds a trailing newline when inserting a comment before documentclass at file start", () => {
@@ -36,5 +38,75 @@ describe("normalizeInsertAtCursorText", () => {
     const doc = "SeeSmith";
     const insert = "\\cite{smith2020}";
     expect(normalizeInsertAtCursorText(insert, doc, 3)).toBe("\\cite{smith2020}\n");
+  });
+});
+
+describe("applyAiClientActions replace_lines ordering", () => {
+  it("applies multiple replace_lines bottom-up against original line numbers", async () => {
+    const content = [
+      "\\documentclass{article}",
+      "line2",
+      "line3",
+      "line4",
+      "line5",
+      "\\begin{document}",
+      "\\end{document}",
+    ].join("\n");
+
+    const fileContents: Record<string, string> = { "main.tex": content };
+    const actions: AiClientAction[] = [
+      {
+        type: "replace_lines",
+        file: "main.tex",
+        startLine: 2,
+        endLine: 2,
+        replace: "fixed2",
+        label: "Replaced line 2 in main.tex",
+      },
+      {
+        type: "replace_lines",
+        file: "main.tex",
+        startLine: 5,
+        endLine: 5,
+        replace: "fixed5",
+        label: "Replaced line 5 in main.tex",
+      },
+    ];
+
+    const result = await applyAiClientActions(actions, {
+      activeFile: null,
+      editorView: null,
+      fileContents,
+      hasSelection: false,
+      saveFile: async (path, next) => {
+        fileContents[path] = next;
+      },
+    });
+
+    expect(result.applied).toHaveLength(2);
+    expect(fileContents["main.tex"]).toBe(
+      [
+        "\\documentclass{article}",
+        "fixed2",
+        "line3",
+        "line4",
+        "fixed5",
+        "\\begin{document}",
+        "\\end{document}",
+      ].join("\n")
+    );
+  });
+
+  it("applyReplaceLinesToFileContent matches single-line edits", () => {
+    expect(
+      applyReplaceLinesToFileContent("\\documentclass{article}\n\\usepackage\n", {
+        type: "replace_lines",
+        file: "main.tex",
+        startLine: 2,
+        endLine: 2,
+        replace: "\\usepackage{amsmath}",
+        label: "",
+      })
+    ).toBe("\\documentclass{article}\n\\usepackage{amsmath}\n");
   });
 });

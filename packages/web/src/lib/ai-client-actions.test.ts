@@ -208,4 +208,46 @@ describe("ai-client-actions", () => {
     expect(lineRangeToOffsets(content, 3, 3)).toEqual({ from: 4, to: 5 });
     expect(lineRangeToOffsets(content, 2, 3)).toEqual({ from: 2, to: 5 });
   });
+
+  it("rejects compile-fix replace_lines that smash preamble before documentclass", () => {
+    const content = [
+      "\\documentclass[conference]{IEEEtran}",
+      "\\usepackage{amsmath}",
+      "\\begin{document}",
+      "\\end{document}",
+    ].join("\n");
+    const smashed =
+      "\\usepackage  \\title{Your Paper Title Here\\documentclass[conference]{IEEEtran}";
+
+    const result = validateClientAction(
+      {
+        type: "replace_lines",
+        file: "main.tex",
+        startLine: 1,
+        endLine: 1,
+        replace: smashed,
+      },
+      { texFiles: new Map([["main.tex", content]]), hasSelection: false, compileFix: true }
+    );
+
+    expect("rejected" in result && result.rejected).toBe(true);
+    if ("rejected" in result && result.rejected) {
+      expect(result.reason).toContain("before \\documentclass");
+    }
+  });
+
+  it("allows compile-fix replace_lines for bare usepackage on cited line", () => {
+    const content = "\\documentclass{article}\n\\usepackage\n\\begin{document}\n";
+    const result = validateClientAction(
+      {
+        type: "replace_lines",
+        file: "main.tex",
+        startLine: 2,
+        endLine: 2,
+        replace: "\\usepackage{amsmath}",
+      },
+      { texFiles: new Map([["main.tex", content]]), hasSelection: false, compileFix: true }
+    );
+    expect("action" in result && result.action.type).toBe("replace_lines");
+  });
 });

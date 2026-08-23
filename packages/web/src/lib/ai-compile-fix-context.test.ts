@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildAiCompileFixContext,
   buildCompileFixTargetHint,
+  buildCompileFixMultiErrorHint,
   buildGetFileWindow,
   extractLineSnippet,
   formatCompileErrorLines,
@@ -122,6 +123,27 @@ describe("buildCompileFixTargetHint", () => {
     expect(hint).toContain("main.tex:12");
     expect(hint).toContain('get_file(path="main.tex", startLine=2, endLine=22)');
     expect(hint).toContain("FIRST tool call");
+    expect(hint).toContain("FIRST document copy");
+    expect(hint).toContain("Do not prepend");
+  });
+});
+
+describe("buildCompileFixMultiErrorHint", () => {
+  it("lists cited lines and bottom-up apply order", () => {
+    const hint = buildCompileFixMultiErrorHint([
+      { message: "error a", file: "main.tex", line: 3 },
+      { message: "error b", file: "main.tex", line: 12 },
+      { message: "error c", file: "main.tex", line: 7 },
+    ]);
+    expect(hint).toContain("main.tex lines 3, 7, 12");
+    expect(hint).toContain("bottom up");
+    expect(hint).toContain("main.tex:12, main.tex:7, main.tex:3");
+  });
+
+  it("returns undefined for a single error", () => {
+    expect(
+      buildCompileFixMultiErrorHint([{ message: "one", file: "main.tex", line: 2 }])
+    ).toBeUndefined();
   });
 });
 
