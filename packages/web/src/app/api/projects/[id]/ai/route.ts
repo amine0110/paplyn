@@ -39,14 +39,20 @@ import {
   collectPapersFromToolResults,
   collectUsedPlugins,
   collectClientActionsFromToolResults,
+  collectToolReadChips,
   toAppliedActionSummaries,
   formatToolResultsAsAssistantMessage,
+  formatAppliedActionsAsAssistantMessage,
+  resolveEmptyAssistantFallback,
+  hadReadOnlyToolActivity,
   hadToolActivity,
+  NO_EDIT_FALLBACK_MESSAGE,
   usedClientEditTools,
 } from "@/lib/ai-response";
 import {
   createWorkspaceTools,
   WORKSPACE_SYSTEM_PROMPT,
+  WORKSPACE_CHAT_SUFFIX,
   COMPILE_FIX_WORKSPACE_SUFFIX,
 } from "@/lib/ai-plugins/workspace-tools";
 import {
@@ -211,6 +217,10 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
     systemPrompt += `\n${pluginSystemPrompt}`;
   }
 
+  if (!compileFix) {
+    systemPrompt += `\n\n${WORKSPACE_CHAT_SUFFIX}`;
+  }
+
   if (fileContext) {
     systemPrompt += compileFix
       ? `\n\n${fileContext}`
@@ -332,15 +342,26 @@ async function resolveAssistantContent<TOOLS extends ToolSet>(options: {
 
   if (trimmed) return result.text;
 
+  if (!compileFixRequest) {
+    return resolveEmptyAssistantFallback({ result, actions });
+  }
+
   if (!hadToolActivity(result)) {
     return "I couldn't generate a response. Please try again.";
   }
+
+  const appliedSummary = formatAppliedActionsAsAssistantMessage(actions);
+  if (appliedSummary) return appliedSummary;
 
   const fallback = formatToolResultsAsAssistantMessage(result);
   if (fallback) return fallback;
 
   if (usedClientEditTools(result)) {
     return "I applied the suggested edits. Recompile to check whether the errors are resolved.";
+  }
+
+  if (hadReadOnlyToolActivity(result)) {
+    return NO_EDIT_FALLBACK_MESSAGE;
   }
 
   return "I searched but couldn't format the results. Please try asking again.";
@@ -586,6 +607,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const papers = collectPapersFromToolResults(result);
         const actions = collectClientActionsFromToolResults(result);
         const appliedActions = toAppliedActionSummaries(actions);
+        const toolReads = collectToolReadChips(result);
 
         await incrementAiUsage(session.user.id);
 
@@ -595,6 +617,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           ...(usedPlugins.length > 0 ? { usedPlugins } : {}),
           ...(papers.length > 0 ? { papers } : {}),
           ...(actions.length > 0 ? { actions, appliedActions } : {}),
+          ...(toolReads.length > 0 ? { toolReads } : {}),
         };
         emit(doneEvent);
       };

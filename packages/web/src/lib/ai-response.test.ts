@@ -2,15 +2,20 @@ import { describe, expect, it } from "vitest";
 import {
   collectPapersFromToolResults,
   collectClientActionsFromToolResults,
+  collectToolReadChips,
   collectToolResultTexts,
   collectUsedPlugins,
   formatToolResultsAsAssistantMessage,
+  formatAppliedActionsAsAssistantMessage,
   hadToolActivity,
+  NO_EDIT_FALLBACK_MESSAGE,
+  resolveEmptyAssistantFallback,
   summarizeToolResult,
   toAppliedActionSummaries,
   usedLiteratureSearch,
 } from "./ai-response";
 import { getEnabledAiPlugins } from "./ai-plugins";
+import { WORKSPACE_CHAT_SUFFIX, WORKSPACE_SYSTEM_PROMPT } from "./ai-plugins/workspace-tools";
 
 function mockResult(overrides: Record<string, unknown> = {}) {
   return {
@@ -63,7 +68,63 @@ describe("ai-response helpers", () => {
     expect(formatToolResultsAsAssistantMessage(result)).toContain("Found 3 paper(s)");
   });
 
-  it("formats workspace tool output as human-readable fallback text", () => {
+  it("does not use get_file read logs as fallback assistant text", () => {
+    const result = mockResult({
+      toolResults: [
+        {
+          toolName: "get_file",
+          result: {
+            path: "main.tex",
+            content: "\\usepackage{amsmath}",
+            startLine: 1,
+            endLine: 100,
+            totalLines: 200,
+            note: "",
+            error: "",
+          },
+        },
+        {
+          toolName: "get_file",
+          result: {
+            path: "main.tex",
+            content: "\\author{Foo}",
+            startLine: 10,
+            endLine: 30,
+            totalLines: 200,
+            note: "",
+            error: "",
+          },
+        },
+      ],
+    });
+    expect(formatToolResultsAsAssistantMessage(result)).toBeNull();
+    expect(resolveEmptyAssistantFallback({ result, actions: [] })).toBe(NO_EDIT_FALLBACK_MESSAGE);
+  });
+
+  it("collects read chips without putting them in the assistant bubble", () => {
+    const result = mockResult({
+      toolResults: [
+        {
+          toolName: "get_file",
+          result: {
+            path: "main.tex",
+            content: "\\author{Foo}",
+            startLine: 10,
+            endLine: 30,
+            totalLines: 200,
+            note: "",
+            error: "",
+          },
+        },
+      ],
+    });
+    expect(collectToolReadChips(result)).toEqual([
+      { label: "Read main.tex (lines 10–30)", path: "main.tex" },
+    ]);
+    expect(resolveEmptyAssistantFallback({ result, actions: [] })).toBe(NO_EDIT_FALLBACK_MESSAGE);
+  });
+
+  it("formats rejected edits without read logs in fallback assistant text", () => {
     const result = mockResult({
       toolResults: [
         {
@@ -87,8 +148,50 @@ describe("ai-response helpers", () => {
         },
       ],
     });
-    expect(formatToolResultsAsAssistantMessage(result)).toBe(
-      "Read main.tex (line 2). search text not found in file"
+    expect(formatToolResultsAsAssistantMessage(result)).toBe("search text not found in file");
+  });
+
+  it("surfaces applied edit labels when model text is empty", () => {
+    const action = {
+      type: "apply_edit" as const,
+      file: "main.tex",
+      search: "University of Old",
+      replace: "UMONS",
+      label: "Applied edit to main.tex",
+    };
+    const result = mockResult({
+      toolResults: [
+        {
+          toolName: "apply_edit",
+          result: { kind: "client-action", action },
+        },
+      ],
+    });
+    expect(formatAppliedActionsAsAssistantMessage([action])).toBe("Applied edit to main.tex");
+    expect(resolveEmptyAssistantFallback({ result, actions: [action] })).toBe(
+      "Applied edit to main.tex"
+    );
+  });
+
+  it("surfaces replace_lines labels when model text is empty", () => {
+    const action = {
+      type: "replace_lines" as const,
+      file: "main.tex",
+      startLine: 3,
+      endLine: 3,
+      replace: "\\affiliation{UMONS}",
+      label: "Replaced line 3 in main.tex",
+    };
+    const result = mockResult({
+      toolResults: [
+        {
+          toolName: "replace_lines",
+          result: { kind: "client-action", action },
+        },
+      ],
+    });
+    expect(resolveEmptyAssistantFallback({ result, actions: [action] })).toBe(
+      "Replaced line 3 in main.tex"
     );
   });
 
@@ -221,5 +324,12 @@ describe("ai-response helpers", () => {
       steps: [{ toolCalls: [], toolResults: [{ toolName: "replace_lines", result: payload }] }],
     });
     expect(collectClientActionsFromToolResults(result)).toEqual([action]);
+  });
+
+  it("workspace system prompt tells the model to apply paper change requests", () => {
+    expect(WORKSPACE_SYSTEM_PROMPT).toContain("change requests get edits");
+    expect(WORKSPACE_SYSTEM_PROMPT).toContain("apply_edit or replace_lines");
+    expect(WORKSPACE_SYSTEM_PROMPT).toContain("Do not spend the whole turn reading overlapping get_file");
+    expect(WORKSPACE_CHAT_SUFFIX).toContain("apply_edit or replace_lines");
   });
 });

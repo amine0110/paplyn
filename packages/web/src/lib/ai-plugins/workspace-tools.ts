@@ -186,7 +186,7 @@ export function readTexFile(
   };
 }
 
-export const WORKSPACE_SYSTEM_PROMPT = `You have workspace tools to list, read, and edit the user's LaTeX project:
+export const WORKSPACE_SYSTEM_PROMPT = `You are a workspace agent for this LaTeX project. You have tools to list, read, and edit files:
 - list_files — list all .tex file paths in the project
 - get_file — read a line range from one .tex file (content is raw file text; line numbers are in startLine/endLine/totalLines; max ${GET_FILE_MAX_LINES} lines per call)
 - apply_edit — surgical search/replace in a file (search must match exactly once)
@@ -195,13 +195,19 @@ export const WORKSPACE_SYSTEM_PROMPT = `You have workspace tools to list, read, 
 - insert_at_cursor — insert LaTeX at the user's cursor
 - replace_selection — replace the user's editor selection
 
-Workflow: use list_files to discover paths, get_file to read small line windows around errors, then replace_lines (when errors cite a line), apply_edit, or fix_compile_errors to make changes. Apply edits with tools — do not only describe changes in prose.
+When the user states a fact about the paper or asks you to change something (affiliation, university, institution, author, title, abstract, adding/removing/rewording text, etc.), you MUST apply the change with apply_edit or replace_lines after locating the relevant span. Answer questions in prose; change requests get edits — do not only describe changes.
+Do not spend the whole turn reading overlapping get_file windows of the same file. Read one useful window, then edit. If the field is not in that window, read a different range once — then edit or say you could not find it.
+
+Workflow: use list_files to discover paths, get_file to read small line windows, then replace_lines (when errors cite a line), apply_edit, or fix_compile_errors to make changes.
 Only reference .tex files returned by list_files or get_file. Never invent file paths or citations.
 Never call tools that are not listed above.
 Keep each edit under ${8_000} characters. Prefer minimal, surgical changes.
 When compile errors cite a line number, use replace_lines — apply_edit often fails on repeated lines in large templates.
 If apply_edit is rejected (0 or multiple matches), use replace_lines for the cited line range.
-After applying edits, briefly explain what changed in your reply.`;
+After applying edits, reply with a short human sentence about what changed. Never put raw tool logs in your reply.`;
+
+/** Extra guidance for general chat (non compile-fix) turns. */
+export const WORKSPACE_CHAT_SUFFIX = `Treat user messages that state or request a change to the paper as edit requests: locate the field in the project .tex files, apply_edit or replace_lines, then confirm briefly in your reply.`;
 
 export const COMPILE_FIX_WORKSPACE_SUFFIX = `Focus on fixing compile errors in the FIRST document copy only (from the first \\\\documentclass through the first \\\\end{document}). pdflatex stops at the first \\\\end{document} — ignore duplicate templates pasted after it.
 

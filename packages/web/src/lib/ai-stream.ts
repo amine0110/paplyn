@@ -1,4 +1,4 @@
-import type { AiAppliedAction, AiChatResponse, AiPaper, AiUsedPlugin } from "@/lib/ai-types";
+import type { AiAppliedAction, AiChatResponse, AiPaper, AiToolRead, AiUsedPlugin } from "@/lib/ai-types";
 import type { AiClientAction } from "@/lib/ai-client-actions";
 
 export const AI_STREAM_CONTENT_TYPE = "application/x-ndjson";
@@ -84,6 +84,7 @@ export async function consumeAiStream(
           ...(event.papers ? { papers: event.papers } : {}),
           ...(event.actions ? { actions: event.actions } : {}),
           ...(event.appliedActions ? { appliedActions: event.appliedActions } : {}),
+          ...(event.toolReads ? { toolReads: event.toolReads } : {}),
         };
       }
     }
@@ -100,6 +101,7 @@ export async function consumeAiStream(
         ...(trailing.papers ? { papers: trailing.papers } : {}),
         ...(trailing.actions ? { actions: trailing.actions } : {}),
         ...(trailing.appliedActions ? { appliedActions: trailing.appliedActions } : {}),
+        ...(trailing.toolReads ? { toolReads: trailing.toolReads } : {}),
       };
     }
   }
@@ -115,4 +117,4 @@ export function isAiStreamResponse(response: Response): boolean {
   return (response.headers.get("content-type") ?? "").includes("ndjson");
 }
 
-export type { AiAppliedAction, AiClientAction, AiPaper, AiUsedPlugin };
+export type { AiAppliedAction, AiClientAction, AiPaper, AiToolRead, AiUsedPlugin };
