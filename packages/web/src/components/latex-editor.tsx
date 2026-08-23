@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection } from "@codemirror/view";
 import { defaultKeymap, indentWithTab } from "@codemirror/commands";
 import { syntaxHighlighting, bracketMatching, StreamLanguage } from "@codemirror/language";
@@ -25,6 +25,7 @@ import {
 } from "@/lib/collab-seed";
 import { buildCollabEditorSyncExtensions } from "@/lib/latex-editor-extensions";
 import {
+  COLLAB_CONNECTION_LOST_MS,
   COLLAB_SAVE_MAX_WAIT_MS,
   createSaveStatusTracker,
   PERSIST_ACK_FIELD,
@@ -109,9 +110,25 @@ export function LatexEditor({
     const saveStatusTracker = onSaveStatusChange
       ? createSaveStatusTracker(onSaveStatusChange, {
           ackTimeoutMs: collabEnabled ? COLLAB_SAVE_MAX_WAIT_MS : 0,
+          initialStatus: collabEnabled ? "syncing" : "saved",
+          isSynced: () => !collabEnabled || (provider?.synced ?? false),
           isConnected: () => !collabEnabled || (provider?.wsconnected ?? false),
+          connectionLostGraceMs: COLLAB_CONNECTION_LOST_MS,
         })
       : null;
+
+    const editableCompartment = new Compartment();
+    let collabSynced = !collabEnabled;
+
+    const enableEditingAfterSync = (view: EditorView) => {
+      if (!collabSynced) {
+        collabSynced = true;
+        saveStatusTracker?.onSynced();
+        view.dispatch({
+          effects: editableCompartment.reconfigure(EditorView.editable.of(canEdit)),
+        });
+      }
+    };
 
     if (collabToken) {
       provider = new WebsocketProvider(collabBaseUrl, projectId, ydoc, {
@@ -120,6 +137,13 @@ export function LatexEditor({
       provider.on("status", (event: { status: string }) => {
         if (event.status === "disconnected") {
           saveStatusTracker?.onConnectionLost();
+        } else if (event.status === "connected") {
+          saveStatusTracker?.onConnectionRestored();
+        }
+      });
+      provider.on("synced", (synced: boolean) => {
+        if (synced && viewRef.current) {
+          enableEditingAfterSync(viewRef.current);
         }
       });
       const payload = parseCollabToken(collabToken);
@@ -190,8 +214,8 @@ export function LatexEditor({
         maxRenderedOptions: 24,
       }),
       keymap.of([...completionKeymap, ...searchKeymap, ...defaultKeymap, ...keymapExtensions, indentWithTab]),
+      editableCompartment.of(EditorView.editable.of(canEdit && collabSynced)),
       EditorView.lineWrapping,
-      EditorView.editable.of(canEdit),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
           const content = update.state.doc.toString();
@@ -262,6 +286,9 @@ export function LatexEditor({
 
     const view = new EditorView({ state, parent: containerRef.current });
     viewRef.current = view;
+    if (collabEnabled && provider?.synced) {
+      enableEditingAfterSync(view);
+    }
     onEditorReady?.(view);
     reportStats(initialDoc);
 

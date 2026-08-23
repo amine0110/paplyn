@@ -5,10 +5,16 @@ export const COLLAB_SAVE_MAX_WAIT_MS = 10000;
 /** Matches collab server persist ack map (packages/collab/src/persistence.ts). */
 export const PERSIST_META_MAP = "_meta";
 export const PERSIST_ACK_FIELD = "persistedAt";
+/** Yjs transaction origin for persist ack — must not mark the doc dirty on the client. */
+export const PERSIST_ACK_ORIGIN = "persist-ack";
 
-export type SaveStatus = "saved" | "saving" | "failed";
+/** Sustained disconnect before failing an in-flight save (after initial sync). */
+export const COLLAB_CONNECTION_LOST_MS = 5000;
+
+export type SaveStatus = "syncing" | "saved" | "saving" | "failed";
 
 export function getSaveStatusLabel(status: SaveStatus): string {
+  if (status === "syncing") return "Syncing…";
   if (status === "saving") return "Saving…";
   if (status === "failed") return "Save failed";
   return "Saved";
@@ -17,8 +23,14 @@ export function getSaveStatusLabel(status: SaveStatus): string {
 export type SaveStatusTrackerOptions = {
   /** After this many ms in "saving" without markSaved, markFailed. 0 disables. */
   ackTimeoutMs?: number;
-  /** When false at markDirty time, fail immediately instead of showing Saving…. */
+  /** Initial UI status; collab clients should start as "syncing", not "saved". */
+  initialStatus?: SaveStatus;
+  /** When false, local doc updates are ignored (not persistable yet). */
+  isSynced?: () => boolean;
+  /** When false after grace period while saving, markFailed. */
   isConnected?: () => boolean;
+  /** Ms to stay disconnected after sync before failing in-flight saves. */
+  connectionLostGraceMs?: number;
 };
 
 export function createSaveStatusTracker(
@@ -26,13 +38,23 @@ export function createSaveStatusTracker(
   options: SaveStatusTrackerOptions = {}
 ) {
   const ackTimeoutMs = options.ackTimeoutMs ?? COLLAB_SAVE_MAX_WAIT_MS;
-  let status: SaveStatus = "saved";
+  const connectionLostGraceMs = options.connectionLostGraceMs ?? COLLAB_CONNECTION_LOST_MS;
+  let status: SaveStatus = options.initialStatus ?? "saved";
+  let hasBeenSynced = status !== "syncing";
   let ackTimer: ReturnType<typeof setTimeout> | undefined;
+  let connectionLostTimer: ReturnType<typeof setTimeout> | undefined;
 
   const clearAckTimer = () => {
     if (ackTimer !== undefined) {
       clearTimeout(ackTimer);
       ackTimer = undefined;
+    }
+  };
+
+  const clearConnectionLostTimer = () => {
+    if (connectionLostTimer !== undefined) {
+      clearTimeout(connectionLostTimer);
+      connectionLostTimer = undefined;
     }
   };
 
@@ -44,6 +66,7 @@ export function createSaveStatusTracker(
 
   const markFailed = () => {
     clearAckTimer();
+    clearConnectionLostTimer();
     setStatus("failed");
   };
 
@@ -63,28 +86,53 @@ export function createSaveStatusTracker(
   };
 
   const markDirty = () => {
-    if (options.isConnected && !options.isConnected()) {
-      markFailed();
-      return;
-    }
+    if (options.isSynced && !options.isSynced()) return;
     setStatus("saving");
     startAckTimer();
   };
 
   const onDocUpdate = (origin: unknown, remoteOrigin: unknown) => {
     if (origin === remoteOrigin) return;
+    if (origin === PERSIST_ACK_ORIGIN) return;
     markDirty();
   };
 
-  const onConnectionLost = () => {
-    if (status === "saving") {
-      markFailed();
+  const onSynced = () => {
+    hasBeenSynced = true;
+    if (status === "syncing") {
+      setStatus("saved");
     }
+  };
+
+  const onConnectionLost = () => {
+    clearConnectionLostTimer();
+    if (!hasBeenSynced || status !== "saving") return;
+    connectionLostTimer = setTimeout(() => {
+      if (status === "saving" && options.isConnected && !options.isConnected()) {
+        markFailed();
+      }
+    }, connectionLostGraceMs);
+  };
+
+  const onConnectionRestored = () => {
+    clearConnectionLostTimer();
   };
 
   const destroy = () => {
     clearAckTimer();
+    clearConnectionLostTimer();
   };
 
-  return { onDocUpdate, markSaved, markFailed, markDirty, onConnectionLost, destroy };
+  onChange(status);
+
+  return {
+    onDocUpdate,
+    markSaved,
+    markFailed,
+    markDirty,
+    onSynced,
+    onConnectionLost,
+    onConnectionRestored,
+    destroy,
+  };
 }

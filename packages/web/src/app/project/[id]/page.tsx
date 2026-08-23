@@ -265,7 +265,10 @@ export default function ProjectPage() {
 
   useEffect(() => {
     collabTokenRef.current = collabToken;
-  }, [collabToken]);
+    if (collabToken && canEdit) {
+      setSaveStatus("syncing");
+    }
+  }, [collabToken, canEdit]);
 
   const saveFile = useCallback(
     async (path: string, content: string, isBinary = false): Promise<boolean> => {
