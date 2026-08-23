@@ -12,15 +12,62 @@ export const CLIENT_EDIT_TOOL_NAMES = [
   "fix_compile_errors",
 ] as const;
 
+export const COMPILE_FIX_EDIT_TOOL_NAMES = [
+  "get_file",
+  ...CLIENT_EDIT_TOOL_NAMES,
+] as const;
+
+function normalizeTexPath(path: string): string {
+  return path.replace(/^\.\//, "").trim();
+}
+
+function readTexFile(
+  texFiles: Map<string, string>,
+  path: string
+): { path: string; content: string; error: string } {
+  const normalized = normalizeTexPath(path);
+  if (!normalized.endsWith(".tex")) {
+    return {
+      path: normalized,
+      content: "",
+      error: `File "${normalized}" is not a .tex file in this project.`,
+    };
+  }
+
+  const content = texFiles.get(normalized);
+  if (content === undefined) {
+    return {
+      path: normalized,
+      content: "",
+      error: `File "${normalized}" is not in this project.`,
+    };
+  }
+
+  return {
+    path: normalized,
+    content,
+    error: "",
+  };
+}
+
 export const CLIENT_EDIT_SYSTEM_PROMPT = `When the user asks you to edit, fix, rewrite, or change their LaTeX manuscript:
 - Apply changes with insert_at_cursor, replace_selection, apply_edit, or fix_compile_errors tools — do not only describe edits in prose.
+- Use get_file to read a full .tex file when snippets are not enough, then apply_edit or fix_compile_errors.
 - Use insert_at_cursor for new content at the cursor; replace_selection when changing highlighted text.
 - Use apply_edit for surgical search/replace changes in a specific .tex file. The search string must match exactly once.
 - Use fix_compile_errors for small LaTeX fixes based on the current compile error list.
 - Only reference .tex files that exist in the project context. Never invent file paths or citations.
+- Never call tools that are not listed for this request.
 - Keep each edit under ${8_000} characters. Prefer minimal, surgical changes.
 - If an edit is ambiguous (multiple matches, unclear target), ask the user instead of guessing.
 - After applying edits, briefly explain what changed in your reply.`;
+
+export const COMPILE_FIX_CLIENT_EDIT_PROMPT = `Apply surgical LaTeX fixes with fix_compile_errors or apply_edit.
+- Use get_file when you need the full contents of a .tex file, then apply_edit or fix_compile_errors.
+- Use exact search/replace from the snippets or get_file output. Each search must match once.
+- Only edit .tex files shown in context or returned by get_file.
+- Only call tools listed for this request: get_file, fix_compile_errors, apply_edit, insert_at_cursor, replace_selection.
+- Keep edits minimal. After tool calls, briefly explain fixes.`;
 
 export function createClientEditTools(ctx: ValidateActionContext) {
   const wrap =
@@ -44,6 +91,14 @@ export function createClientEditTools(ctx: ValidateActionContext) {
     };
 
   return {
+    get_file: tool({
+      description:
+        "Read the full content of a project .tex file from memory. Use when snippets are insufficient before apply_edit or fix_compile_errors.",
+      parameters: z.object({
+        path: z.string().describe("Project .tex file path, e.g. main.tex"),
+      }),
+      execute: async ({ path }) => readTexFile(ctx.texFiles, path),
+    }),
     insert_at_cursor: tool({
       description:
         "Insert LaTeX text at the user's cursor in the active editor. Use for adding new content.",
