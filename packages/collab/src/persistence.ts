@@ -13,6 +13,25 @@ export const PERSIST_ACK_FIELD = "persistedAt";
 /** Yjs transaction origin for persist ack — must not re-trigger debounced save. */
 export const PERSIST_ACK_ORIGIN = "persist-ack";
 
+let loggedPersistAckPersistSkip = false;
+
+/** True when a doc update should schedule debounced room persist. */
+export function shouldSchedulePersistFromUpdate(origin: unknown): boolean {
+  return origin !== PERSIST_ACK_ORIGIN;
+}
+
+/** Log .tex path lengths after a client-originated doc update (diagnostics). */
+export function logClientTexLengths(roomId: string, doc: Doc, origin: unknown): void {
+  const texLengths: Record<string, number> = {};
+  for (const file of getTextFilesFromDoc(doc)) {
+    if (getPathExtension(file.path) === "tex") {
+      texLengths[file.path] = file.content.length;
+    }
+  }
+  if (Object.keys(texLengths).length === 0) return;
+  console.log(`[collab] doc update roomId=${roomId} origin=${String(origin)}`, texLengths);
+}
+
 /** Encode a Yjs document as a binary update suitable for storage. */
 export function encodeDocState(doc: Doc): Uint8Array {
   return Y.encodeStateAsUpdate(doc);
@@ -95,6 +114,7 @@ export function getTextFilesFromDoc(doc: Doc): Array<{ path: string; content: st
   const files: Array<{ path: string; content: string }> = [];
   doc.share.forEach((sharedType, path) => {
     if (COLLAB_INTERNAL_PATHS.has(path)) return;
+    if (isBinaryCollabPath(path)) return;
     if (!isYTextLike(sharedType)) return;
     files.push({ path, content: sharedType.toString() });
   });
@@ -254,10 +274,28 @@ export async function syncProjectFilesFromDoc(
   };
 }
 
+const lastPersistedTexLengthsByRoom = new Map<string, Map<string, number>>();
+
 function signalPersistAck(doc: Doc): void {
   doc.transact(() => {
     doc.getMap(PERSIST_META_MAP).set(PERSIST_ACK_FIELD, Date.now());
   }, PERSIST_ACK_ORIGIN);
+}
+
+function logUnchangedTexLengths(roomId: string, doc: Doc): void {
+  const current = new Map<string, number>();
+  for (const file of getTextFilesFromDoc(doc)) {
+    if (getPathExtension(file.path) === "tex") {
+      current.set(file.path, file.content.length);
+    }
+  }
+  const previous = lastPersistedTexLengthsByRoom.get(roomId);
+  for (const [path, length] of current) {
+    if (previous?.get(path) === length) {
+      console.log(`[collab] persist ${path} length unchanged (${length}) roomId=${roomId}`);
+    }
+  }
+  lastPersistedTexLengthsByRoom.set(roomId, current);
 }
 
 /** Full persist pipeline: Yjs blob, HTTP project_file sync, then client ack. */
@@ -265,6 +303,7 @@ export async function persistRoomState(sql: postgres.Sql, roomId: string, doc: D
   try {
     await saveRoomState(sql, roomId, encodeDocState(doc));
     await syncProjectFilesFromDoc(sql, roomId, doc);
+    logUnchangedTexLengths(roomId, doc);
     const pathLengths = Object.fromEntries(
       getTextFilesFromDoc(doc).map((file) => [file.path, file.content.length])
     );
@@ -400,7 +439,16 @@ export function createPostgresPersistence(sql: postgres.Sql): CollabPersistence 
       debouncedByRoom.set(roomId, debounced);
 
       doc.on("update", (_update, origin) => {
-        if (origin === PERSIST_ACK_ORIGIN) return;
+        if (!shouldSchedulePersistFromUpdate(origin)) {
+          if (!loggedPersistAckPersistSkip) {
+            console.log(
+              `[collab] skipping debounced persist for origin=${PERSIST_ACK_ORIGIN} (persist ack must not re-trigger save)`
+            );
+            loggedPersistAckPersistSkip = true;
+          }
+          return;
+        }
+        logClientTexLengths(roomId, doc, origin);
         debounced.schedule();
       });
     },
