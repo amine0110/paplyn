@@ -15,7 +15,7 @@ export const CLIENT_EDIT_TOOL_NAMES = [
 export const CLIENT_EDIT_SYSTEM_PROMPT = `When the user asks you to edit, fix, rewrite, or change their LaTeX manuscript:
 - Apply changes with insert_at_cursor, replace_selection, apply_edit, or fix_compile_errors tools — do not only describe edits in prose.
 - Use insert_at_cursor for new content at the cursor; replace_selection when changing highlighted text.
-- Use apply_edit for surgical changes in a specific .tex file (search/replace or line range). The search string must match exactly once.
+- Use apply_edit for surgical changes in a specific .tex file (search/replace or line range). The search string must match exactly once. For search/replace set startLine and endLine to 0; for line-range edits set search to an empty string.
 - Use fix_compile_errors for small LaTeX fixes based on the current compile error list.
 - Only reference .tex files that exist in the project context. Never invent file paths or citations.
 - Keep each edit under ${8_000} characters. Prefer minimal, surgical changes.
@@ -49,10 +49,6 @@ export function createClientEditTools(ctx: ValidateActionContext) {
         "Insert LaTeX text at the user's cursor in the active editor. Use for adding new content.",
       parameters: z.object({
         text: z.string().describe("LaTeX text to insert at the cursor"),
-        label: z
-          .string()
-          .optional()
-          .describe('Short chip label, e.g. "Inserted citation at cursor"'),
       }),
       execute: async (args) => wrap("insert_at_cursor")(args),
     }),
@@ -61,29 +57,26 @@ export function createClientEditTools(ctx: ValidateActionContext) {
         "Replace the user's current editor selection with new LaTeX text. Use when rewriting highlighted text.",
       parameters: z.object({
         text: z.string().describe("Replacement LaTeX text"),
-        label: z
-          .string()
-          .optional()
-          .describe('Short chip label, e.g. "Replaced selection"'),
       }),
       execute: async (args) => wrap("replace_selection")(args),
     }),
     apply_edit: tool({
       description:
-        "Apply a surgical edit to a named .tex file via exact search/replace or a 1-based line range.",
+        "Apply a surgical edit to a named .tex file via exact search/replace or a 1-based line range. Use search/replace with startLine=0 and endLine=0, or line range with search=\"\".",
       parameters: z.object({
         file: z.string().describe("Project .tex file path, e.g. main.tex"),
         search: z
           .string()
-          .optional()
-          .describe("Exact substring to replace (must match once in the file)"),
+          .describe("Exact substring to replace (empty string when using line range)"),
         replace: z.string().describe("Replacement text"),
-        startLine: z.number().int().positive().optional().describe("Start line (1-based) for range edit"),
-        endLine: z.number().int().positive().optional().describe("End line (1-based, inclusive) for range edit"),
-        label: z
-          .string()
-          .optional()
-          .describe('Short chip label, e.g. "Applied edit to main.tex"'),
+        startLine: z
+          .number()
+          .int()
+          .describe("Start line (1-based) for range edit; use 0 for search/replace mode"),
+        endLine: z
+          .number()
+          .int()
+          .describe("End line (1-based, inclusive) for range edit; use 0 for search/replace mode"),
       }),
       execute: async (args) => wrap("apply_edit")(args),
     }),
@@ -101,10 +94,6 @@ export function createClientEditTools(ctx: ValidateActionContext) {
           )
           .min(1)
           .max(8),
-        label: z
-          .string()
-          .optional()
-          .describe('Short chip label, e.g. "Fixed 2 compile errors"'),
       }),
       execute: async (args) => wrap("fix_compile_errors")(args),
     }),

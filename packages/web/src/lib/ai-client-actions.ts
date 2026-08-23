@@ -54,10 +54,10 @@ export type AiClientAction =
 
 /** Unlabeled action payload from the model before server validation. */
 export type RawAiClientAction =
-  | (Omit<InsertAtCursorAction, "label"> & { label?: string })
-  | (Omit<ReplaceSelectionAction, "label"> & { label?: string })
-  | (Omit<ApplyEditAction, "label"> & { label?: string })
-  | (Omit<FixCompileErrorsAction, "label"> & { label?: string });
+  | Omit<InsertAtCursorAction, "label">
+  | Omit<ReplaceSelectionAction, "label">
+  | Omit<ApplyEditAction, "label">
+  | Omit<FixCompileErrorsAction, "label">;
 
 export interface ClientActionToolPayload {
   kind: "client-action";
@@ -150,8 +150,6 @@ export function validateClientAction(
   raw: RawAiClientAction,
   ctx: ValidateActionContext
 ): ValidatedAction | null {
-  const label = raw.label?.trim();
-
   switch (raw.type) {
     case "insert_at_cursor": {
       const text = capEditText(raw.text);
@@ -160,7 +158,7 @@ export function validateClientAction(
         action: {
           type: "insert_at_cursor",
           text,
-          label: label || "Inserted text at cursor",
+          label: "Inserted text at cursor",
         },
       };
     }
@@ -172,7 +170,7 @@ export function validateClientAction(
           action: {
             type: "replace_selection",
             text,
-            label: label || "Replaced selection",
+            label: "Replaced selection",
           },
           warning: "No selection in editor; client will insert at cursor instead",
         };
@@ -181,7 +179,7 @@ export function validateClientAction(
         action: {
           type: "replace_selection",
           text,
-          label: label || "Replaced selection",
+          label: "Replaced selection",
         },
       };
     }
@@ -192,14 +190,18 @@ export function validateClientAction(
       if (!replace) return null;
 
       const content = ctx.texFiles.get(file) ?? "";
+      const searchTrimmed = raw.search?.trim() ?? "";
+      const hasSearch = searchTrimmed.length > 0;
+      const startLine = raw.startLine ?? 0;
+      const endLine = raw.endLine ?? 0;
+      const hasLineRange = startLine > 0 && endLine > 0;
       let preview: { ok: true; content: string } | { ok: false; reason: string };
 
-      if (raw.search) {
-        const search = raw.search;
-        if (search.length > MAX_CLIENT_EDIT_CHARS) return null;
-        preview = applySearchReplace(content, search, replace);
-      } else if (raw.startLine != null && raw.endLine != null) {
-        preview = applyLineRangeEdit(content, raw.startLine, raw.endLine, replace);
+      if (hasSearch) {
+        if (searchTrimmed.length > MAX_CLIENT_EDIT_CHARS) return null;
+        preview = applySearchReplace(content, searchTrimmed, replace);
+      } else if (hasLineRange) {
+        preview = applyLineRangeEdit(content, startLine, endLine, replace);
       } else {
         return null;
       }
@@ -210,11 +212,11 @@ export function validateClientAction(
         action: {
           type: "apply_edit",
           file,
-          search: raw.search,
+          search: hasSearch ? searchTrimmed : undefined,
           replace,
-          startLine: raw.startLine,
-          endLine: raw.endLine,
-          label: label || `Applied edit to ${file}`,
+          startLine: hasLineRange ? startLine : undefined,
+          endLine: hasLineRange ? endLine : undefined,
+          label: `Applied edit to ${file}`,
         },
       };
     }
@@ -235,7 +237,7 @@ export function validateClientAction(
         action: {
           type: "fix_compile_errors",
           edits,
-          label: label || `Fixed ${edits.length} compile error(s)`,
+          label: `Fixed ${edits.length} compile error(s)`,
         },
       };
     }
