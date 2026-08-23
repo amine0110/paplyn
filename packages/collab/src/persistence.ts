@@ -265,6 +265,10 @@ export async function persistRoomState(sql: postgres.Sql, roomId: string, doc: D
   try {
     await saveRoomState(sql, roomId, encodeDocState(doc));
     await syncProjectFilesFromDoc(sql, roomId, doc);
+    const pathLengths = Object.fromEntries(
+      getTextFilesFromDoc(doc).map((file) => [file.path, file.content.length])
+    );
+    console.log(`[collab] persist SUCCESS roomId=${roomId}`, pathLengths);
     signalPersistAck(doc);
   } catch (err) {
     if (err instanceof PersistExtractError) {

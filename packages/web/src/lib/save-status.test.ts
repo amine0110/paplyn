@@ -58,14 +58,32 @@ describe("save status helpers", () => {
     expect(changes).toEqual(["saving", "saved"]);
   });
 
-  it("does not auto-save after debounce without markSaved", () => {
+  it("marks failed after max wait without persist ack", () => {
     const changes: string[] = [];
-    const tracker = createSaveStatusTracker((status) => changes.push(status));
+    const tracker = createSaveStatusTracker((status) => changes.push(status), {
+      ackTimeoutMs: COLLAB_SAVE_MAX_WAIT_MS,
+    });
 
     tracker.onDocUpdate("local", "remote-provider");
-    vi.advanceTimersByTime(COLLAB_SAVE_MAX_WAIT_MS);
-
+    vi.advanceTimersByTime(COLLAB_SAVE_MAX_WAIT_MS - 1);
     expect(changes).toEqual(["saving"]);
+
+    vi.advanceTimersByTime(1);
+    expect(changes).toEqual(["saving", "failed"]);
+  });
+
+  it("cancels ack timeout when markSaved arrives in time", () => {
+    const changes: string[] = [];
+    const tracker = createSaveStatusTracker((status) => changes.push(status), {
+      ackTimeoutMs: COLLAB_SAVE_MAX_WAIT_MS,
+    });
+
+    tracker.onDocUpdate("local", "remote-provider");
+    vi.advanceTimersByTime(COLLAB_SAVE_MAX_WAIT_MS - 1);
+    tracker.markSaved();
+    vi.advanceTimersByTime(10_000);
+
+    expect(changes).toEqual(["saving", "saved"]);
   });
 
   it("markFailed surfaces save failure", () => {
@@ -77,5 +95,35 @@ describe("save status helpers", () => {
 
     expect(changes).toEqual(["saving", "failed"]);
     expect(getSaveStatusLabel("failed")).toBe("Save failed");
+  });
+
+  it("fails immediately when disconnected at markDirty time", () => {
+    const changes: string[] = [];
+    const tracker = createSaveStatusTracker((status) => changes.push(status), {
+      isConnected: () => false,
+    });
+
+    tracker.onDocUpdate("local", "remote-provider");
+
+    expect(changes).toEqual(["failed"]);
+  });
+
+  it("onConnectionLost fails while saving", () => {
+    const changes: string[] = [];
+    const tracker = createSaveStatusTracker((status) => changes.push(status));
+
+    tracker.onDocUpdate("local", "remote-provider");
+    tracker.onConnectionLost();
+
+    expect(changes).toEqual(["saving", "failed"]);
+  });
+
+  it("onConnectionLost is a no-op when already saved", () => {
+    const changes: string[] = [];
+    const tracker = createSaveStatusTracker((status) => changes.push(status));
+
+    tracker.onConnectionLost();
+
+    expect(changes).toEqual([]);
   });
 });
