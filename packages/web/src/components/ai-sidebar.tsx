@@ -450,7 +450,7 @@ export function AiSidebar({
         onScroll={handleMessagesScroll}
         className="min-h-0 flex-1 overflow-y-auto px-3 py-2"
       >
-        <div className="space-y-2">
+        <div className="space-y-4">
           {messages.length === 0 && (
             <div className="flex flex-col items-center px-1 pt-6 pb-4 text-center">
               <p className="text-sm text-ink-muted">
