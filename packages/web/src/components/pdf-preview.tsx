@@ -2,7 +2,14 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
-import { ChevronLeft, ChevronRight, Download, ZoomIn, ZoomOut } from "lucide-react";
+import {
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { downloadPdfBase64 } from "@/lib/project-files";
 import {
@@ -49,6 +56,8 @@ interface PdfPreviewProps {
   showDownload?: boolean;
   compileFailed?: boolean;
   compileErrors?: CompileError[];
+  isStale?: boolean;
+  staleErrorCount?: number;
 }
 
 export function PdfPreview({
@@ -61,6 +70,8 @@ export function PdfPreview({
   showDownload = false,
   compileFailed,
   compileErrors = [],
+  isStale,
+  staleErrorCount = 0,
 }: PdfPreviewProps) {
   const [numPages, setNumPages] = useState(0);
   const [page, setPage] = useState(1);
@@ -157,6 +168,23 @@ export function PdfPreview({
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      {isStale && (
+        <div
+          className="flex items-center gap-2 px-3 py-2 shrink-0 border-b border-error/25 bg-error/10 text-sm"
+          role="status"
+        >
+          <AlertCircle className="h-3.5 w-3.5 text-error shrink-0" />
+          <span className="text-ink">
+            Showing last successful proof
+            {staleErrorCount > 0 && (
+              <span className="text-ink-muted">
+                {" "}
+                · {staleErrorCount} error{staleErrorCount !== 1 ? "s" : ""} in latest compile
+              </span>
+            )}
+          </span>
+        </div>
+      )}
       <div className="flex items-center justify-center gap-1 sm:gap-3 py-2 shrink-0 overflow-x-auto px-2">
         <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" disabled={page <= 1} onClick={() => setPage(page - 1)}>
           <ChevronLeft className="h-3.5 w-3.5" />
