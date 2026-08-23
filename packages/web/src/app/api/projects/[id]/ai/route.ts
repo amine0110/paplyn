@@ -400,16 +400,35 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const hasSelection = Boolean(requestData.selectedText?.trim());
   const getFileCalls: GetFileCall[] = [];
 
+  const workspaceCtx = {
+    texFiles: texFileMap,
+    activeFile: requestData.activeFile,
+    hasSelection,
+  };
+
+  async function refreshTexFilesFromDb(): Promise<Map<string, string>> {
+    const freshFiles = await db
+      .select()
+      .from(projectFile)
+      .where(eq(projectFile.projectId, id));
+    const freshTex = freshFiles
+      .filter((f) => !f.isBinary && f.path.endsWith(".tex"))
+      .map((f) => ({ path: f.path, content: f.content }));
+    texFileMap.clear();
+    for (const file of freshTex) {
+      texFileMap.set(file.path, file.content);
+    }
+    return texFileMap;
+  }
+
   const workspaceTools = createWorkspaceTools(
-    {
-      texFiles: texFileMap,
-      activeFile: requestData.activeFile,
-      hasSelection,
-    },
+    workspaceCtx,
     compileFixRequest
       ? {
           maxGetFileCalls: COMPILE_FIX_MAX_GET_FILE_CALLS,
           compileFix: true,
+          citedErrorLocation: primaryErrorLocation,
+          refreshTexFiles: refreshTexFilesFromDb,
           onGetFileCall: (call) => {
             getFileCalls.push(call);
           },
