@@ -133,6 +133,48 @@
   .chrome-link {
     @apply transition-colors text-ink-muted hover:text-ink hover:bg-accent/15 dark:hover:bg-accent/20 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
   }
+
+  /* AI chat sidebar — message enter + typing indicator */
+  .ai-message-enter {
+    animation: ai-message-enter 0.28s ease-out both;
+  }
+
+  .ai-typing-dot {
+    @apply h-1.5 w-1.5 rounded-full bg-accent/50;
+    animation: ai-typing-pulse 1.2s ease-in-out infinite;
+  }
+
+  .ai-typing-dot:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+
+  .ai-typing-dot:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+}
+
+@keyframes ai-message-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ai-typing-pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* CodeMirror workspace editor */
