@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  AI_COMPILE_FIX_CONTEXT_CHAR_LIMIT,
   buildAiCompileFixContext,
   extractLineSnippet,
   formatCompileErrorLines,
   parseFileLineFromMessage,
+  selectCompileFixMessages,
 } from "./ai-compile-fix-context";
 
 const sampleTex = `\\documentclass{article}
@@ -48,21 +48,26 @@ describe("extractLineSnippet", () => {
 });
 
 describe("buildAiCompileFixContext", () => {
-  it("includes error strings and snippets around cited locations", () => {
+  it("includes error strings and project file paths only", () => {
     const result = buildAiCompileFixContext({
       errors: [{ message: "Missing } inserted", file: "main.tex", line: 5 }],
-      files: [{ path: "main.tex", content: sampleTex }],
+      files: [
+        { path: "main.tex", content: sampleTex },
+        { path: "sections/intro.tex", content: "\\section{Intro}" },
+      ],
       activeFile: "main.tex",
     });
 
     expect(result).toContain("Compile errors:");
     expect(result).toContain("main.tex:5: Missing } inserted");
-    expect(result).toContain("around line 5");
-    expect(result).toContain("\\textbf{broken");
-    expect(result.length).toBeLessThanOrEqual(AI_COMPILE_FIX_CONTEXT_CHAR_LIMIT + 200);
+    expect(result).toContain("Project .tex files:");
+    expect(result).toContain("main.tex");
+    expect(result).toContain("sections/intro.tex");
+    expect(result).not.toContain("\\textbf{broken");
+    expect(result).not.toContain("around line");
   });
 
-  it("falls back to trimmed active file when errors have no line numbers", () => {
+  it("does not embed file bodies when errors have no line numbers", () => {
     const deadPaste = "\\end{document}\n" + "Z".repeat(10_000);
     const result = buildAiCompileFixContext({
       errors: [{ message: "Compilation failed — see log for details" }],
@@ -71,8 +76,9 @@ describe("buildAiCompileFixContext", () => {
     });
 
     expect(result).toContain("Compile errors:");
-    expect(result).toContain("--- main.tex ---");
-    expect(result).toContain("\\section{Intro}");
+    expect(result).toContain("Project .tex files:");
+    expect(result).toContain("main.tex");
+    expect(result).not.toContain("\\section{Intro}");
     expect(result).not.toContain("ZZZZ");
   });
 
@@ -84,21 +90,35 @@ describe("buildAiCompileFixContext", () => {
     });
 
     expect(result).toBe("Compile errors:\nmain.tex:5: Missing } inserted");
-    expect(result).not.toContain("around line");
+    expect(result).not.toContain("Project .tex files:");
+  });
+});
+
+describe("selectCompileFixMessages", () => {
+  it("keeps only the latest user message", () => {
+    const messages = [
+      { role: "user" as const, content: "old question" },
+      {
+        role: "assistant" as const,
+        content: "The project context is too large for the AI service.",
+      },
+      { role: "user" as const, content: "Find the error that stopping the compiler" },
+    ];
+
+    expect(selectCompileFixMessages(messages)).toEqual([
+      { role: "user", content: "Find the error that stopping the compiler" },
+    ]);
   });
 
-  it("respects the overall char cap", () => {
-    const hugeTex = Array.from({ length: 200 }, (_, i) => `Line ${i + 1}`).join("\n");
-    const result = buildAiCompileFixContext({
-      errors: [
-        { message: "Error A", file: "main.tex", line: 10 },
-        { message: "Error B", file: "main.tex", line: 150 },
-      ],
-      files: [{ path: "main.tex", content: hugeTex }],
-      charLimit: 500,
-    });
+  it("ignores earlier turns entirely", () => {
+    const messages = [
+      { role: "user" as const, content: "first" },
+      { role: "assistant" as const, content: "Applied edit to main.tex." },
+      { role: "user" as const, content: "fix the remaining errors" },
+    ];
 
-    expect(result.length).toBeLessThanOrEqual(520);
-    expect(result).toContain("Compile errors:");
+    expect(selectCompileFixMessages(messages)).toEqual([
+      { role: "user", content: "fix the remaining errors" },
+    ]);
   });
 });
