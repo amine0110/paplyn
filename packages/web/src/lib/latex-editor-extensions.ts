@@ -1,12 +1,13 @@
 import { history, historyKeymap } from "@codemirror/commands";
 import type { Extension } from "@codemirror/state";
+import type { KeyBinding } from "@codemirror/view";
 import * as Y from "yjs";
 import { yCollab } from "y-codemirror.next";
 import type { Awareness } from "y-protocols/awareness";
 
 export type CollabEditorSyncExtensions = {
   extensions: Extension[];
-  keymapExtensions: readonly Extension[];
+  keymapExtensions: readonly KeyBinding[];
   undoManager: Y.UndoManager | null;
 };
 
