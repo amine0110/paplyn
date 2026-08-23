@@ -8,7 +8,9 @@ import {
   CHROME_MENU_ITEM,
   CHROME_SEGMENT,
   CHROME_SEGMENT_INACTIVE,
+  CHROME_SEND_BTN,
   CHROME_TAB_INACTIVE,
+  CHROME_TOOLBAR_BTN,
   FOCUS_RING,
 } from "@/lib/chrome-interactive";
 
@@ -36,5 +38,10 @@ describe("chrome-interactive class constants", () => {
 
   it("exports destructive icon variant", () => {
     expect(CHROME_DESTRUCTIVE_ICON).toBe("chrome-destructive-icon");
+  });
+
+  it("exports toolbar and send button classes", () => {
+    expect(CHROME_TOOLBAR_BTN).toBe("chrome-toolbar-btn");
+    expect(CHROME_SEND_BTN).toBe("chrome-send-btn");
   });
 });

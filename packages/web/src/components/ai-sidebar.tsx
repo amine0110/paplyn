@@ -15,6 +15,12 @@ import { applyAiClientActions, type ApplyAiActionsContext } from "@/lib/apply-ai
 import { consumeAiStream } from "@/lib/ai-stream";
 import { useSpeechRecognition } from "@/lib/use-speech-recognition";
 import { parseVoiceCommand, speechStatusMessage } from "@/lib/voice-commands";
+import {
+  CHROME_CHIP,
+  CHROME_ICON_BTN_MD,
+  CHROME_SEND_BTN,
+} from "@/lib/chrome-interactive";
+import { cn } from "@/components/ui/cn";
 
 interface Message {
   role: "user" | "assistant";
@@ -313,9 +319,9 @@ export function AiSidebar({
           <Sparkles className="h-4 w-4 text-navy" />
           AI Assistant
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose}>
+        <button type="button" onClick={onClose} className={CHROME_ICON_BTN_MD} aria-label="Close AI assistant">
           <X className="h-4 w-4" />
-        </Button>
+        </button>
       </div>
 
       {!available && (
@@ -340,16 +346,15 @@ export function AiSidebar({
       <div className="shrink-0 border-b border-border px-2 py-1.5">
         <div className="flex flex-wrap gap-1">
           {quickActions.map((a) => (
-            <Button
+            <button
               key={a.action}
-              variant="outline"
-              size="sm"
-              className="h-7 px-2 text-[11px]"
+              type="button"
+              className={cn(CHROME_CHIP, "h-7 border border-border bg-surface px-2 text-[11px]")}
               disabled={a.disabled || loading}
               onClick={() => sendMessage(a.label, a.action)}
             >
               {a.label}
-            </Button>
+            </button>
           ))}
         </div>
       </div>
@@ -497,14 +502,18 @@ export function AiSidebar({
             disabled={loading}
             className={`min-w-0 flex-1 ${variant === "sheet" ? "min-h-11 text-base" : "min-h-9"}`}
           />
-          <Button
+          <button
             type="submit"
-            size="icon"
-            className={`shrink-0 ${variant === "sheet" ? "h-11 w-11" : ""}`}
+            className={cn(
+              CHROME_SEND_BTN,
+              "shrink-0",
+              variant === "sheet" ? "h-11 w-11" : "h-9 w-9"
+            )}
             disabled={loading || !input.trim()}
+            aria-label="Send message"
           >
             <Send className="h-4 w-4" />
-          </Button>
+          </button>
         </form>
       </div>
     </div>

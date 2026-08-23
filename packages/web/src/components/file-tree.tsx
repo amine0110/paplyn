@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { FilePlus, FolderPlus, Trash2, Upload, ChevronRight, ChevronDown, File, Folder, Pencil, Download } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { buildFileTree, folderPathFromFile, joinPath, normalizePath, type FileTreeNode } from "@/lib/project-files";
+import { cn } from "@/components/ui/cn";
 import {
   CHROME_DESTRUCTIVE_ICON,
   CHROME_HOVER,
@@ -91,24 +91,39 @@ export function FileTree({
       <div className="flex gap-0.5 px-2 py-1.5 border-b border-border-light">
         {canEdit && (
           <>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleNewFile} title="New file">
+            <button
+              type="button"
+              className={cn(CHROME_ICON_BTN_SM, "h-7 w-7")}
+              onClick={handleNewFile}
+              title="New file"
+            >
               <FilePlus className="h-3.5 w-3.5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleNewFolder} title="New folder">
+            </button>
+            <button
+              type="button"
+              className={cn(CHROME_ICON_BTN_SM, "h-7 w-7")}
+              onClick={handleNewFolder}
+              title="New folder"
+            >
               <FolderPlus className="h-3.5 w-3.5" />
-            </Button>
+            </button>
             <label>
-              <Button variant="ghost" size="icon" className="h-7 w-7" asChild title="Upload">
-                <span><Upload className="h-3.5 w-3.5" /></span>
-              </Button>
+              <span className={cn(CHROME_ICON_BTN_SM, "inline-flex h-7 w-7")} title="Upload">
+                <Upload className="h-3.5 w-3.5" />
+              </span>
               <input type="file" multiple className="hidden" onChange={handleUpload} accept=".tex,.bib,.cls,.sty,.png,.jpg,.jpeg,.pdf" />
             </label>
           </>
         )}
         {onDownloadSource && (
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onDownloadSource} title="Download source">
+          <button
+            type="button"
+            className={cn(CHROME_ICON_BTN_SM, "h-7 w-7")}
+            onClick={onDownloadSource}
+            title="Download source"
+          >
             <Download className="h-3.5 w-3.5" />
-          </Button>
+          </button>
         )}
       </div>
       <div className="flex-1 overflow-auto py-1 text-sm">

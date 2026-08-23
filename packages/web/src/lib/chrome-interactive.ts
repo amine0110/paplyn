@@ -14,6 +14,10 @@ export const CHROME_ICON_BTN_MD = "chrome-icon-btn-md";
 
 export const CHROME_CHIP = "chrome-chip";
 
+export const CHROME_TOOLBAR_BTN = "chrome-toolbar-btn";
+
+export const CHROME_SEND_BTN = "chrome-send-btn";
+
 export const CHROME_MENU_ITEM = "chrome-menu-item";
 
 export const CHROME_SEGMENT = "chrome-segment";
