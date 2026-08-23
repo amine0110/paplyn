@@ -9,6 +9,7 @@ import {
   getSelfHostedTrustedOrigins,
   getServerAppUrl,
   resolveCollabUrl,
+  resolveCollabHttpUrl,
 } from "@/lib/urls";
 
 describe("product branding", () => {
@@ -72,6 +73,7 @@ describe("url resolution", () => {
     delete process.env.NEXT_PUBLIC_APP_URL;
     delete process.env.COLLAB_URL;
     delete process.env.NEXT_PUBLIC_COLLAB_URL;
+    delete process.env.COLLAB_HTTP_URL;
   });
 
   afterEach(() => {
@@ -169,6 +171,23 @@ describe("url resolution", () => {
       },
     });
     expect(resolveCollabUrl(request)).toBe("wss://plicum.com");
+  });
+
+  it("prefers COLLAB_HTTP_URL over ws-to-http rewrite for server calls", () => {
+    process.env.COLLAB_URL = "wss://plicum.com";
+    process.env.COLLAB_HTTP_URL = "http://collab:1234";
+    const request = new Request("https://plicum.com/api/projects/1/collab", {
+      headers: {
+        host: "plicum.com",
+        "x-forwarded-proto": "https",
+      },
+    });
+    expect(resolveCollabHttpUrl(request)).toBe("http://collab:1234");
+  });
+
+  it("trims trailing slash from COLLAB_HTTP_URL", () => {
+    process.env.COLLAB_HTTP_URL = "http://collab:1234/";
+    expect(resolveCollabHttpUrl()).toBe("http://collab:1234");
   });
 });
 
