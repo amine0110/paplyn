@@ -166,4 +166,43 @@ describe("ai-response helpers", () => {
       { label: "Applied edit to main.tex", type: "apply_edit", file: "main.tex" },
     ]);
   });
+
+  it("summarizes replace_lines with action labels", () => {
+    expect(
+      summarizeToolResult("replace_lines", {
+        kind: "client-action",
+        action: {
+          type: "replace_lines",
+          file: "main.tex",
+          startLine: 3,
+          endLine: 3,
+          replace: "\\usepackage{amsmath}",
+          label: "Replaced line 3 in main.tex",
+        },
+      })
+    ).toBe("Replaced line 3 in main.tex");
+  });
+
+  it("collects replace_lines actions from tool results", () => {
+    const action = {
+      type: "replace_lines" as const,
+      file: "main.tex",
+      startLine: 3,
+      endLine: 3,
+      replace: "\\usepackage{amsmath}",
+      label: "Replaced line 3 in main.tex",
+    };
+    const result = mockResult({
+      toolResults: [
+        {
+          toolName: "replace_lines",
+          result: { kind: "client-action", action },
+        },
+      ],
+    });
+    expect(collectClientActionsFromToolResults(result)).toEqual([action]);
+    expect(toAppliedActionSummaries([action])).toEqual([
+      { label: "Replaced line 3 in main.tex", type: "replace_lines", file: "main.tex" },
+    ]);
+  });
 });

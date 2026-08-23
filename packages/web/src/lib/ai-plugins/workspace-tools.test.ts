@@ -101,8 +101,30 @@ describe("workspace-tools", () => {
 
     expect(result).toEqual({
       kind: "client-action-rejected",
+      reason: "search text is empty. Use replace_lines when compile errors cite a line number.",
+      matchCount: 0,
+      emptySearch: true,
+    });
+  });
+
+  it("apply_edit rejects ambiguous search with occurrence metadata", async () => {
+    const ambiguousFiles = new Map([
+      ["main.tex", "\\usepackage{amsmath}\n\\usepackage{graphicx}\n"],
+    ]);
+    const tools = createWorkspaceTools({ texFiles: ambiguousFiles, hasSelection: false });
+    const result = await tools.apply_edit.execute({
+      file: "main.tex",
+      search: "\\usepackage",
+      replace: "\\usepackage{amsmath}",
+    });
+
+    expect(result).toEqual({
+      kind: "client-action-rejected",
       reason:
-        "Search text is empty or exceeds size limits. Retry with an exact unnumbered substring from get_file that appears once.",
+        "search text is ambiguous (2 matches at lines 1, 2) (search: \"\\usepackage\"). Use replace_lines for the cited line range instead of apply_edit.",
+      matchCount: 2,
+      matchLineNumbers: [1, 2],
+      searchPreview: "\\usepackage",
     });
   });
 
@@ -122,6 +144,31 @@ describe("workspace-tools", () => {
         search: "\\usepackage{amsmath}",
         replace: "\\usepackage{amsmath,amssymb}",
         label: "Applied edit to main.tex",
+      },
+    });
+  });
+
+  it("replace_lines fixes bare usepackage on a known line", async () => {
+    const bareFiles = new Map([
+      ["main.tex", "\\documentclass{article}\n\\usepackage\n\\begin{document}\n"],
+    ]);
+    const tools = createWorkspaceTools({ texFiles: bareFiles, hasSelection: false });
+    const result = await tools.replace_lines.execute({
+      file: "main.tex",
+      startLine: 2,
+      endLine: 2,
+      replace: "\\usepackage{amsmath}",
+    });
+
+    expect(result).toEqual({
+      kind: "client-action",
+      action: {
+        type: "replace_lines",
+        file: "main.tex",
+        startLine: 2,
+        endLine: 2,
+        replace: "\\usepackage{amsmath}",
+        label: "Replaced line 2 in main.tex",
       },
     });
   });

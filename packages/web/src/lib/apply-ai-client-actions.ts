@@ -1,6 +1,10 @@
 import type { EditorView } from "@codemirror/view";
 import type { AiClientAction } from "@/lib/ai-client-actions";
-import { applyActionToFileContent } from "@/lib/ai-client-actions";
+import {
+  applyActionToFileContent,
+  applyReplaceLinesToFileContent,
+  lineRangeToOffsets,
+} from "@/lib/ai-client-actions";
 
 export interface ApplyAiActionsContext {
   activeFile: string | null;
@@ -86,6 +90,39 @@ async function applyFileEdit(
   return true;
 }
 
+async function applyLinesEdit(
+  ctx: ApplyAiActionsContext,
+  file: string,
+  startLine: number,
+  endLine: number,
+  replace: string
+): Promise<boolean> {
+  const content = ctx.fileContents[file];
+  if (content == null) return false;
+
+  const action = {
+    type: "replace_lines" as const,
+    file,
+    startLine,
+    endLine,
+    replace,
+    label: "",
+  };
+  const updated = applyReplaceLinesToFileContent(content, action);
+  if (updated == null) return false;
+
+  if (ctx.activeFile === file && ctx.editorView) {
+    const range = lineRangeToOffsets(content, startLine, endLine);
+    if (!range) return false;
+    applyToActiveEditor(ctx.editorView, range.from, range.to, replace);
+    return true;
+  }
+
+  await ctx.saveFile(file, updated);
+  if (ctx.onSwitchFile) ctx.onSwitchFile(file);
+  return true;
+}
+
 export async function applyAiClientActions(
   actions: AiClientAction[],
   ctx: ApplyAiActionsContext
@@ -128,6 +165,18 @@ export async function applyAiClientActions(
           const ok = await applyFileEdit(ctx, action.file, action.search, action.replace);
           if (ok) applied.push(action);
           else skipped.push({ action, reason: "Could not apply edit" });
+          break;
+        }
+        case "replace_lines": {
+          const ok = await applyLinesEdit(
+            ctx,
+            action.file,
+            action.startLine,
+            action.endLine,
+            action.replace
+          );
+          if (ok) applied.push(action);
+          else skipped.push({ action, reason: "Could not replace lines" });
           break;
         }
         case "fix_compile_errors": {
