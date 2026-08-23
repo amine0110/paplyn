@@ -4,6 +4,7 @@ import {
   validateClientAction,
   type ValidateActionContext,
 } from "@/lib/ai-client-actions";
+import { buildGetFileWindow } from "@/lib/ai-compile-fix-context";
 
 /** Read-only workspace tools (no client-side action). */
 export const WORKSPACE_READ_TOOL_NAMES = ["list_files", "get_file"] as const;
@@ -29,8 +30,56 @@ export const GET_FILE_MAX_LINES = 100;
 /** @deprecated Use CLIENT_ACTION_TOOL_NAMES — kept for ai-response helpers. */
 export const CLIENT_EDIT_TOOL_NAMES = CLIENT_ACTION_TOOL_NAMES;
 
-function normalizeTexPath(path: string): string {
-  return path.replace(/^\.\//, "").trim();
+export const GET_FILE_RETRY_ATTEMPTS = 3;
+export const GET_FILE_RETRY_DELAY_MS = 75;
+
+export function normalizeTexPath(path: string): string {
+  return path.trim().replace(/^\.\//, "").replace(/^\/+/, "");
+}
+
+export function resolveTexFilePath(
+  texFiles: Map<string, string>,
+  path: string
+): string | null {
+  const normalized = normalizeTexPath(path);
+  if (!normalized.endsWith(".tex")) return null;
+
+  if (texFiles.has(normalized)) {
+    return normalized;
+  }
+
+  const basename = normalized.split("/").pop() ?? normalized;
+  const matches = [...texFiles.keys()].filter(
+    (key) => key === basename || key.endsWith(`/${basename}`)
+  );
+  if (matches.length === 1) {
+    return matches[0]!;
+  }
+
+  return null;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function formatGetFileRetryError(
+  requestedPath: string,
+  texFiles: Map<string, string>,
+  lastError: string
+): string {
+  const available = [...texFiles.keys()].sort();
+  const pathsHint =
+    available.length > 0 ? available.join(", ") : "(no .tex files in project)";
+  const base =
+    lastError.length > 0
+      ? lastError
+      : `Could not read "${normalizeTexPath(requestedPath)}".`;
+  return `${base} Retry get_file with one of these exact project paths: ${pathsHint}.`;
+}
+
+function isReadableGetFileResult(result: ReadTexFileResult): boolean {
+  return result.error.length === 0 && result.totalLines > 0;
 }
 
 export function listTexFiles(texFiles: Map<string, string>): {
@@ -63,8 +112,8 @@ export function readTexFile(
   endLine: number
 ): ReadTexFileResult {
   const normalized = normalizeTexPath(path);
-  const emptyResult = (error: string): ReadTexFileResult => ({
-    path: normalized,
+  const emptyResult = (error: string, resolvedPath = normalized): ReadTexFileResult => ({
+    path: resolvedPath,
     content: "",
     startLine: 1,
     endLine: 1,
@@ -77,9 +126,14 @@ export function readTexFile(
     return emptyResult(`File "${normalized}" is not a .tex file in this project.`);
   }
 
-  const rawContent = texFiles.get(normalized);
-  if (rawContent === undefined) {
+  const resolvedPath = resolveTexFilePath(texFiles, path);
+  if (!resolvedPath) {
     return emptyResult(`File "${normalized}" is not in this project.`);
+  }
+
+  const rawContent = texFiles.get(resolvedPath);
+  if (rawContent === undefined) {
+    return emptyResult(`File "${resolvedPath}" is not in this project.`, resolvedPath);
   }
 
   const lines = rawContent.split("\n");
@@ -120,7 +174,7 @@ export function readTexFile(
   const content = lines.slice(windowStart - 1, windowEnd).join("\n");
 
   return {
-    path: normalized,
+    path: resolvedPath,
     content,
     startLine: windowStart,
     endLine: windowEnd,
@@ -165,6 +219,10 @@ export interface WorkspaceToolsOptions {
   onGetFileCall?: (call: { path: string; startLine: number; endLine: number }) => void;
   /** Enable compile-fix edit guards (preamble order, first copy, package invention). */
   compileFix?: boolean;
+  /** Primary cited error location for compile-fix preload. */
+  citedErrorLocation?: { file: string; line: number } | null;
+  /** Refresh project files between get_file retries (compile-fix DB race). */
+  refreshTexFiles?: () => Promise<Map<string, string>>;
 }
 
 export function createWorkspaceTools(
@@ -204,9 +262,66 @@ export function createWorkspaceTools(
       };
     };
 
-  const { maxGetFileCalls, onGetFileCall, compileFix } = options;
+  const { maxGetFileCalls, onGetFileCall, compileFix, citedErrorLocation, refreshTexFiles } =
+    options;
   const validateCtx: ValidateActionContext = { ...ctx, compileFix };
   let getFileCallCount = 0;
+
+  const citedFilePreload = (() => {
+    if (!compileFix || !citedErrorLocation) return null;
+    const resolved = resolveTexFilePath(ctx.texFiles, citedErrorLocation.file);
+    if (!resolved) return null;
+    const { startLine, endLine } = buildGetFileWindow(citedErrorLocation.line);
+    const preload = readTexFile(ctx.texFiles, resolved, startLine, endLine);
+    return isReadableGetFileResult(preload) ? preload : null;
+  })();
+
+  const readTexFileWithRetry = async ({
+    path,
+    startLine,
+    endLine,
+  }: {
+    path: string;
+    startLine: number;
+    endLine: number;
+  }): Promise<ReadTexFileResult> => {
+    let lastResult = readTexFile(ctx.texFiles, path, startLine, endLine);
+
+    for (let attempt = 1; attempt < GET_FILE_RETRY_ATTEMPTS; attempt += 1) {
+      if (isReadableGetFileResult(lastResult)) {
+        return lastResult;
+      }
+
+      const resolvedPath = resolveTexFilePath(ctx.texFiles, path);
+      const normalized = normalizeTexPath(path);
+      const shouldRetry =
+        resolvedPath != null ||
+        (refreshTexFiles != null && normalized.endsWith(".tex"));
+
+      if (!shouldRetry) {
+        return {
+          ...lastResult,
+          error: formatGetFileRetryError(path, ctx.texFiles, lastResult.error),
+        };
+      }
+
+      if (refreshTexFiles) {
+        ctx.texFiles = await refreshTexFiles();
+      }
+
+      await sleep(GET_FILE_RETRY_DELAY_MS);
+      lastResult = readTexFile(ctx.texFiles, path, startLine, endLine);
+    }
+
+    if (isReadableGetFileResult(lastResult)) {
+      return lastResult;
+    }
+
+    return {
+      ...lastResult,
+      error: formatGetFileRetryError(path, ctx.texFiles, lastResult.error),
+    };
+  };
 
   const wrapGetFile = async ({
     path,
@@ -231,7 +346,18 @@ export function createWorkspaceTools(
 
     getFileCallCount += 1;
     onGetFileCall?.({ path, startLine, endLine });
-    return readTexFile(ctx.texFiles, path, startLine, endLine);
+
+    if (
+      citedFilePreload &&
+      resolveTexFilePath(ctx.texFiles, path) === citedFilePreload.path
+    ) {
+      const citedRead = readTexFile(ctx.texFiles, path, startLine, endLine);
+      if (isReadableGetFileResult(citedRead)) {
+        return citedRead;
+      }
+    }
+
+    return readTexFileWithRetry({ path, startLine, endLine });
   };
 
   return {

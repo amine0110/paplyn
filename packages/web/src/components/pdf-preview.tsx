@@ -154,6 +154,13 @@ export function PdfPreview({
           <>
             <p className="text-error text-sm font-medium">Compilation failed</p>
             <p className="text-ink-muted text-sm">{failureMessage}</p>
+            {onFixWithAi && (
+              <FixWithAiButton
+                errorCount={staleErrorCount}
+                onClick={onFixWithAi}
+                className="mt-2"
+              />
+            )}
           </>
         ) : (
           <>

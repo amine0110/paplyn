@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   createWorkspaceTools,
   GET_FILE_MAX_LINES,
+  GET_FILE_RETRY_ATTEMPTS,
   listTexFiles,
+  normalizeTexPath,
   readTexFile,
+  resolveTexFilePath,
 } from "./workspace-tools";
+import { buildGetFileWindow } from "@/lib/ai-compile-fix-context";
 
 const texFiles = new Map<string, string>([
   ["main.tex", "\\documentclass{article}\n\\usepackage{amsmath}\n\\begin{document}\n\\end{document}\n"],
@@ -77,6 +81,92 @@ describe("workspace-tools", () => {
     expect(result.path).toBe("main.tex");
     expect(result.content).toBe("\\documentclass{article}");
     expect(result.error).toBe("");
+  });
+
+  it("get_file resolves leading-slash path aliases to main.tex", async () => {
+    const tools = createWorkspaceTools({ texFiles, hasSelection: false });
+    const result = await tools.get_file.execute({
+      path: "/main.tex",
+      startLine: 1,
+      endLine: 1,
+    });
+
+    expect(result.path).toBe("main.tex");
+    expect(result.content).toBe("\\documentclass{article}");
+    expect(result.error).toBe("");
+  });
+
+  it("resolveTexFilePath maps basename aliases to a unique project file", () => {
+    expect(resolveTexFilePath(texFiles, "intro.tex")).toBe("sections/intro.tex");
+    expect(normalizeTexPath("/main.tex")).toBe("main.tex");
+  });
+
+  it("get_file retries then succeeds when refresh supplies the file", async () => {
+    const snapshot = new Map<string, string>();
+    let refreshCount = 0;
+    const tools = createWorkspaceTools(
+      { texFiles: snapshot, hasSelection: false },
+      {
+        refreshTexFiles: async () => {
+          refreshCount += 1;
+          snapshot.set(
+            "main.tex",
+            "\\documentclass{article}\n\\begin{document}\n\\end{document}\n"
+          );
+          return snapshot;
+        },
+      }
+    );
+
+    const result = await tools.get_file.execute({
+      path: "main.tex",
+      startLine: 1,
+      endLine: 1,
+    });
+
+    expect(refreshCount).toBeGreaterThan(0);
+    expect(refreshCount).toBeLessThan(GET_FILE_RETRY_ATTEMPTS);
+    expect(result.error).toBe("");
+    expect(result.path).toBe("main.tex");
+    expect(result.content).toBe("\\documentclass{article}");
+  });
+
+  it("compile-fix preloads cited file for the first targeted get_file call", async () => {
+    const citedLine = 2;
+    const { startLine, endLine } = buildGetFileWindow(citedLine);
+    const tools = createWorkspaceTools(
+      { texFiles, hasSelection: false },
+      {
+        compileFix: true,
+        citedErrorLocation: { file: "main.tex", line: citedLine },
+      }
+    );
+
+    const result = await tools.get_file.execute({
+      path: "main.tex",
+      startLine,
+      endLine,
+    });
+
+    expect(result.error).toBe("");
+    expect(result.path).toBe("main.tex");
+    expect(result.content).toContain("\\usepackage{amsmath}");
+    expect(result.startLine).toBe(startLine);
+    expect(result.endLine).toBe(5);
+  });
+
+  it("get_file returns retryable errors listing available project paths", async () => {
+    const tools = createWorkspaceTools({ texFiles, hasSelection: false });
+    const result = await tools.get_file.execute({
+      path: "missing.tex",
+      startLine: 1,
+      endLine: 1,
+    });
+
+    expect(result.error).toContain("missing.tex");
+    expect(result.error).toContain("Retry get_file");
+    expect(result.error).toContain("main.tex");
+    expect(result.error).toContain("sections/intro.tex");
   });
 
   it("caps get_file calls when maxGetFileCalls is set", async () => {

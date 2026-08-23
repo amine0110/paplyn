@@ -32,6 +32,13 @@ describe("Fix with AI compile-error UI", () => {
     expect(src).toContain("errorCount={staleErrorCount}");
   });
 
+  it("PdfPreview empty failed proof pane wires Fix with AI behind error count", () => {
+    const src = readSource("components/pdf-preview.tsx");
+    expect(src).toContain("Compilation failed");
+    expect(src).toMatch(/!pdfData[\s\S]*FixWithAiButton/);
+    expect(src).toMatch(/!pdfData[\s\S]*errorCount=\{staleErrorCount\}/);
+  });
+
   it("CompilePanel error header wires Fix with AI behind error count", () => {
     const src = readSource("components/compile-panel.tsx");
     expect(src).toContain("FixWithAiButton");
