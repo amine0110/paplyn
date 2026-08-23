@@ -6,6 +6,7 @@ import {
   type ClientActionToolPayload,
 } from "@/lib/ai-client-actions";
 import { CLIENT_ACTION_TOOL_NAMES } from "@/lib/ai-plugins/workspace-tools";
+import type { ReadTexFileResult } from "@/lib/ai-plugins/workspace-tools";
 import { getPluginByToolName, pluginDisplayName } from "@/lib/ai-plugins";
 import type { AiPlugin } from "@/lib/ai-plugins/types";
 
@@ -42,6 +43,81 @@ function isLiteratureToolPayload(result: unknown): result is LiteratureToolPaylo
   );
 }
 
+function isClientActionRejected(
+  result: unknown
+): result is { kind: "client-action-rejected"; reason: string } {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    (result as { kind?: string }).kind === "client-action-rejected" &&
+    typeof (result as { reason?: string }).reason === "string"
+  );
+}
+
+function isReadTexFileResult(result: unknown): result is ReadTexFileResult {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    typeof (result as ReadTexFileResult).path === "string" &&
+    typeof (result as ReadTexFileResult).content === "string"
+  );
+}
+
+function isListFilesResult(
+  result: unknown
+): result is { files: string[]; count: number; error: string } {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    Array.isArray((result as { files?: unknown }).files) &&
+    typeof (result as { count?: unknown }).count === "number"
+  );
+}
+
+/** Short human label for one tool result (never raw JSON). */
+export function summarizeToolResult(toolName: string, result: unknown): string | null {
+  if (result == null) return null;
+
+  if (isLiteratureToolPayload(result)) {
+    const trimmed = result.summary.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  if (isClientActionPayload(result)) {
+    return result.action.label;
+  }
+
+  if (isClientActionRejected(result)) {
+    if (toolName === "apply_edit" || toolName === "fix_compile_errors") {
+      return "Couldn't apply edit";
+    }
+    return "Couldn't complete editor action";
+  }
+
+  if (toolName === "get_file" && isReadTexFileResult(result)) {
+    if (result.error) {
+      return `Couldn't read ${result.path}`;
+    }
+    const lineRange =
+      result.startLine === result.endLine
+        ? `line ${result.startLine}`
+        : `lines ${result.startLine}–${result.endLine}`;
+    return `Read ${result.path} (${lineRange})`;
+  }
+
+  if (toolName === "list_files" && isListFilesResult(result)) {
+    if (result.error) return "Couldn't list project files";
+    return `Listed ${result.count} project file(s)`;
+  }
+
+  if (typeof result === "string") {
+    const trimmed = result.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  return null;
+}
+
 function stringifyToolResult(result: unknown): string | null {
   if (result == null) return null;
   if (isLiteratureToolPayload(result)) {
@@ -52,12 +128,25 @@ function stringifyToolResult(result: unknown): string | null {
     const trimmed = result.trim();
     return trimmed.length > 0 ? trimmed : null;
   }
-  try {
-    const serialized = JSON.stringify(result);
-    return serialized && serialized !== "{}" ? serialized : null;
-  } catch {
-    return null;
+  return null;
+}
+
+function collectToolResultSummaries(result: LooseGenerateTextResult): string[] {
+  const summaries: string[] = [];
+
+  for (const toolResult of result.toolResults) {
+    const summary = summarizeToolResult(toolResult.toolName, toolResult.result);
+    if (summary) summaries.push(summary);
   }
+
+  for (const step of result.steps) {
+    for (const toolResult of step.toolResults) {
+      const summary = summarizeToolResult(toolResult.toolName, toolResult.result);
+      if (summary) summaries.push(summary);
+    }
+  }
+
+  return [...new Set(summaries)];
 }
 
 /** Collect non-empty tool result strings from a generateText result (all steps). */
@@ -85,13 +174,14 @@ export function collectToolResultTexts<TOOLS extends ToolSet>(
 export function formatToolResultsAsAssistantMessage<TOOLS extends ToolSet>(
   result: GenerateTextResult<TOOLS, unknown>
 ): string | null {
-  const texts = collectToolResultTexts(result);
-  if (texts.length === 0) return null;
+  const loose = asLooseGenerateTextResult(result);
+  const summaries = collectToolResultSummaries(loose);
+  if (summaries.length === 0) return null;
 
-  const literature = texts.find((text) => text.includes("Found ") && text.includes("paper(s)"));
+  const literature = summaries.find((text) => text.includes("Found ") && text.includes("paper(s)"));
   if (literature) return literature;
 
-  return texts.join("\n\n");
+  return summaries.join(". ");
 }
 
 export function hadToolActivity<TOOLS extends ToolSet>(

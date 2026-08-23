@@ -6,6 +6,7 @@ import {
   collectUsedPlugins,
   formatToolResultsAsAssistantMessage,
   hadToolActivity,
+  summarizeToolResult,
   toAppliedActionSummaries,
   usedLiteratureSearch,
 } from "./ai-response";
@@ -60,6 +61,50 @@ describe("ai-response helpers", () => {
       toolResults: [{ toolName: "search_literature", result: literaturePayload }],
     });
     expect(formatToolResultsAsAssistantMessage(result)).toContain("Found 3 paper(s)");
+  });
+
+  it("formats workspace tool output as human-readable fallback text", () => {
+    const result = mockResult({
+      toolResults: [
+        {
+          toolName: "get_file",
+          result: {
+            path: "main.tex",
+            content: "\\usepackage{amsmath}",
+            startLine: 2,
+            endLine: 2,
+            totalLines: 5,
+            note: "",
+            error: "",
+          },
+        },
+        {
+          toolName: "apply_edit",
+          result: {
+            kind: "client-action-rejected",
+            reason: "search text not found in file",
+          },
+        },
+      ],
+    });
+    expect(formatToolResultsAsAssistantMessage(result)).toBe(
+      "Read main.tex (line 2). Couldn't apply edit"
+    );
+  });
+
+  it("summarizes applied edits with action labels", () => {
+    expect(
+      summarizeToolResult("apply_edit", {
+        kind: "client-action",
+        action: {
+          type: "apply_edit",
+          file: "main.tex",
+          search: "foo",
+          replace: "bar",
+          label: "Applied edit to main.tex",
+        },
+      })
+    ).toBe("Applied edit to main.tex");
   });
 
   it("returns null when no tool results exist", () => {
