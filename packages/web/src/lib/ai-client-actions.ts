@@ -1,5 +1,7 @@
 /** Client-side editor actions returned by the AI assistant API. */
 
+import { validateCompileFixEdit } from "@/lib/ai-compile-fix-validation";
+
 export const MAX_CLIENT_EDIT_CHARS = 8_000;
 
 export type AiClientActionType =
@@ -156,6 +158,8 @@ export interface ValidateActionContext {
   texFiles: Map<string, string>;
   activeFile?: string;
   hasSelection: boolean;
+  /** When true, apply compile-fix preamble/first-copy guards. */
+  compileFix?: boolean;
 }
 
 export interface ValidatedAction {
@@ -311,6 +315,24 @@ function validateFilePath(
   if (!normalized.endsWith(".tex")) return null;
   if (!texFiles.has(normalized)) return null;
   return normalized;
+}
+
+function rejectCompileFixEdit(
+  content: string,
+  replace: string,
+  previewContent: string,
+  startLine?: number,
+  endLine?: number
+): RejectedAction | null {
+  const check = validateCompileFixEdit({
+    content,
+    replace,
+    previewContent,
+    startLine,
+    endLine,
+  });
+  if (check.ok) return null;
+  return { rejected: true, reason: check.reason };
 }
 
 function applySearchReplace(
@@ -489,6 +511,11 @@ export function validateClientAction(
         return preview;
       }
 
+      if (ctx.compileFix) {
+        const compileFixReject = rejectCompileFixEdit(content, replace, preview.content);
+        if (compileFixReject) return compileFixReject;
+      }
+
       return {
         action: {
           type: "apply_edit",
@@ -516,6 +543,17 @@ export function validateClientAction(
       const preview = applyLinesReplace(content, raw.startLine, raw.endLine, raw.replace);
       if (!preview.ok) {
         return { rejected: true, reason: preview.reason };
+      }
+
+      if (ctx.compileFix) {
+        const compileFixReject = rejectCompileFixEdit(
+          content,
+          raw.replace,
+          preview.content,
+          raw.startLine,
+          raw.endLine
+        );
+        if (compileFixReject) return compileFixReject;
       }
 
       return {
@@ -548,6 +586,13 @@ export function validateClientAction(
         if ("rejected" in preview) {
           rejections.push(`${file}: ${preview.reason}`);
           continue;
+        }
+        if (ctx.compileFix) {
+          const compileFixReject = rejectCompileFixEdit(content, replace, preview.content);
+          if (compileFixReject) {
+            rejections.push(`${file}: ${compileFixReject.reason}`);
+            continue;
+          }
         }
         edits.push({ file, search: preview.search, replace });
       }

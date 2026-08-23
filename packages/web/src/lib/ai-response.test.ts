@@ -88,7 +88,7 @@ describe("ai-response helpers", () => {
       ],
     });
     expect(formatToolResultsAsAssistantMessage(result)).toBe(
-      "Read main.tex (line 2). Couldn't apply edit"
+      "Read main.tex (line 2). search text not found in file"
     );
   });
 

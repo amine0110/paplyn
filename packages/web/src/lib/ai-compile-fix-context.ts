@@ -101,7 +101,45 @@ export function buildCompileFixTargetHint(location: {
   return (
     `Primary error location: ${location.file}:${location.line}. ` +
     `Your FIRST tool call must be get_file(path="${location.file}", startLine=${startLine}, endLine=${endLine}). ` +
-    `Then call replace_lines or apply_edit on that line. Do not read other line ranges before attempting an edit.`
+    `Then call replace_lines on that exact line in the FIRST document copy. ` +
+    `Do not read other line ranges before attempting an edit. ` +
+    `Do not prepend a preamble or invent packages.`
+  );
+}
+
+/** Hint for fixing multiple cited errors in one turn (rule 3). */
+export function buildCompileFixMultiErrorHint(
+  errors: AiCompileError[]
+): string | undefined {
+  const locations = errors
+    .map((error) => resolveCompileErrorLocation(error))
+    .filter((loc): loc is { file: string; line: number } => loc != null);
+
+  if (locations.length < 2) return undefined;
+
+  const byFile = new Map<string, number[]>();
+  for (const { file, line } of locations) {
+    const lines = byFile.get(file) ?? [];
+    if (!lines.includes(line)) lines.push(line);
+    byFile.set(file, lines);
+  }
+
+  const parts: string[] = [];
+  for (const [file, lines] of byFile) {
+    const sorted = [...lines].sort((a, b) => a - b);
+    parts.push(`${file} lines ${sorted.join(", ")}`);
+  }
+
+  const applyOrder = locations
+    .slice()
+    .sort((a, b) => b.line - a.line)
+    .map((loc) => `${loc.file}:${loc.line}`)
+    .join(", ");
+
+  return (
+    `Multiple cited errors in the first document copy: ${parts.join("; ")}. ` +
+    `Plan every replace_lines against the ORIGINAL file, then apply from the bottom up ` +
+    `(highest line first): ${applyOrder}.`
   );
 }
 

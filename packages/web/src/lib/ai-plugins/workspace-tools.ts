@@ -147,13 +147,24 @@ When compile errors cite a line number, use replace_lines — apply_edit often f
 If apply_edit is rejected (0 or multiple matches), use replace_lines for the cited line range.
 After applying edits, briefly explain what changed in your reply.`;
 
-export const COMPILE_FIX_WORKSPACE_SUFFIX = `Focus on fixing compile errors. Use get_file with small line ranges around cited error lines. Prefer replace_lines when errors cite a line number (e.g. bare \\usepackage on line 3) — large concatenated templates often have no unique substrings for apply_edit. Use fix_compile_errors or apply_edit only when search text matches exactly once. Keep edits minimal.`;
+export const COMPILE_FIX_WORKSPACE_SUFFIX = `Focus on fixing compile errors in the FIRST document copy only (from the first \\\\documentclass through the first \\\\end{document}). pdflatex stops at the first \\\\end{document} — ignore duplicate templates pasted after it.
+
+Rules:
+1. Never put \\\\usepackage, \\\\title, or body content before \\\\documentclass. Repair the cited line — do not prepend a new preamble or smash multiple commands onto one line.
+2. Prefer replace_lines on the exact cited line in the first copy. Do not invent packages (no new \\\\usepackage{cite} unless that exact line already existed). Fixing a bare \\\\usepackage line is allowed.
+3. When several errors cite line numbers, plan ALL replace_lines against the ORIGINAL file (before any edits) and apply from the highest line number downward so line numbers stay valid. Attempt every cited error in the first copy in one turn when possible.
+4. Use get_file with small line ranges around cited error lines (limited calls). Prefer replace_lines when errors cite a line number — large concatenated templates often have no unique substrings for apply_edit.
+5. In your reply, state exactly which lines you changed (e.g. "Changed main.tex line 3."). If an edit is rejected, say so — never claim a fix after a rejected or unsafe edit.
+
+Use fix_compile_errors or apply_edit only when search text matches exactly once. Keep edits minimal.`;
 
 export interface WorkspaceToolsOptions {
   /** Cap get_file calls (compile-fix fast path). */
   maxGetFileCalls?: number;
   /** Called after each get_file invocation. */
   onGetFileCall?: (call: { path: string; startLine: number; endLine: number }) => void;
+  /** Enable compile-fix edit guards (preamble order, first copy, package invention). */
+  compileFix?: boolean;
 }
 
 export function createWorkspaceTools(
@@ -172,7 +183,7 @@ export function createWorkspaceTools(
     (args: Record<string, unknown>) => {
       const validated = validateClientAction(
         { type, ...args } as Parameters<typeof validateClientAction>[0],
-        ctx
+        validateCtx
       );
       if ("rejected" in validated) {
         return {
@@ -193,7 +204,8 @@ export function createWorkspaceTools(
       };
     };
 
-  const { maxGetFileCalls, onGetFileCall } = options;
+  const { maxGetFileCalls, onGetFileCall, compileFix } = options;
+  const validateCtx: ValidateActionContext = { ...ctx, compileFix };
   let getFileCallCount = 0;
 
   const wrapGetFile = async ({

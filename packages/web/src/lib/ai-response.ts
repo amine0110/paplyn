@@ -89,7 +89,11 @@ export function summarizeToolResult(toolName: string, result: unknown): string |
       toolName === "fix_compile_errors" ||
       toolName === "replace_lines"
     ) {
-      return "Couldn't apply edit";
+      const reason =
+        typeof result.reason === "string" && result.reason.length > 0
+          ? result.reason
+          : "Couldn't apply edit";
+      return reason.length > 120 ? `${reason.slice(0, 117)}…` : reason;
     }
     return "Couldn't complete editor action";
   }

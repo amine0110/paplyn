@@ -24,12 +24,14 @@ import { buildAiFileContext } from "@/lib/ai-file-context";
 import {
   buildAiCompileFixContext,
   buildCompileFixTargetHint,
+  buildCompileFixMultiErrorHint,
   COMPILE_FIX_MAX_GET_FILE_CALLS,
   getPrimaryCompileErrorLocation,
   normalizeAiCompileErrors,
   selectCompileFixMessages,
   type AiCompileError,
 } from "@/lib/ai-compile-fix-context";
+import { formatCompileFixLineChangeSummary } from "@/lib/ai-compile-fix-validation";
 import { buildCompileFixNoEditMessage } from "@/lib/ai-compile-fix-failure";
 import { detectFixCompileIntent } from "@/lib/ai-compile-fix-intent";
 import { getPluginActionPrompt, resolveAiPlugins } from "@/lib/ai-plugins";
@@ -165,6 +167,7 @@ function buildSystemPrompt(options: {
   mode: AiContextMode;
   retryHint?: string;
   compileFixTargetHint?: string;
+  compileFixMultiErrorHint?: string;
 }): string {
   const {
     data,
@@ -174,6 +177,7 @@ function buildSystemPrompt(options: {
     mode,
     retryHint,
     compileFixTargetHint,
+    compileFixMultiErrorHint,
   } = options;
   const compileFix = mode !== "full";
 
@@ -206,6 +210,10 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
 
   if (compileFixTargetHint) {
     systemPrompt += `\n\n${compileFixTargetHint}`;
+  }
+
+  if (compileFixMultiErrorHint) {
+    systemPrompt += `\n\n${compileFixMultiErrorHint}`;
   }
 
   if (data.action) {
@@ -269,6 +277,7 @@ async function resolveAssistantContent<TOOLS extends ToolSet>(options: {
 }): Promise<string> {
   const { result, compileFixRequest, compileErrors, getFileCalls } = options;
   const trimmed = result.text.trim();
+  const actions = collectClientActionsFromToolResults(result);
 
   if (compileFixRequest && !usedClientEditTools(result)) {
     return buildCompileFixNoEditMessage({
@@ -276,6 +285,30 @@ async function resolveAssistantContent<TOOLS extends ToolSet>(options: {
       getFileCalls,
       steps: result.steps as StepResult<ToolSet>[],
     });
+  }
+
+  const lineSummaries = actions
+    .flatMap((action) => {
+      if (action.type === "replace_lines") {
+        return [
+          formatCompileFixLineChangeSummary({
+            file: action.file,
+            startLine: action.startLine,
+            endLine: action.endLine,
+          }),
+        ];
+      }
+      return [];
+    })
+    .filter((summary, index, all) => all.indexOf(summary) === index);
+
+  if (compileFixRequest && lineSummaries.length > 0) {
+    const changeBlock = lineSummaries.join(" ");
+    if (trimmed) {
+      const hasLineRef = lineSummaries.some((summary) => trimmed.includes(summary));
+      return hasLineRef ? result.text : `${changeBlock}\n\n${result.text}`;
+    }
+    return changeBlock;
   }
 
   if (trimmed) return result.text;
@@ -376,6 +409,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     compileFixRequest
       ? {
           maxGetFileCalls: COMPILE_FIX_MAX_GET_FILE_CALLS,
+          compileFix: true,
           onGetFileCall: (call) => {
             getFileCalls.push(call);
           },
@@ -414,6 +448,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         ? buildCompileFixTargetHint(primaryErrorLocation)
         : undefined;
 
+    const compileFixMultiErrorHint =
+      compileFixRequest && compileErrors.length > 1
+        ? buildCompileFixMultiErrorHint(compileErrors)
+        : undefined;
+
     const systemPrompt = buildSystemPrompt({
       data: requestData,
       compileErrors,
@@ -422,6 +461,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       mode: compileFixRequest ? mode : "full",
       retryHint: options?.retryHint,
       compileFixTargetHint,
+      compileFixMultiErrorHint,
     });
 
     if (compileFixRequest) {

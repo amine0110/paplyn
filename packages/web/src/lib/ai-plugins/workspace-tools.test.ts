@@ -186,4 +186,30 @@ describe("workspace-tools", () => {
       },
     });
   });
+
+  it("rejects compile-fix replace_lines that prepend preamble before documentclass", async () => {
+    const content = [
+      "\\documentclass[conference]{IEEEtran}",
+      "\\usepackage{amsmath}",
+      "\\begin{document}",
+      "\\end{document}",
+    ].join("\n");
+    const files = new Map([["main.tex", content]]);
+    const tools = createWorkspaceTools(
+      { texFiles: files, hasSelection: false },
+      { compileFix: true }
+    );
+    const result = await tools.replace_lines.execute({
+      file: "main.tex",
+      startLine: 1,
+      endLine: 1,
+      replace:
+        "\\usepackage  \\title{Your Paper Title Here\\documentclass[conference]{IEEEtran}",
+    });
+
+    expect(result.kind).toBe("client-action-rejected");
+    if (result.kind === "client-action-rejected") {
+      expect(result.reason).toContain("before \\documentclass");
+    }
+  });
 });

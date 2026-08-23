@@ -82,11 +82,12 @@ async function applyFileEdit(
     const index = content.indexOf(search);
     if (index === -1) return false;
     applyToActiveEditor(ctx.editorView, index, index + search.length, replace);
-    return true;
+  } else {
+    await ctx.saveFile(file, updated);
+    if (ctx.onSwitchFile) ctx.onSwitchFile(file);
   }
 
-  await ctx.saveFile(file, updated);
-  if (ctx.onSwitchFile) ctx.onSwitchFile(file);
+  ctx.fileContents[file] = updated;
   return true;
 }
 
@@ -115,11 +116,12 @@ async function applyLinesEdit(
     const range = lineRangeToOffsets(content, startLine, endLine);
     if (!range) return false;
     applyToActiveEditor(ctx.editorView, range.from, range.to, replace);
-    return true;
+  } else {
+    await ctx.saveFile(file, updated);
+    if (ctx.onSwitchFile) ctx.onSwitchFile(file);
   }
 
-  await ctx.saveFile(file, updated);
-  if (ctx.onSwitchFile) ctx.onSwitchFile(file);
+  ctx.fileContents[file] = updated;
   return true;
 }
 
@@ -130,7 +132,16 @@ export async function applyAiClientActions(
   const applied: AiClientAction[] = [];
   const skipped: { action: AiClientAction; reason: string }[] = [];
 
-  for (const action of actions) {
+  const lineEdits = actions.filter((action) => action.type === "replace_lines");
+  const otherActions = actions.filter((action) => action.type !== "replace_lines");
+  const sortedLineEdits = [...lineEdits].sort((a, b) => {
+    if (a.type !== "replace_lines" || b.type !== "replace_lines") return 0;
+    if (a.file !== b.file) return a.file.localeCompare(b.file);
+    return b.startLine - a.startLine;
+  });
+  const orderedActions = [...otherActions, ...sortedLineEdits];
+
+  for (const action of orderedActions) {
     try {
       switch (action.type) {
         case "insert_at_cursor": {
