@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  countBeginDocumentInFirstCopy,
   countDocumentClassLinesBeforeBeginDocument,
   formatCompileFixLineChangeSummary,
   getDocumentClassLine,
@@ -7,6 +8,7 @@ import {
   getFirstNonCommentLine,
   validateCompileFixEdit,
   validateLaTeXPreambleOrder,
+  validateNoDuplicateBeginDocument,
   validateNoDuplicateDocumentClass,
   validateNoInventedPackages,
 } from "./ai-compile-fix-validation";
@@ -98,6 +100,54 @@ describe("validateNoDuplicateDocumentClass", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.reason).toContain("2 \\documentclass");
+    }
+  });
+});
+
+describe("validateNoDuplicateBeginDocument", () => {
+  it("rejects a second begin{document} in the first copy", () => {
+    const content = [
+      "\\documentclass[conference]{IEEEtran}",
+      "\\begin{document}",
+      "\\begin{document}",
+      "\\maketitle",
+      "\\end{document}",
+    ].join("\n");
+    expect(countBeginDocumentInFirstCopy(content)).toBe(2);
+    const result = validateNoDuplicateBeginDocument(content);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toContain("2 \\begin{document}");
+    }
+  });
+
+  it("rejects compile-fix edit that prepends begin{document} before maketitle", () => {
+    const content = [
+      "\\documentclass[conference]{IEEEtran}",
+      "\\usepackage{amsmath}",
+      "\\begin{document}",
+      "\\maketitle",
+      "\\end{document}",
+    ].join("\n");
+    const preview = [
+      "\\documentclass[conference]{IEEEtran}",
+      "\\usepackage{amsmath}",
+      "\\begin{document}",
+      "\\begin{document}",
+      "\\maketitle",
+      "\\end{document}",
+    ].join("\n");
+
+    const result = validateCompileFixEdit({
+      content,
+      startLine: 4,
+      endLine: 4,
+      replace: "\\begin{document}\n\\maketitle",
+      previewContent: preview,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toContain("\\begin{document}");
     }
   });
 });

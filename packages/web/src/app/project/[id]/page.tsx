@@ -36,6 +36,7 @@ import {
   beginCompileFixRetrySession,
   createCompileFixRetrySession,
   decideCompileFixAutoRetry,
+  endCompileFixRetrySession,
   markCompileFixEditsApplied,
 } from "@/lib/compile-fix-auto-retry";
 import { AiAssistantFab } from "@/components/ai-assistant-fab";
@@ -365,6 +366,10 @@ export default function ProjectPage() {
 
   const handleCompileFixSessionStart = useCallback(() => {
     beginCompileFixRetrySession(compileFixRetryRef.current);
+  }, []);
+
+  const handleCompileFixRetryNoOp = useCallback(() => {
+    endCompileFixRetrySession(compileFixRetryRef.current);
   }, []);
 
   const handleCompileFixActionsApplied = useCallback(
@@ -1052,6 +1057,7 @@ export default function ProjectPage() {
                 onPendingRequestConsumed={() => setAiPendingRequest(null)}
                 onCompileFixActionsApplied={canEdit ? handleCompileFixActionsApplied : undefined}
                 onCompileFixSessionStart={canEdit ? handleCompileFixSessionStart : undefined}
+                onCompileFixRetryNoOp={canEdit ? handleCompileFixRetryNoOp : undefined}
               />
             </div>
           </>

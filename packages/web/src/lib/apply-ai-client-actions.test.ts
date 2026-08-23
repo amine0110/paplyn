@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { applyReplaceLinesToFileContent } from "./ai-client-actions";
 import { applyAiClientActions, normalizeInsertAtCursorText } from "./apply-ai-client-actions";
 import type { AiClientAction } from "./ai-client-actions";
+import { countBeginDocumentInFirstCopy } from "./ai-compile-fix-validation";
 
 describe("normalizeInsertAtCursorText", () => {
   it("adds a trailing newline when inserting a comment before documentclass at file start", () => {
@@ -151,5 +152,41 @@ describe("applyAiClientActions replace_lines ordering", () => {
     expect(fileContents["main.tex"].split("\n").filter((l) => l.includes("\\documentclass"))).toHaveLength(
       1
     );
+  });
+
+  it("auto-retry compile-fix skips replace_lines that invent second begin{document}", async () => {
+    const content = [
+      "\\documentclass[conference]{IEEEtran}",
+      "\\usepackage{amsmath}",
+      "\\begin{document}",
+      "\\maketitle",
+      "\\end{document}",
+    ].join("\n");
+    const fileContents: Record<string, string> = { "main.tex": content };
+    const actions: AiClientAction[] = [
+      {
+        type: "replace_lines",
+        file: "main.tex",
+        startLine: 4,
+        endLine: 4,
+        replace: "\\begin{document}\n\\maketitle",
+        label: "Replaced line 4 in main.tex",
+      },
+    ];
+
+    const result = await applyAiClientActions(actions, {
+      activeFile: null,
+      editorView: null,
+      fileContents,
+      hasSelection: false,
+      compileFix: true,
+      saveFile: async (path, next) => {
+        fileContents[path] = next;
+      },
+    });
+
+    expect(result.applied).toHaveLength(0);
+    expect(result.skipped).toHaveLength(1);
+    expect(countBeginDocumentInFirstCopy(fileContents["main.tex"])).toBe(1);
   });
 });

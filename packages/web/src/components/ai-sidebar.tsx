@@ -56,6 +56,8 @@ interface AiSidebarProps {
   onCompileFixActionsApplied?: (applied: AiClientAction[]) => void | Promise<void>;
   /** Called when a user-initiated compile-fix turn starts (not automatic retries). */
   onCompileFixSessionStart?: () => void;
+  /** Auto-retry returned actions but none were applied (all rejected/skipped). */
+  onCompileFixRetryNoOp?: () => void;
 }
 
 const SCROLL_THRESHOLD_PX = 80;
@@ -108,6 +110,7 @@ export function AiSidebar({
   onPendingRequestConsumed,
   onCompileFixActionsApplied,
   onCompileFixSessionStart,
+  onCompileFixRetryNoOp,
 }: AiSidebarProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -176,7 +179,7 @@ export function AiSidebar({
   const applyReturnedActions = useCallback(
     async (
       actions: AiClientAction[],
-      options?: { isCompileFixTurn?: boolean }
+      options?: { isCompileFixTurn?: boolean; autoCompileFixRetry?: boolean }
     ): Promise<AiAppliedAction[]> => {
       if (!applyActionsContext || actions.length === 0) return [];
       const result = await applyAiClientActions(actions, {
@@ -186,6 +189,14 @@ export function AiSidebar({
       });
       if (options?.isCompileFixTurn && result.applied.length > 0) {
         await onCompileFixActionsApplied?.(result.applied);
+      }
+      if (
+        options?.isCompileFixTurn &&
+        options?.autoCompileFixRetry &&
+        actions.length > 0 &&
+        result.applied.length === 0
+      ) {
+        onCompileFixRetryNoOp?.();
       }
       return result.applied.map((a) => ({
         label: a.label,
@@ -198,7 +209,7 @@ export function AiSidebar({
               : undefined,
       }));
     },
-    [applyActionsContext, onCompileFixActionsApplied, selectedText]
+    [applyActionsContext, onCompileFixActionsApplied, onCompileFixRetryNoOp, selectedText]
   );
 
   async function sendMessage(
@@ -302,7 +313,10 @@ export function AiSidebar({
 
       let appliedActions: AiAppliedAction[] | undefined;
       if (actions.length > 0 && applyActionsContext) {
-        appliedActions = await applyReturnedActions(actions, { isCompileFixTurn: fixIntent });
+        appliedActions = await applyReturnedActions(actions, {
+          isCompileFixTurn: fixIntent,
+          autoCompileFixRetry: options?.autoCompileFixRetry,
+        });
       } else if (Array.isArray(data.appliedActions) && data.appliedActions.length > 0) {
         appliedActions = data.appliedActions as AiAppliedAction[];
       }

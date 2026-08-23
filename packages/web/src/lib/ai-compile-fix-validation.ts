@@ -2,6 +2,7 @@
 
 const DOCUMENTCLASS_RE = /^\s*\\documentclass\b/;
 const REQUIRE_PACKAGE_RE = /^\s*\\RequirePackage\b/;
+const BEGIN_DOCUMENT_RE = /\\begin\{document\}/g;
 const USEPACKAGE_LINE_RE = /^\s*\\usepackage(\[[^\]]*\])?\s*\{[^}]+\}\s*$/;
 const BARE_USEPACKAGE_RE = /^\s*\\usepackage(\[[^\]]*\])?\s*$/;
 const USEPACKAGE_PKG_RE = /\\usepackage(?:\[[^\]]*\])?\{([^}]+)\}/g;
@@ -118,6 +119,36 @@ export function validateNoDuplicateDocumentClass(content: string): LaTeXPreamble
   };
 }
 
+/** Count \\begin{document} on non-comment lines in the first document copy. */
+export function countBeginDocumentInFirstCopy(content: string): number {
+  const firstCopyEnd = getFirstLaTeXCopyEndLine(content);
+  const lines = content.split("\n");
+  const limit = Math.min(firstCopyEnd, lines.length);
+  let count = 0;
+
+  for (let i = 0; i < limit; i += 1) {
+    const trimmed = lines[i].trim();
+    if (!trimmed || trimmed.startsWith("%")) continue;
+    const matches = trimmed.match(BEGIN_DOCUMENT_RE);
+    if (matches) count += matches.length;
+  }
+
+  return count;
+}
+
+/** Rule 0b: exactly one \\begin{document} in the first copy (no duplicate body opens). */
+export function validateNoDuplicateBeginDocument(content: string): LaTeXPreambleValidation {
+  const count = countBeginDocumentInFirstCopy(content);
+  if (count <= 1) return { ok: true };
+
+  return {
+    ok: false,
+    reason:
+      `Edit would leave ${count} \\begin{document} in the first document copy. ` +
+      `Keep exactly one — repair the cited line instead of inserting another \\begin{document}.`,
+  };
+}
+
 /** Rule 1: first non-comment line must be \\documentclass or \\RequirePackage. */
 export function validateLaTeXPreambleOrder(content: string): LaTeXPreambleValidation {
   const first = getFirstNonCommentLine(content);
@@ -216,6 +247,9 @@ export function validateCompileFixEdit(
 
   const duplicateDocumentClass = validateNoDuplicateDocumentClass(previewContent);
   if (!duplicateDocumentClass.ok) return duplicateDocumentClass;
+
+  const duplicateBeginDocument = validateNoDuplicateBeginDocument(previewContent);
+  if (!duplicateBeginDocument.ok) return duplicateBeginDocument;
 
   const preamble = validateLaTeXPreambleOrder(previewContent);
   if (!preamble.ok) return preamble;
