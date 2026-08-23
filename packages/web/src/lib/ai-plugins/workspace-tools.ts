@@ -22,6 +22,9 @@ export const WORKSPACE_TOOL_NAMES = [
   ...CLIENT_ACTION_TOOL_NAMES,
 ] as const;
 
+/** Maximum inclusive line window returned by get_file. */
+export const GET_FILE_MAX_LINES = 100;
+
 /** @deprecated Use CLIENT_ACTION_TOOL_NAMES — kept for ai-response helpers. */
 export const CLIENT_EDIT_TOOL_NAMES = CLIENT_ACTION_TOOL_NAMES;
 
@@ -42,51 +45,109 @@ export function listTexFiles(texFiles: Map<string, string>): {
   };
 }
 
+export interface ReadTexFileResult {
+  path: string;
+  content: string;
+  startLine: number;
+  endLine: number;
+  totalLines: number;
+  note: string;
+  error: string;
+}
+
 export function readTexFile(
   texFiles: Map<string, string>,
-  path: string
-): { path: string; content: string; error: string } {
+  path: string,
+  startLine: number,
+  endLine: number
+): ReadTexFileResult {
   const normalized = normalizeTexPath(path);
+  const emptyResult = (error: string): ReadTexFileResult => ({
+    path: normalized,
+    content: "",
+    startLine: 1,
+    endLine: 1,
+    totalLines: 0,
+    note: "",
+    error,
+  });
+
   if (!normalized.endsWith(".tex")) {
-    return {
-      path: normalized,
-      content: "",
-      error: `File "${normalized}" is not a .tex file in this project.`,
-    };
+    return emptyResult(`File "${normalized}" is not a .tex file in this project.`);
   }
 
-  const content = texFiles.get(normalized);
-  if (content === undefined) {
-    return {
-      path: normalized,
-      content: "",
-      error: `File "${normalized}" is not in this project.`,
-    };
+  const rawContent = texFiles.get(normalized);
+  if (rawContent === undefined) {
+    return emptyResult(`File "${normalized}" is not in this project.`);
   }
+
+  const lines = rawContent.split("\n");
+  const totalLines = Math.max(lines.length, 1);
+
+  if (!Number.isFinite(startLine) || !Number.isFinite(endLine) || startLine < 1 || endLine < 1) {
+    return emptyResult("startLine and endLine must be positive integers (1-based).");
+  }
+
+  let windowStart = Math.min(startLine, totalLines);
+  let windowEnd = Math.min(endLine, totalLines);
+  if (windowEnd < windowStart) {
+    windowEnd = windowStart;
+  }
+
+  const notes: string[] = [];
+  if (startLine > totalLines) {
+    notes.push(`startLine ${startLine} is past the end of the file (${totalLines} lines).`);
+    windowStart = totalLines;
+    windowEnd = totalLines;
+  }
+
+  const requestedSpan = windowEnd - windowStart + 1;
+  if (requestedSpan > GET_FILE_MAX_LINES) {
+    windowEnd = windowStart + GET_FILE_MAX_LINES - 1;
+    notes.push(
+      `Window capped to ${GET_FILE_MAX_LINES} lines. Call get_file again with a different startLine/endLine to read more.`
+    );
+  }
+
+  if (windowEnd < totalLines) {
+    notes.push(`File has ${totalLines} lines total. Lines ${windowEnd + 1}-${totalLines} not shown.`);
+  }
+  if (windowStart > 1) {
+    notes.push(`Lines 1-${windowStart - 1} not shown.`);
+  }
+
+  const content = lines
+    .slice(windowStart - 1, windowEnd)
+    .map((text, offset) => `${windowStart + offset}: ${text}`)
+    .join("\n");
 
   return {
     path: normalized,
     content,
+    startLine: windowStart,
+    endLine: windowEnd,
+    totalLines,
+    note: notes.join(" "),
     error: "",
   };
 }
 
 export const WORKSPACE_SYSTEM_PROMPT = `You have workspace tools to list, read, and edit the user's LaTeX project:
 - list_files — list all .tex file paths in the project
-- get_file — read the full content of one .tex file
+- get_file — read a line range from one .tex file (startLine/endLine are 1-based inclusive; max ${GET_FILE_MAX_LINES} lines per call)
 - apply_edit — surgical search/replace in a file (search must match exactly once)
 - fix_compile_errors — batch search/replace fixes for compile errors
 - insert_at_cursor — insert LaTeX at the user's cursor
 - replace_selection — replace the user's editor selection
 
-Workflow: use list_files or get_file to inspect files, then apply_edit, fix_compile_errors, insert_at_cursor, or replace_selection to make changes. Apply edits with tools — do not only describe changes in prose.
+Workflow: use list_files to discover paths, get_file to read small line windows around errors, then apply_edit or fix_compile_errors to make changes. Apply edits with tools — do not only describe changes in prose.
 Only reference .tex files returned by list_files or get_file. Never invent file paths or citations.
 Never call tools that are not listed above.
 Keep each edit under ${8_000} characters. Prefer minimal, surgical changes.
 If an edit is ambiguous (multiple matches, unclear target), ask the user instead of guessing.
 After applying edits, briefly explain what changed in your reply.`;
 
-export const COMPILE_FIX_WORKSPACE_SUFFIX = `Focus on fixing compile errors. Use list_files or get_file to inspect sources, then fix_compile_errors or apply_edit with exact search/replace from file contents. Keep edits minimal.`;
+export const COMPILE_FIX_WORKSPACE_SUFFIX = `Focus on fixing compile errors. Use get_file with small line ranges around cited error lines, then fix_compile_errors or apply_edit with exact search/replace from the returned content. Keep edits minimal.`;
 
 export function createWorkspaceTools(ctx: ValidateActionContext) {
   const wrap =
@@ -122,11 +183,22 @@ export function createWorkspaceTools(ctx: ValidateActionContext) {
     }),
     get_file: tool({
       description:
-        "Read the full content of one project .tex file from the workspace. Use before apply_edit or fix_compile_errors when you need more than a snippet.",
+        `Read a line range from one project .tex file. startLine and endLine are 1-based inclusive. At most ${GET_FILE_MAX_LINES} lines are returned per call — request another range to read more.`,
       parameters: z.object({
         path: z.string().describe("Project .tex file path, e.g. main.tex"),
+        startLine: z
+          .number()
+          .int()
+          .min(1)
+          .describe("First line to read (1-based inclusive)"),
+        endLine: z
+          .number()
+          .int()
+          .min(1)
+          .describe("Last line to read (1-based inclusive)"),
       }),
-      execute: async ({ path }) => readTexFile(ctx.texFiles, path),
+      execute: async ({ path, startLine, endLine }) =>
+        readTexFile(ctx.texFiles, path, startLine, endLine),
     }),
     insert_at_cursor: tool({
       description:

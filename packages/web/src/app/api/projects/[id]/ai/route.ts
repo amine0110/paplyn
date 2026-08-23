@@ -17,6 +17,7 @@ import { buildAiFileContext } from "@/lib/ai-file-context";
 import {
   buildAiCompileFixContext,
   normalizeAiCompileErrors,
+  selectCompileFixMessages,
   type AiCompileError,
 } from "@/lib/ai-compile-fix-context";
 import { detectFixCompileIntent } from "@/lib/ai-compile-fix-intent";
@@ -100,7 +101,7 @@ const WRITING_ACTION_PROMPTS: Record<string, string> = {
   citation:
     "Suggest how to cite or reference the selected passage. Use search_literature when real papers are needed; never invent citations.",
   "explain-errors":
-    "Fix the compile errors using fix_compile_errors or apply_edit with exact search/replace from the file context. Apply surgical LaTeX fixes, then explain what you changed.",
+    "Fix the compile errors using get_file to read small line ranges, then fix_compile_errors or apply_edit with exact search/replace. Apply surgical LaTeX fixes, then explain what you changed.",
 };
 
 const FOLLOW_UP_SYSTEM_SUFFIX = `
@@ -156,11 +157,7 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
 
   if (compileFix && compileErrors.length > 0) {
     systemPrompt +=
-      "\n\nWhen fixing errors, prefer fix_compile_errors or apply_edit with exact search/replace snippets from the file context.";
-  } else if (data.action === "explain-errors" && compileErrors.length > 0) {
-    systemPrompt += `\n\nThe user has compile errors:\n${compileErrors.map((error) => error.message).join("\n")}`;
-    systemPrompt +=
-      "\n\nWhen fixing errors, prefer fix_compile_errors or apply_edit with exact search/replace snippets from the file context.";
+      "\n\nWhen fixing errors, call get_file for small line ranges around cited lines, then fix_compile_errors or apply_edit with exact search/replace from the returned content.";
   }
 
   if (data.action) {
@@ -311,6 +308,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             errorsOnly: mode === "compile-fix-minimal",
           });
 
+    const messages = compileFixRequest
+      ? selectCompileFixMessages(requestData.messages)
+      : requestData.messages;
+
     const systemPrompt = buildSystemPrompt({
       data: requestData,
       compileErrors,
@@ -323,7 +324,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const result = await generateText({
       model,
       system: systemPrompt,
-      messages: requestData.messages,
+      messages,
       maxRetries: 0,
       maxSteps: 8,
       tools: compileFixRequest
@@ -335,7 +336,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       result,
       model,
       systemPrompt,
-      messages: requestData.messages,
+      messages,
     });
 
     return { result, content, systemPrompt };
