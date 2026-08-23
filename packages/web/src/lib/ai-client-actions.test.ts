@@ -27,43 +27,19 @@ describe("ai-client-actions", () => {
         file: "main.tex",
         search: "foo",
         replace: "bar",
-        startLine: 0,
-        endLine: 0,
       },
       { texFiles: files, hasSelection: false }
     );
     expect(result).toBeNull();
   });
 
-  it("validates apply_edit with line range sentinels", () => {
-    const result = validateClientAction(
-      {
-        type: "apply_edit",
-        file: "main.tex",
-        search: "",
-        replace: "Replaced line",
-        startLine: 3,
-        endLine: 3,
-      },
-      { texFiles, hasSelection: false }
-    );
-    expect(result?.action.type).toBe("apply_edit");
-    if (result?.action.type === "apply_edit") {
-      expect(result.action.search).toBeUndefined();
-      expect(result.action.startLine).toBe(3);
-      expect(result.action.endLine).toBe(3);
-    }
-  });
-
-  it("rejects apply_edit when neither search nor line range is provided", () => {
+  it("rejects apply_edit when search is empty", () => {
     const result = validateClientAction(
       {
         type: "apply_edit",
         file: "main.tex",
         search: "",
         replace: "text",
-        startLine: 0,
-        endLine: 0,
       },
       { texFiles, hasSelection: false }
     );
@@ -77,14 +53,13 @@ describe("ai-client-actions", () => {
         file: "main.tex",
         search: "Hello world",
         replace: "Hello universe",
-        startLine: 0,
-        endLine: 0,
       },
       { texFiles, hasSelection: false }
     );
     expect(result?.action.type).toBe("apply_edit");
     if (result?.action.type === "apply_edit") {
       expect(result.action.file).toBe("main.tex");
+      expect(result.action.search).toBe("Hello world");
     }
   });
 

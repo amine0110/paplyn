@@ -15,7 +15,7 @@ export const CLIENT_EDIT_TOOL_NAMES = [
 export const CLIENT_EDIT_SYSTEM_PROMPT = `When the user asks you to edit, fix, rewrite, or change their LaTeX manuscript:
 - Apply changes with insert_at_cursor, replace_selection, apply_edit, or fix_compile_errors tools — do not only describe edits in prose.
 - Use insert_at_cursor for new content at the cursor; replace_selection when changing highlighted text.
-- Use apply_edit for surgical changes in a specific .tex file (search/replace or line range). The search string must match exactly once. For search/replace set startLine and endLine to 0; for line-range edits set search to an empty string.
+- Use apply_edit for surgical search/replace changes in a specific .tex file. The search string must match exactly once.
 - Use fix_compile_errors for small LaTeX fixes based on the current compile error list.
 - Only reference .tex files that exist in the project context. Never invent file paths or citations.
 - Keep each edit under ${8_000} characters. Prefer minimal, surgical changes.
@@ -62,21 +62,11 @@ export function createClientEditTools(ctx: ValidateActionContext) {
     }),
     apply_edit: tool({
       description:
-        "Apply a surgical edit to a named .tex file via exact search/replace or a 1-based line range. Use search/replace with startLine=0 and endLine=0, or line range with search=\"\".",
+        "Apply a surgical search/replace edit to a named .tex file. The search string must match exactly once.",
       parameters: z.object({
         file: z.string().describe("Project .tex file path, e.g. main.tex"),
-        search: z
-          .string()
-          .describe("Exact substring to replace (empty string when using line range)"),
+        search: z.string().describe("Exact substring to replace"),
         replace: z.string().describe("Replacement text"),
-        startLine: z
-          .number()
-          .int()
-          .describe("Start line (1-based) for range edit; use 0 for search/replace mode"),
-        endLine: z
-          .number()
-          .int()
-          .describe("End line (1-based, inclusive) for range edit; use 0 for search/replace mode"),
       }),
       execute: async (args) => wrap("apply_edit")(args),
     }),
