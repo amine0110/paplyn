@@ -15,14 +15,25 @@ export interface BuildAiCompileFixContextOptions {
 }
 
 const FILE_LINE_MESSAGE_RE = /([^\s():/\\]+\.tex):(\d+)/i;
+const MAX_COMPILE_ERROR_MESSAGE_LENGTH = 400;
+
+function truncateCompileErrorMessage(message: string): string {
+  if (message.length <= MAX_COMPILE_ERROR_MESSAGE_LENGTH) return message;
+  return `${message.slice(0, MAX_COMPILE_ERROR_MESSAGE_LENGTH)}…`;
+}
 
 export function normalizeAiCompileErrors(
   errors?: (string | AiCompileError)[]
 ): AiCompileError[] {
   if (!errors?.length) return [];
-  return errors.map((entry) =>
-    typeof entry === "string" ? { message: entry } : { ...entry }
-  );
+  return errors.map((entry) => {
+    const normalized =
+      typeof entry === "string" ? { message: entry } : { ...entry };
+    return {
+      ...normalized,
+      message: truncateCompileErrorMessage(normalized.message),
+    };
+  });
 }
 
 export function formatCompileErrorLines(errors: AiCompileError[]): string {

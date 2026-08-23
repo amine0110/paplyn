@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createOpenAI } from "@ai-sdk/openai";
-import { APICallError, generateText, type GenerateTextResult, type ToolSet } from "ai";
+import { generateText, type GenerateTextResult, type ToolSet } from "ai";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { projectFile, organization } from "@/lib/schema";
@@ -36,8 +36,12 @@ import {
   COMPILE_FIX_WORKSPACE_SUFFIX,
 } from "@/lib/ai-plugins/workspace-tools";
 import {
+  AI_RATE_LIMIT_MESSAGE,
   formatAiRequestError,
+  isAiPromptTooLargeError,
+  isAiRateLimitError,
   isUnknownToolCallError,
+  PROMPT_TOO_LARGE_MESSAGE,
   UNKNOWN_TOOL_RETRY_HINT,
 } from "@/lib/ai-tool-errors";
 import { PRODUCT } from "@/lib/product";
@@ -83,9 +87,6 @@ const chatSchema = z.object({
 type ChatRequest = z.infer<typeof chatSchema>;
 
 type AiContextMode = "full" | "compile-fix" | "compile-fix-minimal";
-
-const PROMPT_TOO_LARGE_MESSAGE =
-  "The project context is too large for the AI service. Try asking about a specific file or selection.";
 
 const WRITING_ACTION_PROMPTS: Record<string, string> = {
   tighten:
@@ -208,20 +209,6 @@ async function resolveAssistantContent<TOOLS extends ToolSet>(options: {
   return "I searched but couldn't format the results. Please try asking again.";
 }
 
-function isAiPromptTooLargeError(error: unknown): boolean {
-  if (!APICallError.isInstance(error)) return false;
-  const msg = error.message.toLowerCase();
-  if (error.statusCode === 413) return true;
-  return (
-    error.statusCode === 429 &&
-    (msg.includes("too large") || msg.includes("tpm") || msg.includes("token"))
-  );
-}
-
-function isAiRateLimitError(error: unknown): boolean {
-  return APICallError.isInstance(error) && error.statusCode === 429;
-}
-
 async function getAiConfig() {
   const env = readAiEnvFromProcess();
 
@@ -321,6 +308,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       retryHint: options?.retryHint,
     });
 
+    if (compileFixRequest) {
+      const messagesChars = messages.reduce((sum, message) => sum + message.content.length, 0);
+      console.info("[ai compile-fix]", {
+        mode,
+        systemPromptLength: systemPrompt.length,
+        messagesChars,
+        messageCount: messages.length,
+        errorCount: compileErrors.length,
+        fileContextLength: fileContext.length,
+      });
+    }
+
     const result = await generateText({
       model,
       system: systemPrompt,
@@ -400,6 +399,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         if (isAiPromptTooLargeError(retryError)) {
           return NextResponse.json({ error: PROMPT_TOO_LARGE_MESSAGE }, { status: 429 });
         }
+        if (isAiRateLimitError(retryError)) {
+          return NextResponse.json({ error: AI_RATE_LIMIT_MESSAGE }, { status: 429 });
+        }
         console.error("AI compile-fix retry failed:", retryError);
         return NextResponse.json(
           { error: formatAiRequestError(retryError) },
@@ -412,10 +414,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: PROMPT_TOO_LARGE_MESSAGE }, { status: 429 });
     }
     if (isAiRateLimitError(error)) {
-      return NextResponse.json(
-        { error: "AI service rate limit reached. Please wait a moment and try again." },
-        { status: 429 }
-      );
+      return NextResponse.json({ error: AI_RATE_LIMIT_MESSAGE }, { status: 429 });
     }
     console.error("AI request failed:", error);
     return NextResponse.json({ error: formatAiRequestError(error) }, { status: 502 });

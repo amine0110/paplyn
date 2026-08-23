@@ -1,10 +1,66 @@
 import { APICallError } from "ai";
 
+export const PROMPT_TOO_LARGE_MESSAGE =
+  "The project context is too large for the AI service. Try asking about a specific file or selection.";
+
+export const AI_RATE_LIMIT_MESSAGE =
+  "AI service rate limit reached. Please wait a moment and try again.";
+
+const TPM_OR_RATE_LIMIT_PATTERNS = [
+  "tpm",
+  "tokens per minute",
+  "rate limit",
+  "rate_limit",
+  "requests per minute",
+  "rpm",
+  "too many requests",
+] as const;
+
+const PROMPT_TOO_LARGE_PATTERNS = [
+  "too large",
+  "too long",
+  "maximum context",
+  "context length",
+  "context window",
+  "prompt is too",
+  "request too large",
+  "payload too large",
+  "exceeds the maximum",
+] as const;
+
 const UNKNOWN_TOOL_PATTERNS = [
   "was not in request.tools",
   "attempted to call tool",
   "tool call validation failed",
 ] as const;
+
+function messageIncludesAny(message: string, patterns: readonly string[]): boolean {
+  return patterns.some((pattern) => message.includes(pattern));
+}
+
+export function isTpmOrRateLimitMessage(message: string): boolean {
+  return messageIncludesAny(message.toLowerCase(), TPM_OR_RATE_LIMIT_PATTERNS);
+}
+
+export function isPromptTooLargeMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  if (isTpmOrRateLimitMessage(normalized)) return false;
+  return messageIncludesAny(normalized, PROMPT_TOO_LARGE_PATTERNS);
+}
+
+export function isAiPromptTooLargeError(error: unknown): boolean {
+  if (!APICallError.isInstance(error)) return false;
+  if (error.statusCode === 413) return true;
+  if (error.statusCode === 429) {
+    return isPromptTooLargeMessage(error.message);
+  }
+  return false;
+}
+
+export function isAiRateLimitError(error: unknown): boolean {
+  if (!APICallError.isInstance(error)) return false;
+  return error.statusCode === 429 && !isAiPromptTooLargeError(error);
+}
 
 export function isUnknownToolCallError(error: unknown): boolean {
   if (!APICallError.isInstance(error)) return false;
