@@ -23,6 +23,7 @@ import {
   getOfflineEditorInitialDoc,
   seedYTextIfEmpty,
 } from "@/lib/collab-seed";
+import { createSaveStatusTracker, type SaveStatus } from "@/lib/save-status";
 
 const latexHighlightLight = HighlightStyle.define([
   { tag: t.keyword, color: "#2d6a6a" },
@@ -59,6 +60,7 @@ interface LatexEditorProps {
   onChange: (content: string) => void;
   onEditorReady?: (view: EditorView) => void;
   onStatsChange?: (stats: DocumentStats) => void;
+  onSaveStatusChange?: (status: SaveStatus) => void;
   jumpToLine?: number | null;
 }
 
@@ -72,6 +74,7 @@ export function LatexEditor({
   onChange,
   onEditorReady,
   onStatsChange,
+  onSaveStatusChange,
   jumpToLine,
 }: LatexEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -96,6 +99,9 @@ export function LatexEditor({
 
     let provider: WebsocketProvider | null = null;
     const collabEnabled = Boolean(collabToken);
+    const saveStatusTracker = onSaveStatusChange
+      ? createSaveStatusTracker(onSaveStatusChange)
+      : null;
 
     if (collabToken) {
       provider = new WebsocketProvider(collabBaseUrl, projectId, ydoc, {
@@ -109,9 +115,18 @@ export function LatexEditor({
           color: colorForUserId(payload.userId),
         });
       }
+      provider.on("sync", (synced: boolean) => {
+        if (synced) saveStatusTracker?.markSaved();
+      });
       // Rooms are seeded on the collab server from project_file; do not seed here.
     } else if (initialContent) {
       seedYTextIfEmpty(ytext, initialContent);
+    }
+
+    if (saveStatusTracker && canEdit) {
+      ydoc.on("update", (_update, origin) => {
+        saveStatusTracker.onDocUpdate(origin, provider);
+      });
     }
 
     const highlightStyle = isDark ? latexHighlightDark : latexHighlightLight;
@@ -214,11 +229,12 @@ export function LatexEditor({
     reportStats(initialDoc);
 
     return () => {
+      saveStatusTracker?.destroy();
       view.destroy();
       provider?.destroy();
       ydoc.destroy();
     };
-  }, [filePath, projectId, collabToken, collabBaseUrl, canEdit, isDark]);
+  }, [filePath, projectId, collabToken, collabBaseUrl, canEdit, isDark, onSaveStatusChange]);
 
   useEffect(() => {
     if (jumpToLine && viewRef.current && jumpToLine > 0) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, Link2, Copy, Check, Mail } from "lucide-react";
+import { Users, Link2, Copy, Check, Mail, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -58,6 +58,8 @@ export function ShareDialog({
   const [inviteLink, setInviteLink] = useState("");
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
+  const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
   const [copied, setCopied] = useState<"project" | "invite" | null>(null);
   const [error, setError] = useState("");
 
@@ -135,6 +137,51 @@ export function ShareDialog({
     setInvites((prev) => [{ id: invite.id, email: invite.email, role: invite.role, link }, ...prev]);
     setShareEmail("");
     await copyInviteLink(link);
+  }
+
+  async function removeMember(memberId: string) {
+    if (!canManage) return;
+
+    setRemovingMemberId(memberId);
+    setError("");
+
+    const res = await fetch(`/api/projects/${projectId}/members/${memberId}`, {
+      method: "DELETE",
+    });
+
+    setRemovingMemberId(null);
+
+    if (!res.ok) {
+      const err = await res.json();
+      setError(typeof err.error === "string" ? err.error : "Failed to remove member");
+      return;
+    }
+
+    setMembers((prev) => prev.filter((member) => member.id !== memberId));
+  }
+
+  async function revokeInvite(inviteId: string) {
+    if (!canManage) return;
+
+    setRevokingInviteId(inviteId);
+    setError("");
+
+    const res = await fetch(`/api/projects/${projectId}/invites/${inviteId}`, {
+      method: "DELETE",
+    });
+
+    setRevokingInviteId(null);
+
+    if (!res.ok) {
+      const err = await res.json();
+      setError(typeof err.error === "string" ? err.error : "Failed to revoke invite");
+      return;
+    }
+
+    setInvites((prev) => prev.filter((invite) => invite.id !== inviteId));
+    if (inviteLink && invites.find((invite) => invite.id === inviteId)?.link === inviteLink) {
+      setInviteLink("");
+    }
   }
 
   if (!open) return null;
@@ -229,14 +276,33 @@ export function ShareDialog({
                   </li>
                 )}
                 {members.map((member) => (
-                  <li key={member.id} className="flex items-center justify-between text-sm">
+                  <li key={member.id} className="flex items-center justify-between gap-2 text-sm">
                     <div className="min-w-0">
                       <p className="truncate font-medium">{member.name}</p>
                       <p className="truncate text-xs text-ink-faint">{member.email}</p>
                     </div>
-                    <span className="text-xs text-ink-faint shrink-0 ml-2">
-                      {formatMemberRole(member.role)}
-                    </span>
+                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                      <span className="text-xs text-ink-faint">
+                        {formatMemberRole(member.role)}
+                      </span>
+                      {canManage && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-1.5 text-ink-faint hover:text-error"
+                          onClick={() => removeMember(member.id)}
+                          disabled={removingMemberId === member.id}
+                          title="Remove member"
+                        >
+                          {removingMemberId === member.id ? (
+                            <span className="text-xs">…</span>
+                          ) : (
+                            <X className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -256,9 +322,26 @@ export function ShareDialog({
                       <p className="truncate">{invite.email || "Link invite"}</p>
                       <p className="text-xs text-ink-faint">{formatMemberRole(invite.role)}</p>
                     </div>
-                    <Button type="button" variant="ghost" size="sm" onClick={() => copyInviteLink(invite.link)}>
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button type="button" variant="ghost" size="sm" onClick={() => copyInviteLink(invite.link)}>
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-ink-faint hover:text-error"
+                        onClick={() => revokeInvite(invite.id)}
+                        disabled={revokingInviteId === invite.id}
+                        title="Revoke invite"
+                      >
+                        {revokingInviteId === invite.id ? (
+                          <span className="text-xs">…</span>
+                        ) : (
+                          <X className="h-3.5 w-3.5" />
+                        )}
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ul>
