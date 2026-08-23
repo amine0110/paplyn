@@ -4,6 +4,7 @@ export interface AiCompileError {
   message: string;
   file?: string;
   line?: number;
+  severity?: "error" | "warning";
 }
 
 export interface BuildAiCompileFixContextOptions {
@@ -15,14 +16,33 @@ export interface BuildAiCompileFixContextOptions {
 }
 
 const FILE_LINE_MESSAGE_RE = /([^\s():/\\]+\.tex):(\d+)/i;
+const MAX_COMPILE_ERROR_MESSAGE_LENGTH = 400;
+const MAX_COMPILE_ERRORS = 25;
+
+function truncateCompileErrorMessage(message: string): string {
+  if (message.length <= MAX_COMPILE_ERROR_MESSAGE_LENGTH) return message;
+  return `${message.slice(0, MAX_COMPILE_ERROR_MESSAGE_LENGTH)}…`;
+}
 
 export function normalizeAiCompileErrors(
   errors?: (string | AiCompileError)[]
 ): AiCompileError[] {
   if (!errors?.length) return [];
-  return errors.map((entry) =>
-    typeof entry === "string" ? { message: entry } : { ...entry }
-  );
+
+  const normalized = errors.map((entry) => {
+    const base = typeof entry === "string" ? { message: entry } : { ...entry };
+    return {
+      ...base,
+      message: truncateCompileErrorMessage(base.message),
+    };
+  });
+
+  const hasErrors = normalized.some((entry) => entry.severity === "error");
+  const filtered = hasErrors
+    ? normalized.filter((entry) => entry.severity !== "warning")
+    : normalized;
+
+  return filtered.slice(0, MAX_COMPILE_ERRORS);
 }
 
 export function formatCompileErrorLines(errors: AiCompileError[]): string {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createOpenAI } from "@ai-sdk/openai";
-import { APICallError, generateText, type GenerateTextResult, type ToolSet } from "ai";
+import { generateText, APICallError, type GenerateTextResult, type ToolSet } from "ai";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { projectFile, organization } from "@/lib/schema";
@@ -36,8 +36,16 @@ import {
   COMPILE_FIX_WORKSPACE_SUFFIX,
 } from "@/lib/ai-plugins/workspace-tools";
 import {
+  AI_RATE_LIMIT_MESSAGE,
   formatAiRequestError,
+  getRetryAfterSeconds,
+  isAiPromptTooLargeError,
+  isAiRateLimitError,
+  isSlimCompileFixPrompt,
   isUnknownToolCallError,
+  logAiApiError,
+  PROMPT_TOO_LARGE_MESSAGE,
+  shouldTreatCompileFix429AsRateLimit,
   UNKNOWN_TOOL_RETRY_HINT,
 } from "@/lib/ai-tool-errors";
 import { PRODUCT } from "@/lib/product";
@@ -74,6 +82,7 @@ const chatSchema = z.object({
           message: z.string(),
           file: z.string().optional(),
           line: z.number().optional(),
+          severity: z.enum(["error", "warning"]).optional(),
         }),
       ])
     )
@@ -84,8 +93,12 @@ type ChatRequest = z.infer<typeof chatSchema>;
 
 type AiContextMode = "full" | "compile-fix" | "compile-fix-minimal";
 
-const PROMPT_TOO_LARGE_MESSAGE =
-  "The project context is too large for the AI service. Try asking about a specific file or selection.";
+type CompileFixMetrics = {
+  mode: AiContextMode;
+  systemPromptChars: number;
+  messagesChars: number;
+  errorCount: number;
+};
 
 const WRITING_ACTION_PROMPTS: Record<string, string> = {
   tighten:
@@ -168,7 +181,7 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
     }
   }
 
-  if (data.selectedText) {
+  if (!compileFix && data.selectedText) {
     systemPrompt += `\n\nSelected text in ${data.activeFile || "editor"}:\n${data.selectedText}`;
   }
 
@@ -208,20 +221,6 @@ async function resolveAssistantContent<TOOLS extends ToolSet>(options: {
   return "I searched but couldn't format the results. Please try asking again.";
 }
 
-function isAiPromptTooLargeError(error: unknown): boolean {
-  if (!APICallError.isInstance(error)) return false;
-  const msg = error.message.toLowerCase();
-  if (error.statusCode === 413) return true;
-  return (
-    error.statusCode === 429 &&
-    (msg.includes("too large") || msg.includes("tpm") || msg.includes("token"))
-  );
-}
-
-function isAiRateLimitError(error: unknown): boolean {
-  return APICallError.isInstance(error) && error.statusCode === 429;
-}
-
 async function getAiConfig() {
   const env = readAiEnvFromProcess();
 
@@ -235,6 +234,15 @@ async function getAiConfig() {
   }
 
   return resolveHostedAiConfig(env);
+}
+
+function rateLimitResponse(error: unknown): NextResponse {
+  const headers = new Headers();
+  const retryAfter = getRetryAfterSeconds(error);
+  if (retryAfter != null) {
+    headers.set("Retry-After", String(retryAfter));
+  }
+  return NextResponse.json({ error: AI_RATE_LIMIT_MESSAGE }, { status: 429, headers });
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -295,6 +303,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const model = openai(aiConfig.model);
 
+  const compileFixMetricsRef: { current: CompileFixMetrics | null } = { current: null };
+
   async function runGenerateText(mode: AiContextMode, options?: { retryHint?: string }) {
     const fileContext =
       mode === "full"
@@ -321,12 +331,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       retryHint: options?.retryHint,
     });
 
+    if (compileFixRequest) {
+      const messagesChars = messages.reduce((sum, message) => sum + message.content.length, 0);
+      compileFixMetricsRef.current = {
+        mode,
+        systemPromptChars: systemPrompt.length,
+        messagesChars,
+        errorCount: compileErrors.length,
+      };
+      console.info("[ai compile-fix]", {
+        mode,
+        systemPromptChars: systemPrompt.length,
+        messagesChars,
+        messageCount: messages.length,
+        errorCount: compileErrors.length,
+        fileContextLength: fileContext.length,
+        slim: isSlimCompileFixPrompt(systemPrompt.length, messagesChars),
+      });
+    }
+
     const result = await generateText({
       model,
       system: systemPrompt,
       messages,
       maxRetries: 0,
-      maxSteps: 8,
+      maxSteps: compileFixRequest ? 4 : 8,
       tools: compileFixRequest
         ? workspaceTools
         : { ...pluginTools, ...workspaceTools },
@@ -342,10 +371,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return { result, content, systemPrompt };
   }
 
-  const initialMode: AiContextMode = compileFixRequest ? "compile-fix" : "full";
+  const initialMode: AiContextMode = compileFixRequest ? "compile-fix-minimal" : "full";
 
   try {
-    let generation = await runGenerateText(initialMode);
+    const generation = await runGenerateText(initialMode);
 
     const usedPlugins = collectUsedPlugins(generation.result, plugins);
     const papers = collectPapersFromToolResults(generation.result);
@@ -361,6 +390,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       ...(actions.length > 0 ? { actions, appliedActions } : {}),
     });
   } catch (error) {
+    const compileFixMetrics = compileFixMetricsRef.current;
+    if (compileFixMetrics) {
+      logAiApiError(
+        {
+          compileFix: true,
+          mode: compileFixMetrics.mode,
+          systemPromptChars: compileFixMetrics.systemPromptChars,
+          messagesChars: compileFixMetrics.messagesChars,
+          errorCount: compileFixMetrics.errorCount,
+        },
+        error
+      );
+    } else if (APICallError.isInstance(error)) {
+      logAiApiError({ compileFix: false }, error);
+    }
+
     if (isUnknownToolCallError(error)) {
       try {
         const retry = await runGenerateText(initialMode, {
@@ -384,38 +429,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
     }
 
-    if (compileFixRequest && isAiPromptTooLargeError(error)) {
-      try {
-        const retry = await runGenerateText("compile-fix-minimal");
-        const actions = collectClientActionsFromToolResults(retry.result);
-        const appliedActions = toAppliedActionSummaries(actions);
-
-        await incrementAiUsage(session.user.id);
-
-        return NextResponse.json({
-          content: retry.content,
-          ...(actions.length > 0 ? { actions, appliedActions } : {}),
-        });
-      } catch (retryError) {
-        if (isAiPromptTooLargeError(retryError)) {
-          return NextResponse.json({ error: PROMPT_TOO_LARGE_MESSAGE }, { status: 429 });
-        }
-        console.error("AI compile-fix retry failed:", retryError);
-        return NextResponse.json(
-          { error: formatAiRequestError(retryError) },
-          { status: 502 }
-        );
-      }
+    if (isAiRateLimitError(error)) {
+      return rateLimitResponse(error);
     }
-
+    if (
+      compileFixMetrics &&
+      shouldTreatCompileFix429AsRateLimit(
+        error,
+        compileFixMetrics.systemPromptChars,
+        compileFixMetrics.messagesChars
+      )
+    ) {
+      return rateLimitResponse(error);
+    }
     if (isAiPromptTooLargeError(error)) {
       return NextResponse.json({ error: PROMPT_TOO_LARGE_MESSAGE }, { status: 429 });
-    }
-    if (isAiRateLimitError(error)) {
-      return NextResponse.json(
-        { error: "AI service rate limit reached. Please wait a moment and try again." },
-        { status: 429 }
-      );
     }
     console.error("AI request failed:", error);
     return NextResponse.json({ error: formatAiRequestError(error) }, { status: 502 });
