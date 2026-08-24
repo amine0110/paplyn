@@ -7,7 +7,7 @@ import { getProjectAccess } from "@/lib/project-access";
 import { generateId } from "@/lib/utils";
 import { buildInviteUrl, formatMemberRole } from "@/lib/project-sharing";
 import { getServerAppUrl } from "@/lib/urls";
-import { sendPlicumEmail } from "@/lib/email/send";
+import { formatEmailFailureReason, sendPlicumEmail, type SendEmailResult } from "@/lib/email/send";
 import { renderInviteEmail } from "@/lib/email/templates";
 import { PRODUCT_NAME } from "@/lib/product";
 import { z } from "zod";
@@ -34,7 +34,7 @@ async function sendInviteEmail({
   projectName: string;
   role: "editor" | "viewer";
   inviteId: string;
-}): Promise<boolean> {
+}): Promise<SendEmailResult> {
   const inviteUrl = inviteLink(inviteId);
   const { subject, html, text } = renderInviteEmail({
     productName: PRODUCT_NAME,
@@ -49,7 +49,7 @@ async function sendInviteEmail({
   if (!result.sent) {
     console.warn(`[invite] Email not sent to ${to}: ${result.reason}`);
   }
-  return result.sent;
+  return result;
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -161,7 +161,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       })
       .returning();
 
-    const emailSent = await sendInviteEmail({
+    const emailResult = await sendInviteEmail({
       to: email,
       ownerName: session.user.name || session.user.email,
       projectName: access.project.name,
@@ -170,7 +170,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
 
     return NextResponse.json(
-      { ...invite, link: inviteLink(invite.id), emailSent },
+      {
+        ...invite,
+        link: inviteLink(invite.id),
+        emailSent: emailResult.sent,
+        ...(emailResult.sent ? {} : { emailReason: formatEmailFailureReason(emailResult) }),
+      },
       { status: 201 }
     );
   }

@@ -13,6 +13,7 @@ import {
   type InviteRole,
 } from "@/lib/project-sharing";
 import { PRODUCT } from "@/lib/product";
+import { resolveInviteEmailNotice } from "@/lib/invite-email-notice";
 
 interface ShareMember {
   id: string;
@@ -61,7 +62,7 @@ export function ShareDialog({
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
   const [copied, setCopied] = useState<"project" | "invite" | null>(null);
-  const [inviteNotice, setInviteNotice] = useState<"sent" | "not-sent" | null>(null);
+  const [inviteNotice, setInviteNotice] = useState<{ notice: "sent" | "not-sent"; message: string } | null>(null);
   const [error, setError] = useState("");
 
   const appOrigin = typeof window !== "undefined" ? window.location.origin : "";
@@ -141,7 +142,7 @@ export function ShareDialog({
     setShareEmail("");
 
     if (hadEmail) {
-      setInviteNotice(invite.emailSent ? "sent" : "not-sent");
+      setInviteNotice(resolveInviteEmailNotice(invite.emailSent, invite.emailReason));
     } else {
       await copyInviteLink(link);
     }
@@ -254,10 +255,10 @@ export function ShareDialog({
                 </div>
                 {inviteNotice && (
                   <p
-                    className={`text-sm ${inviteNotice === "sent" ? "text-accent" : "text-ink-muted"}`}
+                    className={`text-sm ${inviteNotice.notice === "sent" ? "text-accent" : "text-ink-muted"}`}
                     role="status"
                   >
-                    {inviteNotice === "sent" ? "Invite email sent." : "Invite created; email not sent."}
+                    {inviteNotice.message}
                   </p>
                 )}
                 {inviteLink && (

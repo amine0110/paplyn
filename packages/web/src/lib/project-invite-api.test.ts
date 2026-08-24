@@ -32,6 +32,12 @@ vi.mock("@/lib/db", () => ({
 
 vi.mock("@/lib/email/send", () => ({
   sendPlicumEmail,
+  formatEmailFailureReason: (result: { sent: false; reason: string; error?: string }) => {
+    if (result.reason === "not-configured") {
+      return "Email is not configured on this server (SMTP credentials missing).";
+    }
+    return result.error ? `Email could not be sent: ${result.error}` : "Email could not be sent.";
+  },
 }));
 
 import { getSession } from "@/lib/session";
@@ -60,6 +66,23 @@ const inviteRow = {
   createdAt: new Date(),
 };
 
+const linkOnlyInviteRow = {
+  ...inviteRow,
+  id: "invite-link",
+  email: null,
+};
+
+function mockOwnerSession() {
+  vi.mocked(getSession).mockResolvedValue({
+    user: { id: ownerId, email: "owner@example.com", name: "Owner" },
+  } as never);
+  vi.mocked(getProjectAccess).mockResolvedValue({
+    project: projectRow,
+    role: "owner",
+    canEdit: true,
+  } as never);
+}
+
 describe("POST /api/projects/[id]/invite", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -71,15 +94,8 @@ describe("POST /api/projects/[id]/invite", () => {
     sendPlicumEmail.mockResolvedValue({ sent: false, reason: "not-configured" });
   });
 
-  it("returns invite link when mailer is not configured", async () => {
-    vi.mocked(getSession).mockResolvedValue({
-      user: { id: ownerId, email: "owner@example.com", name: "Owner" },
-    } as never);
-    vi.mocked(getProjectAccess).mockResolvedValue({
-      project: projectRow,
-      role: "owner",
-      canEdit: true,
-    } as never);
+  it("returns invite link and emailReason when mailer is not configured", async () => {
+    mockOwnerSession();
 
     const { POST } = await import("@/app/api/projects/[id]/invite/route");
     const res = await POST(
@@ -95,6 +111,70 @@ describe("POST /api/projects/[id]/invite", () => {
     const body = await res.json();
     expect(body.link).toContain("/invite/invite-1");
     expect(body.emailSent).toBe(false);
+    expect(body.emailReason).toContain("SMTP credentials missing");
     expect(sendPlicumEmail).toHaveBeenCalled();
+  });
+
+  it("returns emailSent true when send succeeds", async () => {
+    mockOwnerSession();
+    sendPlicumEmail.mockResolvedValue({ sent: true });
+
+    const { POST } = await import("@/app/api/projects/[id]/invite/route");
+    const res = await POST(
+      new NextRequest(`http://localhost/api/projects/${projectId}/invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "guest@example.com", role: "editor" }),
+      }),
+      { params: Promise.resolve({ id: projectId }) }
+    );
+
+    const body = await res.json();
+    expect(body.emailSent).toBe(true);
+    expect(body.emailReason).toBeUndefined();
+  });
+
+  it("returns emailSent false and send error reason when send fails", async () => {
+    mockOwnerSession();
+    sendPlicumEmail.mockResolvedValue({
+      sent: false,
+      reason: "send-failed",
+      error: "Connection refused",
+    });
+
+    const { POST } = await import("@/app/api/projects/[id]/invite/route");
+    const res = await POST(
+      new NextRequest(`http://localhost/api/projects/${projectId}/invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "guest@example.com", role: "editor" }),
+      }),
+      { params: Promise.resolve({ id: projectId }) }
+    );
+
+    const body = await res.json();
+    expect(body.emailSent).toBe(false);
+    expect(body.emailReason).toContain("Connection refused");
+  });
+
+  it("creates link-only invite without calling send", async () => {
+    mockOwnerSession();
+    dbMocks.returning.mockResolvedValue([linkOnlyInviteRow]);
+
+    const { POST } = await import("@/app/api/projects/[id]/invite/route");
+    const res = await POST(
+      new NextRequest(`http://localhost/api/projects/${projectId}/invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: "editor", linkOnly: true }),
+      }),
+      { params: Promise.resolve({ id: projectId }) }
+    );
+
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.link).toContain("/invite/invite-link");
+    expect(body.emailSent).toBeUndefined();
+    expect(sendPlicumEmail).not.toHaveBeenCalled();
   });
 });
