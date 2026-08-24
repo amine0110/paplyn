@@ -14,7 +14,7 @@ import {
   alreadyMemberEmailFields,
   inviteEmailFieldsFromSendResult,
   linkOnlyInviteEmailFields,
-} from "@/lib/invite-email-status";
+} from "@/lib/invite-email-status-server";
 import { PRODUCT_NAME } from "@/lib/product";
 import { z } from "zod";
 
