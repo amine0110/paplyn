@@ -5,10 +5,16 @@ import { projectMember, projectInvite, user } from "@/lib/schema";
 import { getSession } from "@/lib/session";
 import { getProjectAccess } from "@/lib/project-access";
 import { generateId } from "@/lib/utils";
-import { buildInviteUrl, formatMemberRole } from "@/lib/project-sharing";
+import { buildInviteUrl, buildProjectUrl, formatMemberRole } from "@/lib/project-sharing";
 import { getServerAppUrl } from "@/lib/urls";
-import { sendPlicumEmail } from "@/lib/email/send";
-import { renderInviteEmail } from "@/lib/email/templates";
+import { sendPlicumEmail, type SendEmailResult } from "@/lib/email/send";
+import { renderInviteEmail, renderProjectAddedEmail } from "@/lib/email/templates";
+import {
+  addedExistingUserEmailFields,
+  alreadyMemberEmailFields,
+  inviteEmailFieldsFromSendResult,
+  linkOnlyInviteEmailFields,
+} from "@/lib/invite-email-status";
 import { PRODUCT_NAME } from "@/lib/product";
 import { z } from "zod";
 
@@ -34,7 +40,7 @@ async function sendInviteEmail({
   projectName: string;
   role: "editor" | "viewer";
   inviteId: string;
-}): Promise<boolean> {
+}): Promise<SendEmailResult> {
   const inviteUrl = inviteLink(inviteId);
   const { subject, html, text } = renderInviteEmail({
     productName: PRODUCT_NAME,
@@ -49,7 +55,37 @@ async function sendInviteEmail({
   if (!result.sent) {
     console.warn(`[invite] Email not sent to ${to}: ${result.reason}`);
   }
-  return result.sent;
+  return result;
+}
+
+async function sendProjectAddedEmail({
+  to,
+  ownerName,
+  projectName,
+  role,
+  projectId,
+}: {
+  to: string;
+  ownerName: string;
+  projectName: string;
+  role: "editor" | "viewer";
+  projectId: string;
+}): Promise<SendEmailResult> {
+  const projectUrl = buildProjectUrl(getServerAppUrl(), projectId);
+  const { subject, html, text } = renderProjectAddedEmail({
+    productName: PRODUCT_NAME,
+    ownerName,
+    projectName,
+    roleLabel: formatMemberRole(role),
+    projectUrl,
+    appUrl: getServerAppUrl(),
+  });
+
+  const result = await sendPlicumEmail({ to, subject, html, text });
+  if (!result.sent) {
+    console.warn(`[invite] Added-user email not sent to ${to}: ${result.reason}`);
+  }
+  return result;
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -120,6 +156,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const { email, role, linkOnly } = parsed.data;
+  const ownerName = session.user.name || session.user.email;
 
   if (email && !linkOnly) {
     const [existingUser] = await db
@@ -138,7 +175,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         .limit(1);
 
       if (existingMember) {
-        return NextResponse.json({ success: true, added: true, alreadyMember: true });
+        return NextResponse.json({
+          success: true,
+          added: true,
+          alreadyMember: true,
+          ...alreadyMemberEmailFields(),
+        });
       }
 
       await db.insert(projectMember).values({
@@ -147,7 +189,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         userId: existingUser.id,
         role,
       });
-      return NextResponse.json({ success: true, added: true });
+
+      const emailResult = await sendProjectAddedEmail({
+        to: email,
+        ownerName,
+        projectName: access.project.name,
+        role,
+        projectId: id,
+      });
+
+      return NextResponse.json({
+        success: true,
+        added: true,
+        ...addedExistingUserEmailFields(emailResult),
+      });
     }
 
     const [invite] = await db
@@ -161,16 +216,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       })
       .returning();
 
-    const emailSent = await sendInviteEmail({
+    const emailResult = await sendInviteEmail({
       to: email,
-      ownerName: session.user.name || session.user.email,
+      ownerName,
       projectName: access.project.name,
       role,
       inviteId: invite.id,
     });
 
     return NextResponse.json(
-      { ...invite, link: inviteLink(invite.id), emailSent },
+      {
+        ...invite,
+        link: inviteLink(invite.id),
+        ...inviteEmailFieldsFromSendResult(emailResult),
+      },
       { status: 201 }
     );
   }
@@ -187,7 +246,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .returning();
 
   return NextResponse.json(
-    { ...invite, link: inviteLink(invite.id) },
+    {
+      ...invite,
+      link: inviteLink(invite.id),
+      ...linkOnlyInviteEmailFields(),
+    },
     { status: 201 }
   );
 }

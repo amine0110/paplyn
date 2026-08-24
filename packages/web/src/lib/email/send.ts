@@ -4,6 +4,38 @@ export type SendEmailResult =
   | { sent: true }
   | { sent: false; reason: "not-configured" | "send-failed"; error?: string };
 
+export const EMAIL_NOT_CONFIGURED_REASON =
+  "Email is not configured on this server (SMTP credentials missing).";
+
+const SECRET_PATTERNS: RegExp[] = [
+  /(?:password|passwd|secret|api[_-]?key|token|auth(?:orization)?)\s*[:=]\s*\S+/gi,
+  /\b(?:Bearer|Basic)\s+[A-Za-z0-9+/=._-]+/gi,
+];
+
+function redactSecrets(text: string): string {
+  let redacted = text;
+  const pass = process.env.SMTP_PASS;
+  if (pass && pass.length > 0) {
+    redacted = redacted.split(pass).join("[REDACTED]");
+  }
+  for (const pattern of SECRET_PATTERNS) {
+    redacted = redacted.replace(pattern, "[REDACTED]");
+  }
+  return redacted;
+}
+
+export function formatEmailFailureReason(
+  result: Extract<SendEmailResult, { sent: false }>
+): string {
+  if (result.reason === "not-configured") {
+    return EMAIL_NOT_CONFIGURED_REASON;
+  }
+  if (result.error) {
+    return `Email could not be sent: ${redactSecrets(result.error)}`;
+  }
+  return "Email could not be sent.";
+}
+
 export interface SendPlicumEmailParams {
   to: string;
   subject: string;
@@ -51,7 +83,8 @@ export async function sendPlicumEmail({
     return { sent: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[email] Failed to send to ${to}:`, message);
-    return { sent: false, reason: "send-failed", error: message };
+    const safeMessage = redactSecrets(message);
+    console.error(`[email] Failed to send to ${to}:`, safeMessage);
+    return { sent: false, reason: "send-failed", error: safeMessage };
   }
 }

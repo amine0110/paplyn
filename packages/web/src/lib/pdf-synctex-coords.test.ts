@@ -13,7 +13,7 @@ import {
   type PdfViewportLike,
   viewportClickToSynctexPoint,
 } from "./pdf-synctex-coords";
-import { explainSynctexLookup, findSynctexSource, parseSynctex } from "./synctex";
+import { explainSynctexLookup, findSynctexSource, parseSynctex, type SynctexBlock } from "./synctex";
 
 const FIXTURES = join(import.meta.dirname, "__fixtures__");
 
@@ -304,7 +304,7 @@ describe("compiled IEEEtran fixture (pdflatex synctex)", () => {
     const scale = 0.95;
     const viewport = page.getViewport({ scale, rotation: page.rotate });
 
-    const byLine: Record<number, (typeof index!.pageBlocks)[1]> = {};
+    const byLine: Record<number, SynctexBlock[]> = {};
     for (const b of index!.pageBlocks[1] || []) {
       (byLine[b.line] ||= []).push(b);
     }

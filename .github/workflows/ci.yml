@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck web
+        run: pnpm --filter @quire/web typecheck
+
+      - name: Test collab
+        run: pnpm --filter @quire/collab test
+
+      - name: Test web
+        run: pnpm --filter @quire/web test
+
+      - name: Test compiler
+        run: pnpm --filter @quire/compiler test
