@@ -26,8 +26,8 @@ import {
   buildCompileFixTargetHint,
   buildCompileFixMultiErrorHint,
   COMPILE_FIX_MAX_GET_FILE_CALLS,
-  getPrimaryCompileErrorLocation,
   normalizeAiCompileErrors,
+  prepareCompileErrorsForCompileFix,
   selectCompileFixMessages,
   type AiCompileError,
 } from "@/lib/ai-compile-fix-context";
@@ -436,15 +436,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .filter((f) => !f.isBinary && f.path.endsWith(".tex"))
     .map((f) => ({ path: f.path, content: f.content }));
 
-  const compileErrors = normalizeAiCompileErrors(requestData.compileErrors);
+  const compileErrorsRaw = normalizeAiCompileErrors(requestData.compileErrors);
   const compileFixRequest = isCompileFixRequest(requestData);
-  const primaryErrorLocation = compileFixRequest
-    ? getPrimaryCompileErrorLocation(compileErrors)
-    : null;
 
   const { tools: pluginTools, systemPrompt: pluginSystemPrompt, plugins } = resolveAiPlugins();
 
   const texFileMap = new Map(texFiles.map((f) => [f.path, f.content]));
+  const mainFile = access.project.mainFile;
+  const mainFileContent = texFileMap.get(mainFile) ?? "";
+
+  const compileFixErrorPrep = compileFixRequest
+    ? prepareCompileErrorsForCompileFix(compileErrorsRaw, {
+        mainFile,
+        mainFileContent,
+      })
+    : null;
+  const compileErrors = compileFixErrorPrep?.errors ?? compileErrorsRaw;
+  const primaryErrorLocation = compileFixErrorPrep?.primaryLocation ?? null;
   const hasSelection = Boolean(requestData.selectedText?.trim());
   const getFileCalls: GetFileCall[] = [];
 

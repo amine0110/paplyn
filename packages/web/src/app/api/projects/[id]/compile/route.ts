@@ -5,6 +5,7 @@ import { projectFile, compileLog } from "@/lib/schema";
 import { getSession } from "@/lib/session";
 import { getProjectAccess } from "@/lib/project-access";
 import { config } from "@/lib/config";
+import { prepareCompileErrorsForCompileFix } from "@/lib/ai-compile-fix-context";
 import { checkCompileLimit, incrementCompileUsage } from "@/lib/usage";
 import { generateId } from "@/lib/utils";
 import { createProjectRevision } from "@/lib/project-revisions-store";
@@ -65,6 +66,14 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
     const result = (await response.json()) as CompileResult;
 
+    const mainFile = access.project.mainFile;
+    const mainContent = files.find((f) => f.path === mainFile)?.content ?? "";
+    const { errors: enrichedErrors } = prepareCompileErrorsForCompileFix(result.errors, {
+      mainFile,
+      mainFileContent: mainContent,
+    });
+    const enrichedResult = { ...result, errors: enrichedErrors };
+
     await incrementCompileUsage(session.user.id);
 
     await db.insert(compileLog).values({
@@ -73,19 +82,19 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       userId: session.user.id,
       success: result.success,
       durationMs: result.durationMs,
-      errorCount: result.errors.filter((e) => e.severity === "error").length,
+      errorCount: enrichedErrors.filter((e) => e.severity === "error").length,
     });
 
-    if (result.success) {
+    if (enrichedResult.success) {
       await createProjectRevision({
         projectId: id,
         userId: session.user.id,
         source: "compile",
-        pdf: result.pdf ?? null,
+        pdf: enrichedResult.pdf ?? null,
       });
     }
 
-    return NextResponse.json(result);
+    return NextResponse.json(enrichedResult);
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to reach compile service" },
