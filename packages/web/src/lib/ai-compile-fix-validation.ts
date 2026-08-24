@@ -267,8 +267,8 @@ export function validateCompileFixEdit(
     startLine === endLine &&
     isBeginDocumentLine(content.split("\n")[startLine - 1] ?? "");
 
-  const preamble = fixingBeginDocumentLine
-    ? { ok: true }
+  const preamble: LaTeXPreambleValidation = fixingBeginDocumentLine
+    ? { ok: true as const }
     : validateLaTeXPreambleOrder(previewContent);
   if (!preamble.ok) return preamble;
 
