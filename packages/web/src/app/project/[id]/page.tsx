@@ -607,9 +607,9 @@ export default function ProjectPage() {
             return [...prev, { path, content, isBinary: false }];
           });
         }
-        return ok;
+        return;
       }
-      return await saveFile(path, content, false);
+      await saveFile(path, content, false);
     },
     onSwitchFile: (path: string) => setActiveFile(path),
   };
