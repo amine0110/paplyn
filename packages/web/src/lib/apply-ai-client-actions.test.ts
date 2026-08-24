@@ -1,8 +1,25 @@
 import { describe, expect, it } from "vitest";
 import { applyReplaceLinesToFileContent } from "./ai-client-actions";
-import { applyAiClientActions, normalizeInsertAtCursorText } from "./apply-ai-client-actions";
+import {
+  applyAiClientActions,
+  normalizeInsertAtCursorText,
+  type ApplyAiActionsContext,
+} from "./apply-ai-client-actions";
 import type { AiClientAction } from "./ai-client-actions";
 import { countBeginDocumentInFirstCopy } from "./ai-compile-fix-validation";
+
+describe("ApplyAiActionsContext typing", () => {
+  it("accepts saveFile handlers that return void (not boolean)", () => {
+    const ctx: ApplyAiActionsContext = {
+      activeFile: "main.tex",
+      editorView: null,
+      fileContents: { "main.tex": "" },
+      hasSelection: false,
+      saveFile: async () => {},
+    };
+    expect(ctx.saveFile).toBeTypeOf("function");
+  });
+});
 
 describe("normalizeInsertAtCursorText", () => {
   it("adds a trailing newline when inserting a comment before documentclass at file start", () => {
