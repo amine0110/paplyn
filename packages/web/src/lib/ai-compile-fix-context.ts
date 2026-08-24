@@ -22,8 +22,8 @@ const MAX_COMPILE_ERRORS = 25;
 /** Lines above/below a cited error line for the first targeted get_file call. */
 export const COMPILE_FIX_LINE_RADIUS = 10;
 
-/** Maximum get_file calls allowed per compile-fix request. */
-export const COMPILE_FIX_MAX_GET_FILE_CALLS = 2;
+/** Maximum get_file calls allowed per compile-fix request (large templates need a few slices). */
+export const COMPILE_FIX_MAX_GET_FILE_CALLS = 4;
 
 function truncateCompileErrorMessage(message: string): string {
   if (message.length <= MAX_COMPILE_ERROR_MESSAGE_LENGTH) return message;

@@ -84,6 +84,52 @@ function isReadableGetFileResult(result: ReadTexFileResult): boolean {
   return result.error.length === 0 && result.totalLines > 0;
 }
 
+export function isGetFileLimitError(error: string): boolean {
+  return error.includes("get_file limit reached");
+}
+
+type LineCoverageRange = { start: number; end: number };
+
+function recordLineCoverage(
+  coverage: Map<string, LineCoverageRange[]>,
+  texFiles: Map<string, string>,
+  path: string,
+  startLine: number,
+  endLine: number
+): void {
+  const resolved = resolveTexFilePath(texFiles, path) ?? normalizeTexPath(path);
+  const ranges = coverage.get(resolved) ?? [];
+  ranges.push({ start: startLine, end: endLine });
+  coverage.set(resolved, ranges);
+}
+
+function isLineCovered(
+  coverage: Map<string, LineCoverageRange[]>,
+  texFiles: Map<string, string>,
+  path: string,
+  line: number
+): boolean {
+  const resolved = resolveTexFilePath(texFiles, path) ?? normalizeTexPath(path);
+  const ranges = coverage.get(resolved);
+  if (!ranges?.length) return false;
+  return ranges.some((range) => line >= range.start && line <= range.end);
+}
+
+/** Merge refreshed DB snapshot without wiping tex content we already read this turn. */
+function mergeTexFilesPreservingReads(
+  previous: Map<string, string>,
+  refreshed: Map<string, string>
+): Map<string, string> {
+  const merged = new Map(refreshed);
+  for (const [path, content] of previous) {
+    const next = merged.get(path);
+    if (next == null || next.length === 0) {
+      if (content.length > 0) merged.set(path, content);
+    }
+  }
+  return merged;
+}
+
 export function listTexFiles(texFiles: Map<string, string>): {
   files: string[];
   count: number;
@@ -253,6 +299,24 @@ export function createWorkspaceTools(
         | "fix_compile_errors"
     ) =>
     (args: Record<string, unknown>) => {
+      if (compileFix && citedErrorLocation) {
+        const steerTypes = new Set(["apply_edit", "fix_compile_errors"]);
+        if (steerTypes.has(type)) {
+          const citedFile = citedErrorLocation.file;
+          const citedLine = citedErrorLocation.line;
+          if (!isLineCovered(readLineCoverage, validateCtx.texFiles, citedFile, citedLine)) {
+            const reason =
+              `Could not read ${citedFile} around line ${citedLine} in this turn. ` +
+              `Use replace_lines(file="${citedFile}", startLine=${citedLine}, endLine=${citedLine}, replace="...") ` +
+              `on the cited compile-error line instead of ${type}.`;
+            return {
+              kind: "client-action-rejected" as const,
+              reason,
+            };
+          }
+        }
+      }
+
       const validated = validateClientAction(
         { type, ...args } as Parameters<typeof validateClientAction>[0],
         validateCtx
@@ -283,6 +347,7 @@ export function createWorkspaceTools(
     options;
   const validateCtx: ValidateActionContext = { ...ctx, compileFix };
   let getFileCallCount = 0;
+  const readLineCoverage: Map<string, LineCoverageRange[]> = new Map();
 
   const applyValidatedActionToTexFiles = (action: AiClientAction) => {
     switch (action.type) {
@@ -320,7 +385,11 @@ export function createWorkspaceTools(
     if (!resolved) return null;
     const { startLine, endLine } = buildGetFileWindow(citedErrorLocation.line);
     const preload = readTexFile(ctx.texFiles, resolved, startLine, endLine);
-    return isReadableGetFileResult(preload) ? preload : null;
+    if (isReadableGetFileResult(preload)) {
+      recordLineCoverage(readLineCoverage, ctx.texFiles, preload.path, preload.startLine, preload.endLine);
+      return preload;
+    }
+    return null;
   })();
 
   const readTexFileWithRetry = async ({
@@ -353,7 +422,9 @@ export function createWorkspaceTools(
       }
 
       if (refreshTexFiles) {
-        ctx.texFiles = await refreshTexFiles();
+        const previous = new Map(ctx.texFiles);
+        const refreshed = await refreshTexFiles();
+        ctx.texFiles = mergeTexFilesPreservingReads(previous, refreshed);
       }
 
       await sleep(GET_FILE_RETRY_DELAY_MS);
@@ -387,7 +458,7 @@ export function createWorkspaceTools(
         endLine,
         totalLines: 0,
         note: "",
-        error: `get_file limit reached (${maxGetFileCalls} calls). Use replace_lines or apply_edit now.`,
+        error: `get_file limit reached (${maxGetFileCalls} calls). Use replace_lines on the cited error line or apply_edit now.`,
       };
     }
 
@@ -400,11 +471,28 @@ export function createWorkspaceTools(
     ) {
       const citedRead = readTexFile(ctx.texFiles, path, startLine, endLine);
       if (isReadableGetFileResult(citedRead)) {
+        recordLineCoverage(
+          readLineCoverage,
+          ctx.texFiles,
+          citedRead.path,
+          citedRead.startLine,
+          citedRead.endLine
+        );
         return citedRead;
       }
     }
 
-    return readTexFileWithRetry({ path, startLine, endLine });
+    const result = await readTexFileWithRetry({ path, startLine, endLine });
+    if (isReadableGetFileResult(result)) {
+      recordLineCoverage(
+        readLineCoverage,
+        ctx.texFiles,
+        result.path,
+        result.startLine,
+        result.endLine
+      );
+    }
+    return result;
   };
 
   return {

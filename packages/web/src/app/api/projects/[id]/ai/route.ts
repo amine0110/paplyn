@@ -353,6 +353,14 @@ async function resolveAssistantContent<TOOLS extends ToolSet>(options: {
   const appliedSummary = formatAppliedActionsAsAssistantMessage(actions);
   if (appliedSummary) return appliedSummary;
 
+  if (compileFixRequest && usedClientEditTools(result) && actions.length === 0) {
+    return buildCompileFixNoEditMessage({
+      errors: compileErrors,
+      getFileCalls,
+      steps: result.steps as StepResult<ToolSet>[],
+    });
+  }
+
   const fallback = formatToolResultsAsAssistantMessage(result);
   if (fallback) return fallback;
 

@@ -1,5 +1,7 @@
 /** Human-readable live status for AI tool calls (sidebar progress). */
 
+import { isGetFileLimitError } from "@/lib/ai-plugins/workspace-tools";
+
 function basename(path: string): string {
   const normalized = path.replace(/^\.\//, "").trim();
   const slash = normalized.lastIndexOf("/");
@@ -88,6 +90,9 @@ export function formatToolProgressDone(
     };
     if (read.error) {
       const file = read.path ? basename(read.path) : "file";
+      if (isGetFileLimitError(read.error)) {
+        return `Read limit reached for ${file}`;
+      }
       return `Couldn't read ${file}`;
     }
     if (read.path && read.startLine != null && read.endLine != null) {

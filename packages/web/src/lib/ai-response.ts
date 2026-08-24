@@ -14,6 +14,7 @@ import {
 } from "@/lib/ai-client-actions";
 import { CLIENT_ACTION_TOOL_NAMES } from "@/lib/ai-plugins/workspace-tools";
 import type { ReadTexFileResult } from "@/lib/ai-plugins/workspace-tools";
+import { isGetFileLimitError } from "@/lib/ai-plugins/workspace-tools";
 import { getPluginByToolName, pluginDisplayName } from "@/lib/ai-plugins";
 import type { AiPlugin } from "@/lib/ai-plugins/types";
 
@@ -110,6 +111,9 @@ export function summarizeToolResult(toolName: string, result: unknown): string |
 
   if (toolName === "get_file" && isReadTexFileResult(result)) {
     if (result.error) {
+      if (isGetFileLimitError(result.error)) {
+        return `Read limit reached for ${result.path}`;
+      }
       return `Couldn't read ${result.path}`;
     }
     const lineRange =
@@ -151,19 +155,36 @@ function collectToolResultSummaries(
 ): string[] {
   const includeReadOnly = options?.includeReadOnly ?? true;
   const summaries: string[] = [];
+  const editRejections: string[] = [];
+
+  const collect = (toolName: string, toolResult: unknown) => {
+    if (!includeReadOnly && READ_ONLY_TOOL_NAMES.has(toolName)) return;
+    const summary = summarizeToolResult(toolName, toolResult);
+    if (!summary) return;
+    if (
+      isClientActionRejected(toolResult) &&
+      (toolName === "apply_edit" ||
+        toolName === "fix_compile_errors" ||
+        toolName === "replace_lines")
+    ) {
+      editRejections.push(summary);
+      return;
+    }
+    summaries.push(summary);
+  };
 
   for (const toolResult of result.toolResults) {
-    if (!includeReadOnly && READ_ONLY_TOOL_NAMES.has(toolResult.toolName)) continue;
-    const summary = summarizeToolResult(toolResult.toolName, toolResult.result);
-    if (summary) summaries.push(summary);
+    collect(toolResult.toolName, toolResult.result);
   }
 
   for (const step of result.steps) {
     for (const toolResult of step.toolResults) {
-      if (!includeReadOnly && READ_ONLY_TOOL_NAMES.has(toolResult.toolName)) continue;
-      const summary = summarizeToolResult(toolResult.toolName, toolResult.result);
-      if (summary) summaries.push(summary);
+      collect(toolResult.toolName, toolResult.result);
     }
+  }
+
+  if (editRejections.length > 0) {
+    summaries.push(editRejections[editRejections.length - 1]!);
   }
 
   return [...new Set(summaries)];

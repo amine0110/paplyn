@@ -40,17 +40,17 @@ describe("formatToolProgressDone", () => {
     ).toBe("Replaced line 12 in main.tex");
   });
 
-  it("formats get_file reads", () => {
+  it("formats get_file read limit separately from read failures", () => {
     expect(
       formatToolProgressDone("get_file", {
         path: "main.tex",
-        content: "x",
-        startLine: 2,
-        endLine: 22,
-        totalLines: 100,
+        content: "",
+        startLine: 80,
+        endLine: 120,
+        totalLines: 0,
         note: "",
-        error: "",
+        error: "get_file limit reached (4 calls). Use replace_lines on the cited error line or apply_edit now.",
       })
-    ).toBe("Read main.tex (lines 2–22)");
+    ).toBe("Read limit reached for main.tex");
   });
 });
