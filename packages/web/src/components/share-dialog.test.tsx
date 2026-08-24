@@ -1,7 +1,7 @@
 import React from "react";
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { resolveInviteEmailNotice } from "@/lib/invite-email-status";
+import { resolveInviteEmailNotice } from "@/lib/invite-email-notice";
 import { EMAIL_NOT_CONFIGURED_REASON } from "@/lib/email/send";
 
 function InviteNotice({

@@ -4,11 +4,10 @@ import {
   alreadyMemberEmailFields,
   inviteEmailFieldsFromSendResult,
   linkOnlyInviteEmailFields,
-  resolveInviteEmailNotice,
-} from "@/lib/invite-email-status";
+} from "@/lib/invite-email-status-server";
 import { EMAIL_NOT_CONFIGURED_REASON } from "@/lib/email/send";
 
-describe("invite email status helpers", () => {
+describe("invite email status server helpers", () => {
   it("maps successful send to sent status", () => {
     expect(inviteEmailFieldsFromSendResult({ sent: true })).toEqual({
       emailSent: true,
@@ -50,34 +49,26 @@ describe("invite email status helpers", () => {
       emailSent: false,
       emailStatus: "already-member",
     });
-    expect(resolveInviteEmailNotice(alreadyMemberEmailFields())?.message).toBe(
-      "They are already on this project."
-    );
   });
 
   it("uses added-existing-user when notification email succeeds", () => {
-    const fields = addedExistingUserEmailFields({ sent: true });
-    expect(fields).toEqual({
+    expect(addedExistingUserEmailFields({ sent: true })).toEqual({
       emailSent: true,
       emailStatus: "added-existing-user",
     });
-    expect(resolveInviteEmailNotice(fields)?.message).toContain("Added to the project");
   });
 
-  it("reports add + email failure without invite-created wording", () => {
-    const fields = addedExistingUserEmailFields({
-      sent: false,
-      reason: "send-failed",
-      error: "Connection refused",
+  it("keeps added-existing-user status when notification email fails", () => {
+    expect(
+      addedExistingUserEmailFields({
+        sent: false,
+        reason: "send-failed",
+        error: "Connection refused",
+      })
+    ).toEqual({
+      emailSent: false,
+      emailStatus: "added-existing-user",
+      emailReason: "Email could not be sent: Connection refused",
     });
-    const notice = resolveInviteEmailNotice(fields);
-    expect(fields.emailStatus).toBe("added-existing-user");
-    expect(notice?.message).toContain("Added to the project");
-    expect(notice?.message).not.toContain("Invite created");
-    expect(notice?.message).toContain("Connection refused");
-  });
-
-  it("returns null notice for link-only status", () => {
-    expect(resolveInviteEmailNotice(linkOnlyInviteEmailFields())).toBeNull();
   });
 });

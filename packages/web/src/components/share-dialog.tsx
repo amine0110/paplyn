@@ -13,7 +13,7 @@ import {
   type InviteRole,
 } from "@/lib/project-sharing";
 import { PRODUCT } from "@/lib/product";
-import { resolveInviteEmailNotice, type InviteEmailResponseFields } from "@/lib/invite-email-status";
+import { resolveInviteEmailNotice, type InviteEmailResponseFields } from "@/lib/invite-email-notice";
 
 interface ShareMember {
   id: string;
