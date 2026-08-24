@@ -13,7 +13,7 @@ import {
   type InviteRole,
 } from "@/lib/project-sharing";
 import { PRODUCT } from "@/lib/product";
-import { resolveInviteEmailNotice } from "@/lib/invite-email-notice";
+import { resolveInviteEmailNotice, type InviteEmailResponseFields } from "@/lib/invite-email-status";
 
 interface ShareMember {
   id: string;
@@ -62,11 +62,24 @@ export function ShareDialog({
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
   const [copied, setCopied] = useState<"project" | "invite" | null>(null);
-  const [inviteNotice, setInviteNotice] = useState<{ notice: "sent" | "not-sent"; message: string } | null>(null);
+  const [inviteNotice, setInviteNotice] = useState<{ tone: "success" | "muted"; message: string } | null>(null);
   const [error, setError] = useState("");
 
   const appOrigin = typeof window !== "undefined" ? window.location.origin : "";
   const projectLink = appOrigin ? buildProjectUrl(appOrigin, projectId) : "";
+
+  async function reloadSharing() {
+    const res = await fetch(`/api/projects/${projectId}/invite`);
+    if (!res.ok) {
+      setError("Could not load sharing details");
+      return false;
+    }
+    const data = await res.json();
+    setMembers(data.members ?? []);
+    setOwner(data.owner ?? null);
+    setInvites(data.invites ?? []);
+    return true;
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -74,16 +87,7 @@ export function ShareDialog({
     async function loadSharing() {
       setLoading(true);
       setError("");
-      const res = await fetch(`/api/projects/${projectId}/invite`);
-      if (!res.ok) {
-        setError("Could not load sharing details");
-        setLoading(false);
-        return;
-      }
-      const data = await res.json();
-      setMembers(data.members ?? []);
-      setOwner(data.owner ?? null);
-      setInvites(data.invites ?? []);
+      await reloadSharing();
       setLoading(false);
     }
 
@@ -116,7 +120,6 @@ export function ShareDialog({
     setError("");
     setInviteNotice(null);
 
-    const hadEmail = Boolean(shareEmail.trim());
     const body = shareEmail.trim()
       ? { email: shareEmail.trim(), role: shareRole }
       : { role: shareRole, linkOnly: true };
@@ -135,16 +138,35 @@ export function ShareDialog({
       return;
     }
 
-    const invite = await res.json();
-    const link = invite.link || (appOrigin ? buildInviteUrl(appOrigin, invite.id) : "");
-    setInviteLink(link);
-    setInvites((prev) => [{ id: invite.id, email: invite.email, role: invite.role, link }, ...prev]);
+    const result = await res.json();
     setShareEmail("");
 
-    if (hadEmail) {
-      setInviteNotice(resolveInviteEmailNotice(invite.emailSent, invite.emailReason));
-    } else {
+    const emailFields: InviteEmailResponseFields = {
+      emailSent: Boolean(result.emailSent),
+      emailStatus: result.emailStatus,
+      emailReason: result.emailReason,
+    };
+    const notice = resolveInviteEmailNotice(emailFields);
+
+    if (result.added) {
+      await reloadSharing();
+      if (notice) {
+        setInviteNotice(notice);
+      }
+      return;
+    }
+
+    const link = result.link || (appOrigin ? buildInviteUrl(appOrigin, result.id) : "");
+    setInviteLink(link);
+    setInvites((prev) => [
+      { id: result.id, email: result.email, role: result.role, link },
+      ...prev,
+    ]);
+
+    if (emailFields.emailStatus === "not-applicable") {
       await copyInviteLink(link);
+    } else if (notice) {
+      setInviteNotice(notice);
     }
   }
 
@@ -255,7 +277,7 @@ export function ShareDialog({
                 </div>
                 {inviteNotice && (
                   <p
-                    className={`text-sm ${inviteNotice.notice === "sent" ? "text-accent" : "text-ink-muted"}`}
+                    className={`text-sm ${inviteNotice.tone === "success" ? "text-accent" : "text-ink-muted"}`}
                     role="status"
                   >
                     {inviteNotice.message}

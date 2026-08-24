@@ -114,6 +114,65 @@ export interface InviteEmailParams {
   appUrl: string;
 }
 
+export interface ProjectAddedEmailParams {
+  productName?: string;
+  ownerName: string;
+  projectName: string;
+  roleLabel: string;
+  projectUrl: string;
+  appUrl: string;
+}
+
+export function renderProjectAddedEmail({
+  productName = PRODUCT_NAME,
+  ownerName,
+  projectName,
+  roleLabel,
+  projectUrl,
+  appUrl,
+}: ProjectAddedEmailParams): { subject: string; html: string; text: string } {
+  const safeOwner = escapeHtml(ownerName);
+  const safeProject = escapeHtml(projectName);
+  const safeRole = escapeHtml(roleLabel);
+
+  const subject = `${ownerName} added you to ${projectName} on ${productName}`;
+
+  const bodyHtml = `
+    <p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:${INK};">
+      <strong>${safeOwner}</strong> added you to
+      <strong>${safeProject}</strong> on ${escapeHtml(productName)}.
+    </p>
+    <p style="margin:0 0 4px;font-size:14px;line-height:1.6;color:${INK_MUTED};">
+      Your access: <strong style="color:${INK};">${safeRole}</strong>
+    </p>
+    ${ctaButton("Open the manuscript", projectUrl)}
+    <p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:${INK_MUTED};">
+      If you didn&rsquo;t expect this, you can safely ignore this email.
+    </p>
+  `.trim();
+
+  const html = emailShell({
+    productName,
+    preheader: `${ownerName} added you to ${projectName}`,
+    bodyHtml,
+    appUrl,
+  });
+
+  const text = [
+    `${ownerName} added you to "${projectName}" on ${productName}.`,
+    ``,
+    `Your access: ${roleLabel}`,
+    ``,
+    `Open the manuscript: ${projectUrl}`,
+    ``,
+    `If you didn't expect this, you can safely ignore this email.`,
+    ``,
+    `— ${productName}`,
+  ].join("\n");
+
+  return { subject, html, text };
+}
+
 export function renderInviteEmail({
   productName = PRODUCT_NAME,
   ownerName,

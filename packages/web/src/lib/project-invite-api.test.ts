@@ -72,6 +72,12 @@ const linkOnlyInviteRow = {
   email: null,
 };
 
+const existingUser = {
+  id: "user-2",
+  email: "member@example.com",
+  name: "Member",
+};
+
 function mockOwnerSession() {
   vi.mocked(getSession).mockResolvedValue({
     user: { id: ownerId, email: "owner@example.com", name: "Owner" },
@@ -94,7 +100,7 @@ describe("POST /api/projects/[id]/invite", () => {
     sendPlicumEmail.mockResolvedValue({ sent: false, reason: "not-configured" });
   });
 
-  it("returns invite link and emailReason when mailer is not configured", async () => {
+  it("returns invite link with explicit emailStatus when mailer is not configured", async () => {
     mockOwnerSession();
 
     const { POST } = await import("@/app/api/projects/[id]/invite/route");
@@ -111,11 +117,12 @@ describe("POST /api/projects/[id]/invite", () => {
     const body = await res.json();
     expect(body.link).toContain("/invite/invite-1");
     expect(body.emailSent).toBe(false);
+    expect(body.emailStatus).toBe("not-configured");
     expect(body.emailReason).toContain("SMTP credentials missing");
     expect(sendPlicumEmail).toHaveBeenCalled();
   });
 
-  it("returns emailSent true when send succeeds", async () => {
+  it("returns sent status when invite email succeeds", async () => {
     mockOwnerSession();
     sendPlicumEmail.mockResolvedValue({ sent: true });
 
@@ -131,10 +138,11 @@ describe("POST /api/projects/[id]/invite", () => {
 
     const body = await res.json();
     expect(body.emailSent).toBe(true);
+    expect(body.emailStatus).toBe("sent");
     expect(body.emailReason).toBeUndefined();
   });
 
-  it("returns emailSent false and send error reason when send fails", async () => {
+  it("returns send-failed status when invite email fails", async () => {
     mockOwnerSession();
     sendPlicumEmail.mockResolvedValue({
       sent: false,
@@ -154,10 +162,11 @@ describe("POST /api/projects/[id]/invite", () => {
 
     const body = await res.json();
     expect(body.emailSent).toBe(false);
+    expect(body.emailStatus).toBe("send-failed");
     expect(body.emailReason).toContain("Connection refused");
   });
 
-  it("creates link-only invite without calling send", async () => {
+  it("creates link-only invite with not-applicable status and no send", async () => {
     mockOwnerSession();
     dbMocks.returning.mockResolvedValue([linkOnlyInviteRow]);
 
@@ -174,7 +183,80 @@ describe("POST /api/projects/[id]/invite", () => {
     expect(res.status).toBe(201);
     const body = await res.json();
     expect(body.link).toContain("/invite/invite-link");
-    expect(body.emailSent).toBeUndefined();
+    expect(body.emailSent).toBe(false);
+    expect(body.emailStatus).toBe("not-applicable");
     expect(sendPlicumEmail).not.toHaveBeenCalled();
+  });
+
+  it("returns already-member status without sending email", async () => {
+    mockOwnerSession();
+    dbMocks.limit
+      .mockResolvedValueOnce([existingUser])
+      .mockResolvedValueOnce([{ id: "member-1", projectId, userId: existingUser.id, role: "editor" }]);
+
+    const { POST } = await import("@/app/api/projects/[id]/invite/route");
+    const res = await POST(
+      new NextRequest(`http://localhost/api/projects/${projectId}/invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: existingUser.email, role: "editor" }),
+      }),
+      { params: Promise.resolve({ id: projectId }) }
+    );
+
+    const body = await res.json();
+    expect(body.alreadyMember).toBe(true);
+    expect(body.emailSent).toBe(false);
+    expect(body.emailStatus).toBe("already-member");
+    expect(sendPlicumEmail).not.toHaveBeenCalled();
+  });
+
+  it("adds existing user, sends notification email, and returns added-existing-user status", async () => {
+    mockOwnerSession();
+    dbMocks.limit.mockResolvedValueOnce([existingUser]).mockResolvedValueOnce([]);
+    sendPlicumEmail.mockResolvedValue({ sent: true });
+
+    const { POST } = await import("@/app/api/projects/[id]/invite/route");
+    const res = await POST(
+      new NextRequest(`http://localhost/api/projects/${projectId}/invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: existingUser.email, role: "editor" }),
+      }),
+      { params: Promise.resolve({ id: projectId }) }
+    );
+
+    const body = await res.json();
+    expect(body.added).toBe(true);
+    expect(body.emailSent).toBe(true);
+    expect(body.emailStatus).toBe("added-existing-user");
+    expect(sendPlicumEmail).toHaveBeenCalledTimes(1);
+    expect(sendPlicumEmail.mock.calls[0]?.[0]?.subject).toContain("added you to Thesis");
+  });
+
+  it("adds existing user but reports email failure without invite-created semantics", async () => {
+    mockOwnerSession();
+    dbMocks.limit.mockResolvedValueOnce([existingUser]).mockResolvedValueOnce([]);
+    sendPlicumEmail.mockResolvedValue({
+      sent: false,
+      reason: "send-failed",
+      error: "Connection refused",
+    });
+
+    const { POST } = await import("@/app/api/projects/[id]/invite/route");
+    const res = await POST(
+      new NextRequest(`http://localhost/api/projects/${projectId}/invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: existingUser.email, role: "editor" }),
+      }),
+      { params: Promise.resolve({ id: projectId }) }
+    );
+
+    const body = await res.json();
+    expect(body.added).toBe(true);
+    expect(body.emailSent).toBe(false);
+    expect(body.emailStatus).toBe("added-existing-user");
+    expect(body.emailReason).toContain("Connection refused");
   });
 });

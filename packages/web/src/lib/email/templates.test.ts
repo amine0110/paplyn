@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   escapeHtml,
   renderInviteEmail,
+  renderProjectAddedEmail,
   renderResetPasswordEmail,
 } from "@/lib/email/templates";
 
@@ -36,6 +37,23 @@ describe("email templates", () => {
     expect(text).toContain("Dissertation Draft");
     expect(text).toContain(inviteUrl);
     expect(text).toContain("Can edit");
+  });
+
+  it("renders project-added email with wordmark and project URL", () => {
+    const projectUrl = "https://app.plicum.test/project/proj-1";
+    const { subject, html, text } = renderProjectAddedEmail({
+      ownerName: "Ada Lovelace",
+      projectName: "Dissertation Draft",
+      roleLabel: "Can edit",
+      projectUrl,
+      appUrl: APP_URL,
+    });
+
+    expect(subject).toBe("Ada Lovelace added you to Dissertation Draft on Plicum");
+    expect(html).toContain("added you to");
+    expect(html).toContain(projectUrl);
+    expectBrandedWordmarkHeader(html);
+    expect(text).toContain(projectUrl);
   });
 
   it("renders reset password email with branded wordmark header", () => {
