@@ -104,13 +104,21 @@ function rejectSiblingStackingPreview(
   return check.ok ? null : check.reason;
 }
 
+function resolveFileContent(ctx: ApplyAiActionsContext, file: string): string | null {
+  if (ctx.activeFile === file && ctx.editorView) {
+    return ctx.editorView.state.doc.toString();
+  }
+  const content = ctx.fileContents[file];
+  return content ?? null;
+}
+
 async function applyFileEdit(
   ctx: ApplyAiActionsContext,
   file: string,
   search: string,
   replace: string
 ): Promise<boolean> {
-  const content = ctx.fileContents[file];
+  const content = resolveFileContent(ctx, file);
   if (content == null) return false;
 
   const updated = applyActionToFileContent(content, {
@@ -148,7 +156,7 @@ async function applyLinesEdit(
   endLine: number,
   replace: string
 ): Promise<boolean> {
-  const content = ctx.fileContents[file];
+  const content = resolveFileContent(ctx, file);
   if (content == null) return false;
 
   const action = {

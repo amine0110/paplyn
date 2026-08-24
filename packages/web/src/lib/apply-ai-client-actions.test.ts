@@ -290,4 +290,48 @@ describe("applyAiClientActions replace_lines ordering", () => {
     expect(result.skipped).toHaveLength(1);
     expect(fileContents["main.tex"]).toBe(content);
   });
+
+  it("apply_edit uses live editor document when active file is open", async () => {
+    const staleContent = "\\documentclass{article}\nold line\n\\end{document}";
+    const liveContent = "\\documentclass{article}\nunique-marker-old\n\\end{document}";
+    let doc = liveContent;
+
+    const editorView = {
+      state: {
+        doc: { toString: () => doc },
+        selection: { main: { from: 0, to: 0 } },
+      },
+      dispatch: (update: { changes: { from: number; to: number; insert: string } }) => {
+        doc =
+          doc.slice(0, update.changes.from) +
+          update.changes.insert +
+          doc.slice(update.changes.to);
+      },
+    };
+
+    const fileContents: Record<string, string> = { "main.tex": staleContent };
+    const result = await applyAiClientActions(
+      [
+        {
+          type: "apply_edit",
+          file: "main.tex",
+          search: "unique-marker-old",
+          replace: "unique-marker-new",
+          label: "Applied edit to main.tex",
+        },
+      ],
+      {
+        activeFile: "main.tex",
+        editorView: editorView as never,
+        fileContents,
+        hasSelection: false,
+        saveFile: async () => {},
+      }
+    );
+
+    expect(result.applied).toHaveLength(1);
+    expect(doc).toContain("unique-marker-new");
+    expect(doc).not.toContain("unique-marker-old");
+    expect(fileContents["main.tex"]).toContain("unique-marker-new");
+  });
 });

@@ -4,12 +4,17 @@ import {
   buildCompileFixTargetHint,
   buildCompileFixMultiErrorHint,
   buildGetFileWindow,
+  enrichCompileErrorsWithLocations,
   extractLineSnippet,
   formatCompileErrorLines,
   getPrimaryCompileErrorLocation,
+  inferFirstCopyCompileFixLocation,
+  isBrokenBeginDocumentLine,
   normalizeAiCompileErrors,
   parseFileLineFromMessage,
+  prepareCompileErrorsForCompileFix,
   resolveCompileErrorLocation,
+  resolvePrimaryCompileErrorLocation,
   selectCompileFixMessages,
 } from "./ai-compile-fix-context";
 
@@ -230,5 +235,87 @@ describe("selectCompileFixMessages", () => {
     expect(selectCompileFixMessages(messages)).toEqual([
       { role: "user", content: "fix the remaining errors" },
     ]);
+  });
+});
+
+describe("inferFirstCopyCompileFixLocation", () => {
+  it("targets broken \\begin{document in the first copy, not later duplicates", () => {
+    const lines = [
+      "",
+      "\\usepackage{graphicx}",
+      "\\usepackage{amsmath}",
+      "\\usepackage{amsfonts}",
+      "\\usepackage{amssymb}",
+      "\\usepackage{algorithmic}",
+      "\\usepackage{textcomp}",
+      "\\begin{document",
+      "\\title{Paper}",
+    ];
+    for (let copy = 1; copy < 4; copy += 1) {
+      const offset = copy * 62;
+      lines.push(`\\documentclass[conference]{IEEEtran}`);
+      lines.push("\\begin{document}");
+    }
+
+    const content = lines.join("\n");
+    expect(isBrokenBeginDocumentLine("\\begin{document")).toBe(true);
+    expect(inferFirstCopyCompileFixLocation(content, "main.tex")).toEqual({
+      file: "main.tex",
+      line: 8,
+    });
+  });
+
+  it("targets usepackage before documentclass in the first copy", () => {
+    const content = [
+      "",
+      "\\usepackage{graphicx}",
+      "\\usepackage{amsmath}",
+      "\\begin{document}",
+      "\\end{document}",
+      "\\documentclass[conference]{IEEEtran}",
+    ].join("\n");
+
+    expect(inferFirstCopyCompileFixLocation(content, "main.tex")).toEqual({
+      file: "main.tex",
+      line: 2,
+    });
+  });
+});
+
+describe("prepareCompileErrorsForCompileFix", () => {
+  it("infers primary location when errors lack file/line and log is empty", () => {
+    const content = [
+      "",
+      "\\usepackage{graphicx}",
+      "\\begin{document",
+      "\\title{Paper}",
+      "\\documentclass[conference]{IEEEtran}",
+    ].join("\n");
+
+    const { errors, primaryLocation } = prepareCompileErrorsForCompileFix(
+      [
+        { message: "Compilation failed", severity: "error" },
+        { message: "Another error", severity: "error" },
+      ],
+      { mainFile: "main.tex", mainFileContent: content }
+    );
+
+    expect(primaryLocation).toEqual({ file: "main.tex", line: 3 });
+    expect(errors[0]?.file).toBe("main.tex");
+    expect(errors[0]?.line).toBe(3);
+  });
+
+  it("enriches l.N patterns with main file path", () => {
+    const enriched = enrichCompileErrorsWithLocations(
+      [{ message: "! Missing $ inserted. l.8 <inserted text>", severity: "error" }],
+      "main.tex"
+    );
+    expect(enriched[0]).toMatchObject({ file: "main.tex", line: 8 });
+    expect(
+      resolvePrimaryCompileErrorLocation(enriched, {
+        mainFile: "main.tex",
+        mainFileContent: "\\begin{document",
+      })
+    ).toEqual({ file: "main.tex", line: 8 });
   });
 });

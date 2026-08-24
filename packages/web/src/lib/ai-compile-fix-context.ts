@@ -1,4 +1,7 @@
 import { type TexFileInput } from "@/lib/ai-file-context";
+import { getFirstLaTeXCopyEndLine } from "@/lib/ai-compile-fix-validation";
+
+const DOCUMENTCLASS_LINE_RE = /^\s*\\documentclass\b/;
 
 export interface AiCompileError {
   message: string;
@@ -22,8 +25,8 @@ const MAX_COMPILE_ERRORS = 25;
 /** Lines above/below a cited error line for the first targeted get_file call. */
 export const COMPILE_FIX_LINE_RADIUS = 10;
 
-/** Maximum get_file calls allowed per compile-fix request. */
-export const COMPILE_FIX_MAX_GET_FILE_CALLS = 2;
+/** Maximum get_file calls allowed per compile-fix request (large templates need a few slices). */
+export const COMPILE_FIX_MAX_GET_FILE_CALLS = 4;
 
 function truncateCompileErrorMessage(message: string): string {
   if (message.length <= MAX_COMPILE_ERROR_MESSAGE_LENGTH) return message;
@@ -81,6 +84,138 @@ export function getPrimaryCompileErrorLocation(
     if (location) return location;
   }
   return null;
+}
+
+/** True when a line has \\begin{document without a closing brace before {document}. */
+export function isBrokenBeginDocumentLine(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed || trimmed.startsWith("%")) return false;
+  if (!/\\begin\{document/.test(trimmed)) return false;
+  return !/^\\begin\{document\}(\s|$|\[)/.test(trimmed);
+}
+
+/**
+ * Infer the primary fix location in the FIRST document copy when compile logs
+ * lack file:line metadata (empty log, generic errors, stacked duplicate templates).
+ */
+export function inferFirstCopyCompileFixLocation(
+  content: string,
+  file: string
+): { file: string; line: number } | null {
+  const lines = content.split("\n");
+  const firstCopyEnd = getFirstLaTeXCopyEndLine(content);
+  const limit = Math.min(firstCopyEnd, lines.length);
+
+  for (let i = 0; i < limit; i += 1) {
+    if (isBrokenBeginDocumentLine(lines[i])) {
+      return { file, line: i + 1 };
+    }
+  }
+
+  let hasDocumentClass = false;
+  let firstBeginDocLine: number | null = null;
+  let firstUsepackageLine: number | null = null;
+  let firstContentLine: number | null = null;
+
+  for (let i = 0; i < limit; i += 1) {
+    const trimmed = lines[i].trim();
+    if (!trimmed || trimmed.startsWith("%")) continue;
+    if (!firstContentLine) firstContentLine = i + 1;
+    if (DOCUMENTCLASS_LINE_RE.test(trimmed)) {
+      hasDocumentClass = true;
+      break;
+    }
+    if (/\\usepackage/.test(trimmed) && !firstUsepackageLine) {
+      firstUsepackageLine = i + 1;
+    }
+    if (/\\begin\{document/.test(trimmed)) {
+      firstBeginDocLine = i + 1;
+      break;
+    }
+  }
+
+  if (!hasDocumentClass) {
+    if (firstUsepackageLine != null) return { file, line: firstUsepackageLine };
+    if (firstBeginDocLine != null) return { file, line: firstBeginDocLine };
+    if (firstContentLine != null) return { file, line: firstContentLine };
+  }
+
+  return null;
+}
+
+/** Add file/line from message patterns (main.tex:8, l.8) when the compiler omitted them. */
+export function enrichCompileErrorsWithLocations(
+  errors: AiCompileError[],
+  mainFile: string
+): AiCompileError[] {
+  return errors.map((error) => {
+    if (error.file && error.line != null) return error;
+
+    const resolved = resolveCompileErrorLocation(error);
+    if (resolved) {
+      return { ...error, file: resolved.file, line: resolved.line };
+    }
+
+    const lDot = error.message.match(/\bl\.(\d+)\b/);
+    if (lDot?.[1]) {
+      return { ...error, file: mainFile, line: Number.parseInt(lDot[1], 10) };
+    }
+
+    if (error.line != null && !error.file) {
+      return { ...error, file: mainFile };
+    }
+
+    return error;
+  });
+}
+
+/** Attach inferred first-copy location to errors that lack any line when log metadata is missing. */
+export function attachInferredCompileErrorLocation(
+  errors: AiCompileError[],
+  location: { file: string; line: number } | null
+): AiCompileError[] {
+  if (!location || errors.length === 0) return errors;
+  if (errors.some((error) => error.line != null)) return errors;
+
+  const [first, ...rest] = errors;
+  return [{ ...first, file: location.file, line: location.line }, ...rest];
+}
+
+export function prepareCompileErrorsForCompileFix(
+  errors: AiCompileError[],
+  options: { mainFile: string; mainFileContent?: string }
+): {
+  errors: AiCompileError[];
+  primaryLocation: { file: string; line: number } | null;
+} {
+  const enriched = enrichCompileErrorsWithLocations(errors, options.mainFile);
+  let primaryLocation = getPrimaryCompileErrorLocation(enriched);
+
+  if (!primaryLocation && options.mainFileContent) {
+    primaryLocation = inferFirstCopyCompileFixLocation(
+      options.mainFileContent,
+      options.mainFile
+    );
+  }
+
+  const withLocation = attachInferredCompileErrorLocation(enriched, primaryLocation);
+  const primaryFromPrepared = getPrimaryCompileErrorLocation(withLocation) ?? primaryLocation;
+
+  return { errors: withLocation, primaryLocation: primaryFromPrepared };
+}
+
+/** Resolve primary error location from compile errors, with first-copy inference fallback. */
+export function resolvePrimaryCompileErrorLocation(
+  errors: AiCompileError[],
+  options?: { mainFile?: string; mainFileContent?: string }
+): { file: string; line: number } | null {
+  if (!options?.mainFile) {
+    return getPrimaryCompileErrorLocation(errors);
+  }
+  return prepareCompileErrorsForCompileFix(errors, {
+    mainFile: options.mainFile,
+    mainFileContent: options.mainFileContent,
+  }).primaryLocation;
 }
 
 export function buildGetFileWindow(

@@ -124,6 +124,30 @@ describe("ai-response helpers", () => {
     expect(resolveEmptyAssistantFallback({ result, actions: [] })).toBe(NO_EDIT_FALLBACK_MESSAGE);
   });
 
+  it("formats rejected edits with only the last rejection in fallback assistant text", () => {
+    const result = mockResult({
+      toolResults: [
+        {
+          toolName: "apply_edit",
+          result: {
+            kind: "client-action-rejected",
+            reason: "Replacement text is empty or exceeds size limits.",
+          },
+        },
+        {
+          toolName: "apply_edit",
+          result: {
+            kind: "client-action-rejected",
+            reason: "search text is ambiguous (220 matches at lines 8, 72)",
+          },
+        },
+      ],
+    });
+    expect(formatToolResultsAsAssistantMessage(result)).toBe(
+      "search text is ambiguous (220 matches at lines 8, 72)"
+    );
+  });
+
   it("formats rejected edits without read logs in fallback assistant text", () => {
     const result = mockResult({
       toolResults: [
@@ -149,6 +173,56 @@ describe("ai-response helpers", () => {
       ],
     });
     expect(formatToolResultsAsAssistantMessage(result)).toBe("search text not found in file");
+  });
+
+  it("resolveEmptyAssistantFallback uses one sentence for compile-fix rejected edits", () => {
+    const result = mockResult({
+      toolResults: [
+        {
+          toolName: "get_file",
+          result: {
+            path: "main.tex",
+            content: "line",
+            startLine: 1,
+            endLine: 100,
+            totalLines: 500,
+            note: "",
+            error: "",
+          },
+        },
+        {
+          toolName: "apply_edit",
+          result: {
+            kind: "client-action-rejected",
+            reason: "search text is ambiguous (220 matches)",
+          },
+        },
+        {
+          toolName: "apply_edit",
+          result: {
+            kind: "client-action-rejected",
+            reason: "Replacement text is empty or exceeds size limits.",
+          },
+        },
+      ],
+      steps: [
+        {
+          toolCalls: [{ toolName: "apply_edit" }],
+          toolResults: [
+            {
+              toolName: "apply_edit",
+              result: {
+                kind: "client-action-rejected",
+                reason: "Replacement text is empty or exceeds size limits.",
+              },
+            },
+          ],
+        },
+      ],
+    });
+    const fallback = resolveEmptyAssistantFallback({ result, actions: [] });
+    expect(fallback).not.toContain("220 matches");
+    expect(fallback).toContain("Replacement text is empty");
   });
 
   it("surfaces applied edit labels when model text is empty", () => {

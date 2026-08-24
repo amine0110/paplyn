@@ -73,6 +73,7 @@ import type { DocumentStats } from "@/lib/document-stats";
 import { countDocumentStats } from "@/lib/document-stats";
 import type { SaveStatus } from "@/lib/save-status";
 import { saveProjectFile } from "@/lib/save-file";
+import { runCollabSaveFallback } from "@/lib/collab-save-fallback";
 import type { AiPaper } from "@/lib/ai-types";
 import {
   appendBibEntry,
@@ -586,13 +587,29 @@ export default function ProjectPage() {
   }
 
   const fileContentsMap = Object.fromEntries(files.map((f) => [f.path, f.content]));
+  if (activeFile && editorView) {
+    fileContentsMap[activeFile] = editorView.state.doc.toString();
+  }
 
   const aiApplyActionsContext = {
     activeFile,
     editorView,
     fileContents: fileContentsMap,
     saveFile: async (path: string, content: string) => {
-      await saveFile(path, content, false);
+      if (collabTokenRef.current) {
+        const ok = await runCollabSaveFallback({ projectId, path, content });
+        if (ok) {
+          setFiles((prev) => {
+            const existing = prev.find((f) => f.path === path);
+            if (existing) {
+              return prev.map((f) => (f.path === path ? { ...f, content } : f));
+            }
+            return [...prev, { path, content, isBinary: false }];
+          });
+        }
+        return ok;
+      }
+      return await saveFile(path, content, false);
     },
     onSwitchFile: (path: string) => setActiveFile(path),
   };

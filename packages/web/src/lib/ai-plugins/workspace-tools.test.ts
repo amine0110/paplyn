@@ -382,4 +382,64 @@ describe("workspace-tools", () => {
       expect(result.reason).toContain("in place");
     }
   });
+
+  it("preserves tex file content when DB refresh returns empty during get_file retry", async () => {
+    const largeContent = Array.from({ length: 200 }, (_, i) => `Line ${i + 1}`).join("\n");
+    const texFiles = new Map([["main.tex", largeContent]]);
+    const tools = createWorkspaceTools(
+      { texFiles, hasSelection: false },
+      {
+        refreshTexFiles: async () => new Map([["main.tex", ""]]),
+      }
+    );
+
+    await tools.get_file.execute({ path: "missing.tex", startLine: 1, endLine: 1 });
+
+    const result = await tools.get_file.execute({ path: "main.tex", startLine: 1, endLine: 100 });
+    expect(result.error).toBe("");
+    expect(result.totalLines).toBe(200);
+  });
+
+  it("steers apply_edit to replace_lines when cited error line was not read", async () => {
+    const tools = createWorkspaceTools(
+      { texFiles: new Map(), hasSelection: false },
+      {
+        compileFix: true,
+        citedErrorLocation: { file: "main.tex", line: 2 },
+      }
+    );
+
+    const result = await tools.apply_edit.execute({
+      file: "main.tex",
+      search: "\\usepackage",
+      replace: "\\usepackage{amsmath}",
+    });
+
+    expect(result.kind).toBe("client-action-rejected");
+    if (result.kind === "client-action-rejected") {
+      expect(result.reason).toContain("replace_lines");
+      expect(result.reason).toContain("line 2");
+    }
+  });
+
+  it("allows apply_edit when cited error line was covered by compile-fix preload", async () => {
+    const files = new Map([
+      ["main.tex", "\\documentclass{article}\n\\usepackage\n\\begin{document}\n\\end{document}"],
+    ]);
+    const tools = createWorkspaceTools(
+      { texFiles: files, hasSelection: false },
+      {
+        compileFix: true,
+        citedErrorLocation: { file: "main.tex", line: 2 },
+      }
+    );
+
+    const result = await tools.apply_edit.execute({
+      file: "main.tex",
+      search: "\\usepackage",
+      replace: "\\usepackage{amsmath}",
+    });
+
+    expect(result.kind).toBe("client-action");
+  });
 });
