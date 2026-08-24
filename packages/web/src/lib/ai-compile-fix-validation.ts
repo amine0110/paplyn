@@ -2,7 +2,7 @@
 
 const DOCUMENTCLASS_RE = /^\s*\\documentclass\b/;
 const REQUIRE_PACKAGE_RE = /^\s*\\RequirePackage\b/;
-const BEGIN_DOCUMENT_RE = /\\begin\{document\}/g;
+const BEGIN_DOCUMENT_MARKER_RE = /\\begin\{document/;
 const USEPACKAGE_LINE_RE = /^\s*\\usepackage(\[[^\]]*\])?\s*\{[^}]+\}\s*$/;
 const BARE_USEPACKAGE_RE = /^\s*\\usepackage(\[[^\]]*\])?\s*$/;
 const USEPACKAGE_PKG_RE = /\\usepackage(?:\[[^\]]*\])?\{([^}]+)\}/g;
@@ -23,25 +23,35 @@ export function getFirstNonCommentLine(content: string): FirstNonCommentLine | n
   return null;
 }
 
+/** True for \\begin{document} and broken \\begin{document without a closing brace. */
+export function isBeginDocumentLine(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed || trimmed.startsWith("%")) return false;
+  return BEGIN_DOCUMENT_MARKER_RE.test(trimmed);
+}
+
 /** Line number of the last line in the first compiled document copy. */
 export function getFirstLaTeXCopyEndLine(content: string): number {
   const lines = content.split("\n");
-  let firstDocumentClassLine: number | null = null;
+  let seenBeginDocument = false;
 
   for (let i = 0; i < lines.length; i += 1) {
     const trimmed = lines[i].trim();
     if (!trimmed || trimmed.startsWith("%")) continue;
 
-    if (DOCUMENTCLASS_RE.test(trimmed)) {
-      if (firstDocumentClassLine == null) {
-        firstDocumentClassLine = i + 1;
-        continue;
-      }
-      return i;
-    }
-
     if (trimmed.includes("\\end{document}")) {
       return i + 1;
+    }
+
+    if (isBeginDocumentLine(trimmed)) {
+      seenBeginDocument = true;
+      continue;
+    }
+
+    if (DOCUMENTCLASS_RE.test(trimmed)) {
+      if (seenBeginDocument) {
+        return i;
+      }
     }
   }
 
@@ -75,15 +85,16 @@ export type LaTeXPreambleValidation =
   | { ok: true }
   | { ok: false; reason: string };
 
-/** Count non-comment \\documentclass lines before the first \\begin{document}. */
+/** Count non-comment \\documentclass lines before the first \\begin{document} (including broken). */
 export function countDocumentClassLinesBeforeBeginDocument(content: string): number {
   const lines = content.split("\n");
+  const limit = Math.min(getFirstLaTeXCopyEndLine(content), lines.length);
   let count = 0;
 
-  for (const line of lines) {
-    const trimmed = line.trim();
+  for (let i = 0; i < limit; i += 1) {
+    const trimmed = lines[i].trim();
     if (!trimmed || trimmed.startsWith("%")) continue;
-    if (trimmed.includes("\\begin{document}")) break;
+    if (isBeginDocumentLine(trimmed)) break;
     if (DOCUMENTCLASS_RE.test(trimmed)) count += 1;
   }
 
@@ -129,8 +140,7 @@ export function countBeginDocumentInFirstCopy(content: string): number {
   for (let i = 0; i < limit; i += 1) {
     const trimmed = lines[i].trim();
     if (!trimmed || trimmed.startsWith("%")) continue;
-    const matches = trimmed.match(BEGIN_DOCUMENT_RE);
-    if (matches) count += matches.length;
+    if (isBeginDocumentLine(trimmed)) count += 1;
   }
 
   return count;
@@ -251,7 +261,15 @@ export function validateCompileFixEdit(
   const duplicateBeginDocument = validateNoDuplicateBeginDocument(previewContent);
   if (!duplicateBeginDocument.ok) return duplicateBeginDocument;
 
-  const preamble = validateLaTeXPreambleOrder(previewContent);
+  const fixingBeginDocumentLine =
+    startLine != null &&
+    endLine != null &&
+    startLine === endLine &&
+    isBeginDocumentLine(content.split("\n")[startLine - 1] ?? "");
+
+  const preamble = fixingBeginDocumentLine
+    ? { ok: true }
+    : validateLaTeXPreambleOrder(previewContent);
   if (!preamble.ok) return preamble;
 
   if (startLine != null && endLine != null) {

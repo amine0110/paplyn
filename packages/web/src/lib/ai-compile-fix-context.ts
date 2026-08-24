@@ -25,6 +25,9 @@ const MAX_COMPILE_ERRORS = 25;
 /** Lines above/below a cited error line for the first targeted get_file call. */
 export const COMPILE_FIX_LINE_RADIUS = 10;
 
+/** Minimum end line for compile-fix preload when the cited error is in the first ~30 lines. */
+export const COMPILE_FIX_MIN_READ_END_LINE = 30;
+
 /** Maximum get_file calls allowed per compile-fix request (large templates need a few slices). */
 export const COMPILE_FIX_MAX_GET_FILE_CALLS = 4;
 
@@ -222,9 +225,11 @@ export function buildGetFileWindow(
   line: number,
   radius = COMPILE_FIX_LINE_RADIUS
 ): { startLine: number; endLine: number } {
+  const startLine = Math.max(1, line - radius);
+  const endLine = Math.max(line + radius, COMPILE_FIX_MIN_READ_END_LINE);
   return {
-    startLine: Math.max(1, line - radius),
-    endLine: line + radius,
+    startLine,
+    endLine: Math.max(endLine, startLine),
   };
 }
 
@@ -236,8 +241,9 @@ export function buildCompileFixTargetHint(location: {
   return (
     `Primary error location: ${location.file}:${location.line}. ` +
     `Your FIRST tool call must be get_file(path="${location.file}", startLine=${startLine}, endLine=${endLine}). ` +
-    `Then call replace_lines on that exact line in the FIRST document copy. ` +
-    `Do not read other line ranges before attempting an edit. ` +
+    `Then call replace_lines on that exact line in the FIRST document copy (line ${location.line} — ` +
+    `if it is a broken \\begin{document without a closing brace, fix that line first before adding \\documentclass). ` +
+    `Do not read line ranges past line ${endLine} before attempting an edit. ` +
     `Do not prepend a preamble or invent packages.`
   );
 }
