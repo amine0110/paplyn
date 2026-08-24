@@ -116,9 +116,13 @@ describe("getPrimaryCompileErrorLocation", () => {
 });
 
 describe("buildGetFileWindow", () => {
-  it("centers a window around the cited line", () => {
-    expect(buildGetFileWindow(12, 10)).toEqual({ startLine: 2, endLine: 22 });
-    expect(buildGetFileWindow(3, 10)).toEqual({ startLine: 1, endLine: 13 });
+  it("centers a window around the cited line and extends through line 30 for early errors", () => {
+    expect(buildGetFileWindow(12, 10)).toEqual({ startLine: 2, endLine: 30 });
+    expect(buildGetFileWindow(3, 10)).toEqual({ startLine: 1, endLine: 30 });
+  });
+
+  it("does not force line 30 minimum for errors deep in the file", () => {
+    expect(buildGetFileWindow(100, 10)).toEqual({ startLine: 90, endLine: 110 });
   });
 });
 
@@ -126,7 +130,7 @@ describe("buildCompileFixTargetHint", () => {
   it("instructs the model to read a small window first", () => {
     const hint = buildCompileFixTargetHint({ file: "main.tex", line: 12 });
     expect(hint).toContain("main.tex:12");
-    expect(hint).toContain('get_file(path="main.tex", startLine=2, endLine=22)');
+    expect(hint).toContain('get_file(path="main.tex", startLine=2, endLine=30)');
     expect(hint).toContain("FIRST tool call");
     expect(hint).toContain("FIRST document copy");
     expect(hint).toContain("Do not prepend");

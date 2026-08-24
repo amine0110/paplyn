@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   countBeginDocumentInFirstCopy,
   countDocumentClassLinesBeforeBeginDocument,
+  countDocumentClassLinesInFirstCopy,
   formatCompileFixLineChangeSummary,
   getDocumentClassLine,
   getFirstLaTeXCopyEndLine,
   getFirstNonCommentLine,
+  isBeginDocumentLine,
   validateCompileFixEdit,
   validateLaTeXPreambleOrder,
   validateNoDuplicateBeginDocument,
@@ -30,6 +32,28 @@ const concatenatedIeee = [
   "\\end{document}",
 ].join("\n");
 
+/** llm-similarity-style first copy: packages, broken \\begin{document at line 8, dup at 63+. */
+function buildLlmSimilarityFirstCopyFixture(): string {
+  const lines = [
+    "",
+    "\\usepackage{graphicx}",
+    "\\usepackage{amsmath}",
+    "\\usepackage{amsfonts}",
+    "\\usepackage{amssymb}",
+    "\\usepackage{algorithmic}",
+    "\\usepackage{textcomp}",
+    "\\begin{document",
+    "\\title{Paper}",
+  ];
+  for (let line = 9; line <= 62; line += 1) {
+    lines.push(`% filler line ${line}`);
+  }
+  lines.push("\\documentclass[conference]{IEEEtran}");
+  lines.push("\\begin{document}");
+  lines.push("\\end{document}");
+  return lines.join("\n");
+}
+
 describe("getFirstNonCommentLine", () => {
   it("skips comments and blank lines", () => {
     expect(getFirstNonCommentLine("% comment\n\n\\documentclass{article}")).toEqual({
@@ -47,6 +71,21 @@ describe("getFirstLaTeXCopyEndLine", () => {
   it("ends before a second \\documentclass when no \\end{document}", () => {
     const content = "\\documentclass{article}\n\\begin{document}\nHi\n\\documentclass{book}\n";
     expect(getFirstLaTeXCopyEndLine(content)).toBe(3);
+  });
+
+  it("ends before stacked \\documentclass when \\begin{document precedes the first class", () => {
+    const content = buildLlmSimilarityFirstCopyFixture();
+    expect(getFirstLaTeXCopyEndLine(content)).toBe(63);
+    expect(countDocumentClassLinesInFirstCopy(content)).toBe(0);
+    expect(countDocumentClassLinesBeforeBeginDocument(content)).toBe(0);
+  });
+});
+
+describe("isBeginDocumentLine", () => {
+  it("matches broken and complete begin{document lines", () => {
+    expect(isBeginDocumentLine("\\begin{document")).toBe(true);
+    expect(isBeginDocumentLine("\\begin{document}")).toBe(true);
+    expect(isBeginDocumentLine("\\usepackage{amsmath}")).toBe(false);
   });
 });
 
@@ -165,6 +204,58 @@ describe("validateCompileFixEdit", () => {
     if (!result.ok) {
       expect(result.reason).toContain("first document copy");
     }
+  });
+
+  describe("llm-similarity first-copy fixture", () => {
+    const content = buildLlmSimilarityFirstCopyFixture();
+
+    it("allows inserting exactly one \\documentclass at the top", () => {
+      const lines = content.split("\n");
+      lines[0] = "\\documentclass[conference]{IEEEtran}";
+      const preview = lines.join("\n");
+      expect(
+        validateCompileFixEdit({
+          content,
+          startLine: 1,
+          endLine: 1,
+          replace: "\\documentclass[conference]{IEEEtran}",
+          previewContent: preview,
+        })
+      ).toEqual({ ok: true });
+    });
+
+    it("rejects inserting two \\documentclass lines before \\begin{document", () => {
+      const lines = content.split("\n");
+      lines[0] = "\\documentclass[conference]{IEEEtran}";
+      lines[1] = "\\documentclass[conference]{IEEEtran}";
+      const preview = lines.join("\n");
+      const result = validateCompileFixEdit({
+        content,
+        startLine: 1,
+        endLine: 2,
+        replace: "\\documentclass[conference]{IEEEtran}\n\\documentclass[conference]{IEEEtran}",
+        previewContent: preview,
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.reason).toContain("2 \\documentclass");
+      }
+    });
+
+    it("allows replace_lines on line 8 to close \\begin{document}", () => {
+      const lines = content.split("\n");
+      lines[7] = "\\begin{document}";
+      const preview = lines.join("\n");
+      expect(
+        validateCompileFixEdit({
+          content,
+          startLine: 8,
+          endLine: 8,
+          replace: "\\begin{document}",
+          previewContent: preview,
+        })
+      ).toEqual({ ok: true });
+    });
   });
 
   it("rejects smashed line 1 replacement", () => {
