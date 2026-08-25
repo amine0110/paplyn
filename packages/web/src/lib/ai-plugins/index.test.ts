@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getEnabledAiPlugins,
+  getForcedToolPrompt,
   getPluginActionPrompt,
   listAiPlugins,
   resolveAiPlugins,
@@ -34,6 +35,13 @@ describe("ai-plugins registry", () => {
 
   it("returns undefined for unknown actions", () => {
     expect(getPluginActionPrompt("unknown-action")).toBeUndefined();
+  });
+
+  it("builds a forced-tool prompt for composer tool picks", () => {
+    const prompt = getForcedToolPrompt("search_literature");
+    expect(prompt).toContain("search_literature");
+    expect(prompt).toContain("MUST call");
+    expect(getForcedToolPrompt("not-a-tool")).toBeUndefined();
   });
 
   it("keeps disabled plugins out of the resolved set", () => {

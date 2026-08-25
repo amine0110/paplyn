@@ -9,7 +9,8 @@ import { detectFixCompileIntent } from "@/lib/ai-compile-fix-intent";
 import type { AiCompileError } from "@/lib/ai-compile-fix-context";
 import { AiMarkdown } from "@/components/ai-markdown";
 import type { AiAppliedAction, AiClientAction, AiPaper, AiToolRead, AiUsedPlugin, ArxivPaperResult, DoiCitationPayload } from "@/lib/ai-types";
-import { loadingLabelForAction } from "@/lib/ai-plugins/client-meta";
+import { AiComposerToolChip, AiComposerToolPicker, getComposerToolMeta } from "@/components/ai-composer-tool-picker";
+import { loadingLabelForAction, type AiPluginClientMeta } from "@/lib/ai-plugins/client-meta";
 import { applyAiClientActions, type ApplyAiActionsContext } from "@/lib/apply-ai-client-actions";
 import { consumeAiStream } from "@/lib/ai-stream";
 import { useSpeechRecognition } from "@/lib/use-speech-recognition";
@@ -137,6 +138,8 @@ export function AiSidebar({
   const [available, setAvailable] = useState(true);
   const [citingKey, setCitingKey] = useState<string | null>(null);
   const [importingArxivId, setImportingArxivId] = useState<string | null>(null);
+  const [selectedTool, setSelectedTool] = useState<string | null>(null);
+  const [toolInputPlaceholder, setToolInputPlaceholder] = useState<string | null>(null);
   const [voiceNote, setVoiceNote] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -233,10 +236,11 @@ export function AiSidebar({
   async function sendMessage(
     content: string,
     action?: string,
-    options?: { autoCompileFixRetry?: boolean }
+    options?: { autoCompileFixRetry?: boolean; forcedTool?: string }
   ) {
     if (!content.trim() && !action) return;
 
+    const forcedTool = options?.forcedTool;
     const fixIntent = detectFixCompileIntent(content, action);
     const effectiveAction = fixIntent ? "explain-errors" : action;
 
@@ -255,17 +259,21 @@ export function AiSidebar({
         },
       ]);
       setInput("");
+      setSelectedTool(null);
+      setToolInputPlaceholder(null);
       return;
     }
 
     userScrolledUpRef.current = false;
     setLoading(true);
     setHasStreamProgress(false);
-    setLoadingMessage(loadingLabelForAction(effectiveAction, content));
+    setLoadingMessage(loadingLabelForAction(effectiveAction, content, forcedTool));
 
     const userMsg: Message = { role: "user", content: content || action || "" };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
+    setSelectedTool(null);
+    setToolInputPlaceholder(null);
 
     try {
       const res = await fetch(`/api/projects/${projectId}/ai`, {
@@ -276,6 +284,7 @@ export function AiSidebar({
           activeFile,
           selectedText: selectedText || undefined,
           action: effectiveAction,
+          forcedTool,
           compileErrors: compileErrors.length > 0 ? compileErrors : undefined,
         }),
       });
@@ -400,14 +409,37 @@ export function AiSidebar({
     }
   }
 
+  function focusComposerInput() {
+    textareaRef.current?.focus();
+  }
+
+  function handleSelectTool(toolName: string, meta: AiPluginClientMeta) {
+    setSelectedTool(toolName);
+    setToolInputPlaceholder(meta.inputPlaceholder ?? null);
+  }
+
+  function handleClearTool() {
+    setSelectedTool(null);
+    setToolInputPlaceholder(null);
+  }
+
+  function submitComposer() {
+    const forcedTool = selectedTool ?? undefined;
+    void sendMessage(input, undefined, { forcedTool });
+  }
+
   function handleVoiceToggle() {
     if (!speech.isSupported || speech.status === "denied") return;
     if (speech.isListening) {
       speech.stop();
       const command = parseVoiceCommand(input);
       if (command.message.trim()) {
-        void sendMessage(command.message, command.action);
+        void sendMessage(command.message, command.action, {
+          forcedTool: selectedTool ?? undefined,
+        });
         setInput("");
+        setSelectedTool(null);
+        setToolInputPlaceholder(null);
       }
       return;
     }
@@ -420,7 +452,7 @@ export function AiSidebar({
       e.preventDefault();
       if (!loading && input.trim()) {
         if (speech.isListening) speech.stop();
-        void sendMessage(input);
+        submitComposer();
       }
     }
   }
@@ -428,7 +460,7 @@ export function AiSidebar({
   function handleComposerSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (speech.isListening) speech.stop();
-    void sendMessage(input);
+    submitComposer();
   }
 
   useEffect(() => {
@@ -451,6 +483,11 @@ export function AiSidebar({
   const canReplace = Boolean(selectedText && onReplace);
   const micDisabled = !speech.isSupported || speech.status === "denied" || loading;
   const canSend = Boolean(input.trim()) && !loading;
+  const toolsDisabled = loading;
+  const selectedToolMeta = selectedTool ? getComposerToolMeta(selectedTool) : undefined;
+  const composerPlaceholder = speech.isListening
+    ? "Listening…"
+    : toolInputPlaceholder ?? "Message the assistant…";
 
   return (
     <div
@@ -703,7 +740,7 @@ export function AiSidebar({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleComposerKeyDown}
-              placeholder={speech.isListening ? "Listening…" : "Message the assistant…"}
+              placeholder={composerPlaceholder}
               disabled={loading}
               rows={1}
               className={cn(
@@ -713,34 +750,49 @@ export function AiSidebar({
                 variant === "sheet" ? "min-h-[44px] text-base" : "min-h-[36px]"
               )}
             />
-            <div className="flex items-center justify-between gap-2 px-2 pb-2">
-              <Button
-                type="button"
-                size="icon"
-                variant={speech.isListening ? "default" : "ghost"}
-                className={cn(
-                  "shrink-0 rounded-lg text-ink-muted",
-                  variant === "sheet" ? "h-9 w-9" : "h-8 w-8"
-                )}
-                disabled={micDisabled}
-                onClick={handleVoiceToggle}
-                aria-label={speech.isListening ? "Stop voice input" : "Start voice input"}
-                title={speech.isListening ? "Stop and send" : "Voice input"}
-              >
-                {speech.isListening ? (
-                  <Square className="h-4 w-4" />
-                ) : speech.status === "denied" ? (
-                  <MicOff className="h-4 w-4" />
-                ) : (
-                  <Mic className="h-4 w-4" />
-                )}
-              </Button>
+            {selectedToolMeta ? (
+              <AiComposerToolChip
+                meta={selectedToolMeta}
+                onClear={handleClearTool}
+                disabled={toolsDisabled}
+              />
+            ) : null}
+            <div className="flex items-end justify-between gap-1 px-2 pb-2">
+              <div className="flex min-w-0 items-end gap-0.5">
+                <AiComposerToolPicker
+                  onSelectTool={handleSelectTool}
+                  disabled={toolsDisabled}
+                  variant={variant}
+                  onFocusInput={focusComposerInput}
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  variant={speech.isListening ? "default" : "ghost"}
+                  className={cn(
+                    "shrink-0 rounded-lg text-ink-muted",
+                    variant === "sheet" ? "h-11 w-11" : "h-8 w-8"
+                  )}
+                  disabled={micDisabled}
+                  onClick={handleVoiceToggle}
+                  aria-label={speech.isListening ? "Stop voice input" : "Start voice input"}
+                  title={speech.isListening ? "Stop and send" : "Voice input"}
+                >
+                  {speech.isListening ? (
+                    <Square className="h-4 w-4" />
+                  ) : speech.status === "denied" ? (
+                    <MicOff className="h-4 w-4" />
+                  ) : (
+                    <Mic className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
               <button
                 type="submit"
                 className={cn(
                   CHROME_SEND_BTN,
                   "shrink-0 rounded-full transition-opacity",
-                  variant === "sheet" ? "h-9 w-9" : "h-8 w-8",
+                  variant === "sheet" ? "h-11 w-11" : "h-8 w-8",
                   !canSend && "opacity-40"
                 )}
                 disabled={!canSend}

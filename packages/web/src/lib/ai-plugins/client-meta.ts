@@ -1,39 +1,58 @@
 import { detectFixCompileIntent } from "@/lib/ai-compile-fix-intent";
+import { getEnabledAiPlugins } from "./index";
 
 export interface AiPluginClientMeta {
   id: string;
   name: string;
+  /** Short label in the composer tool menu. */
+  menuLabel: string;
   toolName: string;
   /** Shown while the plugin tool is running. */
   loadingLabel: string;
+  /** Composer placeholder when this tool is attached to the next send. */
+  inputPlaceholder?: string;
 }
 
 export const AI_PLUGIN_CLIENT_META: AiPluginClientMeta[] = [
   {
     id: "semantic-scholar",
     name: "Semantic Scholar",
+    menuLabel: "Semantic Scholar",
     toolName: "search_literature",
     loadingLabel: "Searching Semantic Scholar…",
+    inputPlaceholder: "Paper search query…",
   },
   {
     id: "cite-doi",
     name: "Crossref",
+    menuLabel: "Cite DOI / Crossref",
     toolName: "cite_from_doi",
     loadingLabel: "Resolving DOI…",
+    inputPlaceholder: "Paste a DOI (10.xxxx/…)…",
   },
   {
     id: "arxiv",
     name: "arXiv",
+    menuLabel: "arXiv",
     toolName: "search_arxiv",
     loadingLabel: "Searching arXiv…",
+    inputPlaceholder: "arXiv query or ID…",
   },
   {
     id: "github-import",
     name: "GitHub",
+    menuLabel: "GitHub",
     toolName: "parse_github_repo",
     loadingLabel: "Checking GitHub repo…",
+    inputPlaceholder: "owner/repo or GitHub URL…",
   },
 ];
+
+/** Registered plugin tools shown in the composer + menu (enabled registry only). */
+export function listComposerToolMeta(): AiPluginClientMeta[] {
+  const enabledIds = new Set(getEnabledAiPlugins().map((plugin) => plugin.id));
+  return AI_PLUGIN_CLIENT_META.filter((meta) => enabledIds.has(meta.id));
+}
 
 export function getClientPluginMetaByToolName(toolName: string): AiPluginClientMeta | undefined {
   return AI_PLUGIN_CLIENT_META.find((plugin) => plugin.toolName === toolName);
@@ -81,7 +100,16 @@ const EDIT_ACTIONS = new Set([
   "write",
 ]);
 
-export function loadingLabelForAction(action?: string, userMessage?: string): string {
+export function loadingLabelForAction(
+  action?: string,
+  userMessage?: string,
+  forcedToolName?: string
+): string {
+  if (forcedToolName) {
+    const forced = getClientPluginMetaByToolName(forcedToolName);
+    if (forced) return forced.loadingLabel;
+  }
+
   const literature = loadingLabelForLiteratureAction(action, userMessage);
   if (literature) return literature;
 
