@@ -570,14 +570,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       });
     }
 
-    const forcedToolName =
-      !compileFixRequest &&
-      requestData.forcedTool &&
-      isRegisteredPluginToolName(requestData.forcedTool) &&
-      requestData.forcedTool in pluginTools
-        ? requestData.forcedTool
-        : undefined;
-
     const streamResult = streamText({
       model,
       system: systemPrompt,
@@ -587,9 +579,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       tools: compileFixRequest
         ? workspaceTools
         : { ...pluginTools, ...workspaceTools },
-      ...(forcedToolName
-        ? { toolChoice: { type: "tool" as const, toolName: forcedToolName } }
-        : {}),
     });
 
     return { streamResult, systemPrompt };
