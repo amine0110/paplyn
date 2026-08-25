@@ -19,17 +19,18 @@ export const BRAND = {
   appleTouchIcon: "/brand/apple-touch-icon.png",
 } as const;
 
-/** Square mark raster size for next/image (paplyn-mark.png). */
-const MARK_SIZE = 1024;
+/** Tight-cropped folded-P mark raster size for next/image (paplyn-mark.png). */
+const MARK_WIDTH = 410;
+const MARK_HEIGHT = 753;
 
 type PlicumWordmarkProps = {
-  /** Tailwind height class for the square mark (text scales alongside). */
+  /** Tailwind height class for the mark (text scales alongside). */
   className?: string;
   priority?: boolean;
 };
 
 /**
- * Header lockup: square folded-P mark plus product name as text.
+ * Header lockup: folded-P mark at natural aspect plus product name as text.
  * Does not use the wide wordmark PNG cards in chrome.
  */
 export function PlicumWordmark({ className, priority }: PlicumWordmarkProps) {
@@ -41,10 +42,10 @@ export function PlicumWordmark({ className, priority }: PlicumWordmarkProps) {
       <Image
         src={BRAND.mark}
         alt=""
-        width={MARK_SIZE}
-        height={MARK_SIZE}
+        width={MARK_WIDTH}
+        height={MARK_HEIGHT}
         priority={priority}
-        className="h-full w-auto aspect-square shrink-0"
+        className="h-full w-auto shrink-0"
         aria-hidden
       />
       <span className="font-serif text-[1.125em] font-semibold leading-none tracking-tight text-navy dark:text-ink">

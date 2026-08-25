@@ -31,7 +31,7 @@ function brandHeaderHtml(appUrl: string): string {
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
       <tr>
         <td align="center" style="text-align:center;padding:0 8px 0 0;vertical-align:middle;">
-          <img src="${src}" alt="" width="32" height="32" style="display:block;width:32px;height:32px;border:0;outline:none;text-decoration:none;" />
+          <img src="${src}" alt="" height="40" style="display:block;height:40px;width:auto;border:0;outline:none;text-decoration:none;" />
         </td>
         <td align="center" style="text-align:left;vertical-align:middle;">
           <span style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:600;line-height:1;color:${INK};">${name}</span>
