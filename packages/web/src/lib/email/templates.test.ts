@@ -11,7 +11,7 @@ const APP_URL = "https://app.paplyn.test";
 
 function expectBrandedWordmarkHeader(html: string, appUrl = APP_URL): void {
   const base = appUrl.replace(/\/$/, "");
-  expect(html).toContain(`${base}/brand/plicum-wordmark-light.png`);
+  expect(html).toContain(`${base}/brand/paplyn-wordmark-light.png`);
   expect(html).toContain(`alt="${PRODUCT_NAME}"`);
   expect(html).toContain('align="center"');
   expect(html).toContain("display:block;margin:0 auto");
@@ -85,7 +85,7 @@ describe("email templates", () => {
       appUrl: "https://app.paplyn.test/",
     });
 
-    expect(html).toContain("https://app.paplyn.test/brand/plicum-wordmark-light.png");
+    expect(html).toContain("https://app.paplyn.test/brand/paplyn-wordmark-light.png");
     expect(html).not.toContain("https://app.paplyn.test//brand/");
   });
 
