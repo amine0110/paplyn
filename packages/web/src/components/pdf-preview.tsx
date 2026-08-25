@@ -17,6 +17,7 @@ import {
   buildPdfClickDomContext,
   scrollAwareClickToSynctexPoint,
 } from "@/lib/pdf-synctex-coords";
+import { getDefaultPdfScale } from "@/lib/pdf-preview-scale";
 import { synctexLookupFromBase64 } from "@/lib/synctex";
 
 /** Minimal pdf.js page handle used for SyncTeX reverse lookup (react-pdf onRenderSuccess). */
@@ -78,7 +79,7 @@ export function PdfPreview({
 }: PdfPreviewProps) {
   const [numPages, setNumPages] = useState(0);
   const [page, setPage] = useState(1);
-  const [scale, setScale] = useState(0.95);
+  const [scale, setScale] = useState(getDefaultPdfScale);
   const pageProxyRef = useRef<SyncPageHandle | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);

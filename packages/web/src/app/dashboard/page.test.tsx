@@ -63,10 +63,13 @@ describe("Dashboard destructive actions", () => {
       expect(screen.getByText("Thesis Draft")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByTitle("Archive"));
+    fireEvent.click(screen.getByRole("button", { name: "Project actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Archive/i }));
 
     expect(window.confirm).not.toHaveBeenCalled();
-    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    });
     expect(screen.getByText("Are you sure you want to archive this project?")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Confirm" })).toBeInTheDocument();
@@ -79,10 +82,13 @@ describe("Dashboard destructive actions", () => {
       expect(screen.getByText("Thesis Draft")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByTitle("Delete permanently"));
+    fireEvent.click(screen.getByRole("button", { name: "Project actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Delete/i }));
 
     expect(window.confirm).not.toHaveBeenCalled();
-    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    });
     expect(
       screen.getByText(
         'Permanently delete "Thesis Draft"? This removes all files and cannot be undone.'
@@ -141,6 +147,24 @@ describe("Dashboard archived projects", () => {
     const unarchiveButton = screen.getByRole("button", { name: "Unarchive" });
     expect(unarchiveButton).toHaveAttribute("title", "Unarchive");
     expect(unarchiveButton).not.toBe(archiveButton);
+  });
+
+  it("exposes project actions through a mobile menu instead of hover-only buttons", async () => {
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByText("Thesis Draft")).toBeInTheDocument();
+    });
+
+    const mobileMenu = screen.getByRole("button", { name: "Project actions" });
+    expect(mobileMenu).toHaveClass("h-11", "w-11");
+    expect(mobileMenu.closest(".md\\:hidden")).not.toBeNull();
+
+    fireEvent.click(mobileMenu);
+    expect(screen.getByRole("menuitem", { name: /Settings/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /Duplicate/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /Archive/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /Delete/i })).toBeInTheDocument();
   });
 
   it("uses the in-app confirm dialog for unarchive instead of window.confirm", async () => {

@@ -8,9 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProjectSettingsDialog } from "@/components/project-settings-dialog";
-import { Plus, Archive, ArchiveRestore, FileText, Copy, Settings, Trash2, Upload } from "lucide-react";
+import { Plus, Archive, ArchiveRestore, FileText, Copy, Settings, Trash2, Upload, MoreHorizontal } from "lucide-react";
 import type { Project } from "@/lib/schema";
 import { useUiFeedback } from "@/components/ui-feedback";
+import { cn } from "@/components/ui/cn";
+import { CHROME_MENU_ITEM } from "@/lib/chrome-interactive";
 
 const TEMPLATES = [
   { id: "blank", name: "Blank Article", desc: "Simple article with sections" },
@@ -383,6 +385,17 @@ function ProjectRow({
   onDelete: (id: string, name: string) => void;
   onSettings: (project: Project) => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  function runMenuAction(action: () => void) {
+    setMenuOpen(false);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => action());
+    });
+  }
+
+  const archiveLabel = project.archived ? "Unarchive" : "Archive";
+
   return (
     <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-surface hover:bg-canvas-dark transition-colors group">
       <Link href={`/project/${project.id}`} className="flex-1 min-w-0">
@@ -393,29 +406,29 @@ function ProjectRow({
           {project.description && <span className="ml-2">— {project.description}</span>}
         </div>
       </Link>
-      <div className="flex items-center gap-1 shrink-0 ml-2">
-        <span className="text-xs text-ink-faint hidden sm:inline">
+      <div className="hidden md:flex items-center gap-1 shrink-0 ml-2">
+        <span className="text-xs text-ink-faint hidden lg:inline">
           {new Date(project.updatedAt).toLocaleDateString()}
         </span>
         <button
           onClick={() => onSettings(project)}
-          className="opacity-0 group-hover:opacity-100 text-ink-faint hover:text-ink p-1"
+          className="opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto text-ink-faint hover:text-ink p-1"
           title="Settings"
         >
           <Settings className="h-4 w-4" />
         </button>
         <button
           onClick={() => onDuplicate(project.id)}
-          className="opacity-0 group-hover:opacity-100 text-ink-faint hover:text-ink p-1"
+          className="opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto text-ink-faint hover:text-ink p-1"
           title="Duplicate"
         >
           <Copy className="h-4 w-4" />
         </button>
         <button
           onClick={() => onArchive(project.id, !project.archived)}
-          className="opacity-0 group-hover:opacity-100 text-ink-faint hover:text-ink p-1"
-          title={project.archived ? "Unarchive" : "Archive"}
-          aria-label={project.archived ? "Unarchive" : "Archive"}
+          className="opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto text-ink-faint hover:text-ink p-1"
+          title={archiveLabel}
+          aria-label={archiveLabel}
         >
           {project.archived ? (
             <ArchiveRestore className="h-4 w-4" />
@@ -425,11 +438,81 @@ function ProjectRow({
         </button>
         <button
           onClick={() => onDelete(project.id, project.name)}
-          className="opacity-0 group-hover:opacity-100 text-ink-faint hover:text-error p-1"
+          className="opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto text-ink-faint hover:text-error p-1"
           title="Delete permanently"
         >
           <Trash2 className="h-4 w-4" />
         </button>
+      </div>
+      <div className="relative md:hidden shrink-0 ml-1">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setMenuOpen((open) => !open);
+          }}
+          className="flex h-11 w-11 items-center justify-center text-ink-faint hover:text-ink"
+          aria-expanded={menuOpen}
+          aria-haspopup="menu"
+          aria-label="Project actions"
+        >
+          <MoreHorizontal className="h-5 w-5" />
+        </button>
+        {menuOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setMenuOpen(false)}
+              aria-hidden
+            />
+            <div
+              className="absolute right-0 top-full mt-1 z-50 min-w-[10rem] rounded-sm border border-border bg-paper py-1 shadow-lg"
+              role="menu"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                className={cn(CHROME_MENU_ITEM, "flex w-full items-center gap-2 px-3 py-2.5 text-sm")}
+                onClick={() => runMenuAction(() => onSettings(project))}
+              >
+                <Settings className="h-4 w-4" />
+                Settings
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className={cn(CHROME_MENU_ITEM, "flex w-full items-center gap-2 px-3 py-2.5 text-sm")}
+                onClick={() => runMenuAction(() => onDuplicate(project.id))}
+              >
+                <Copy className="h-4 w-4" />
+                Duplicate
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className={cn(CHROME_MENU_ITEM, "flex w-full items-center gap-2 px-3 py-2.5 text-sm")}
+                onClick={() => runMenuAction(() => onArchive(project.id, !project.archived))}
+              >
+                {project.archived ? (
+                  <ArchiveRestore className="h-4 w-4" />
+                ) : (
+                  <Archive className="h-4 w-4" />
+                )}
+                {archiveLabel}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className={cn(CHROME_MENU_ITEM, "flex w-full items-center gap-2 px-3 py-2.5 text-sm text-error")}
+                onClick={() => runMenuAction(() => onDelete(project.id, project.name))}
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
