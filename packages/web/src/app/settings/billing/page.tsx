@@ -4,11 +4,11 @@ import { useState } from "react";
 import { Nav } from "@/components/nav";
 import { Button } from "@/components/ui/button";
 import { PLAN_LIMITS } from "@/lib/config";
-import { useSession } from "@/lib/auth-client";
+import { useRequireSession } from "@/lib/use-require-session";
 import { useUiFeedback } from "@/components/ui-feedback";
 
 export default function BillingPage() {
-  const { data: session } = useSession();
+  const { session, isPending, isAuthenticated } = useRequireSession({ loginNext: "/settings/billing" });
   const { notice } = useUiFeedback();
   const plan = (session?.user as { plan?: string })?.plan || "free";
   const limits = PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS] || PLAN_LIMITS.free;
@@ -34,6 +34,15 @@ export default function BillingPage() {
     if (data.url) window.location.href = data.url;
     else notice(data.error || "Portal unavailable");
     setLoading(null);
+  }
+
+  if (isPending || !isAuthenticated) {
+    return (
+      <div className="min-h-screen">
+        <Nav />
+        <div className="max-w-2xl mx-auto px-4 py-8 text-ink-muted">Loading...</div>
+      </div>
+    );
   }
 
   return (

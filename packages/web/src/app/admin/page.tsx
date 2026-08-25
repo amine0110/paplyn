@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { config } from "@/lib/config";
 import { formatRevisionTimestamp } from "@/lib/format-date";
+import { useRequireSession } from "@/lib/use-require-session";
+import { leaveForHome } from "@/lib/auth-redirect";
 
 type AdminUserSummary = {
   id: string;
@@ -19,6 +21,8 @@ type AdminUserSummary = {
 };
 
 export default function AdminPage() {
+  const { session, isPending, isAuthenticated } = useRequireSession({ loginNext: "/admin" });
+  const isAdmin = (session?.user as { role?: string } | undefined)?.role === "admin";
   const [settings, setSettings] = useState({
     name: "",
     openaiApiKey: "",
@@ -54,6 +58,16 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
+    if (!isPending && isAuthenticated && !isAdmin) {
+      leaveForHome();
+    }
+  }, [isPending, isAuthenticated, isAdmin]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setUsers([]);
+      return;
+    }
     async function load() {
       if (config.isSelfHosted) {
         const res = await fetch("/api/admin");
@@ -66,7 +80,7 @@ export default function AdminPage() {
     }
     load();
     loadUsers();
-  }, [loadUsers]);
+  }, [isAuthenticated, loadUsers]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -113,6 +127,15 @@ export default function AdminPage() {
       setMessage(err.error || "Failed to save");
     }
     setSaving(false);
+  }
+
+  if (isPending || !isAuthenticated || !isAdmin) {
+    return (
+      <div className="min-h-screen">
+        <Nav />
+        <div className="max-w-2xl mx-auto px-4 py-8 text-ink-muted">Loading...</div>
+      </div>
+    );
   }
 
   if (loading) {
