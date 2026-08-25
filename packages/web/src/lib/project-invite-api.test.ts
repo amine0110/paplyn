@@ -211,9 +211,10 @@ describe("POST /api/projects/[id]/invite", () => {
     expect(sendPlicumEmail).not.toHaveBeenCalled();
   });
 
-  it("adds existing user, sends notification email, and returns added-existing-user status", async () => {
+  it("creates pending invite for existing user and sends invite email", async () => {
     mockOwnerSession();
     dbMocks.limit.mockResolvedValueOnce([existingUser]).mockResolvedValueOnce([]);
+    dbMocks.returning.mockResolvedValue([{ ...inviteRow, email: existingUser.email }]);
     sendPlicumEmail.mockResolvedValue({ sent: true });
 
     const { POST } = await import("@/app/api/projects/[id]/invite/route");
@@ -226,17 +227,22 @@ describe("POST /api/projects/[id]/invite", () => {
       { params: Promise.resolve({ id: projectId }) }
     );
 
+    expect(res.status).toBe(201);
     const body = await res.json();
-    expect(body.added).toBe(true);
+    expect(body.link).toContain("/invite/");
     expect(body.emailSent).toBe(true);
-    expect(body.emailStatus).toBe("added-existing-user");
+    expect(body.emailStatus).toBe("sent");
+    expect(body.added).toBeUndefined();
+    expect(body.alreadyMember).toBeUndefined();
+    expect(dbMocks.insert).toHaveBeenCalledTimes(1);
     expect(sendPlicumEmail).toHaveBeenCalledTimes(1);
-    expect(sendPlicumEmail.mock.calls[0]?.[0]?.subject).toContain("added you to Thesis");
+    expect(sendPlicumEmail.mock.calls[0]?.[0]?.subject).not.toContain("added you to Thesis");
   });
 
-  it("adds existing user but reports email failure without invite-created semantics", async () => {
+  it("creates pending invite for existing user even when email fails", async () => {
     mockOwnerSession();
     dbMocks.limit.mockResolvedValueOnce([existingUser]).mockResolvedValueOnce([]);
+    dbMocks.returning.mockResolvedValue([{ ...inviteRow, email: existingUser.email }]);
     sendPlicumEmail.mockResolvedValue({
       sent: false,
       reason: "send-failed",
@@ -253,10 +259,11 @@ describe("POST /api/projects/[id]/invite", () => {
       { params: Promise.resolve({ id: projectId }) }
     );
 
+    expect(res.status).toBe(201);
     const body = await res.json();
-    expect(body.added).toBe(true);
     expect(body.emailSent).toBe(false);
-    expect(body.emailStatus).toBe("added-existing-user");
-    expect(body.emailReason).toContain("Connection refused");
+    expect(body.emailStatus).toBe("send-failed");
+    expect(body.added).toBeUndefined();
+    expect(dbMocks.insert).toHaveBeenCalledTimes(1);
   });
 });

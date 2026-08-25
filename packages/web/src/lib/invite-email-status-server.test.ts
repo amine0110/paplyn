@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import {
-  addedExistingUserEmailFields,
   alreadyMemberEmailFields,
   inviteEmailFieldsFromSendResult,
   linkOnlyInviteEmailFields,
@@ -48,27 +47,6 @@ describe("invite email status server helpers", () => {
     expect(alreadyMemberEmailFields()).toEqual({
       emailSent: false,
       emailStatus: "already-member",
-    });
-  });
-
-  it("uses added-existing-user when notification email succeeds", () => {
-    expect(addedExistingUserEmailFields({ sent: true })).toEqual({
-      emailSent: true,
-      emailStatus: "added-existing-user",
-    });
-  });
-
-  it("keeps added-existing-user status when notification email fails", () => {
-    expect(
-      addedExistingUserEmailFields({
-        sent: false,
-        reason: "send-failed",
-        error: "Connection refused",
-      })
-    ).toEqual({
-      emailSent: false,
-      emailStatus: "added-existing-user",
-      emailReason: "Email could not be sent: Connection refused",
     });
   });
 });

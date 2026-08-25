@@ -10,6 +10,7 @@ vi.mock("@/components/nav", () => ({
 
 const signUp = vi.fn();
 const push = vi.fn();
+const useSearchParams = vi.fn();
 
 vi.mock("@/lib/auth-client", () => ({
   signUp: {
@@ -19,6 +20,7 @@ vi.mock("@/lib/auth-client", () => ({
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
+  useSearchParams: () => useSearchParams(),
 }));
 
 describe("Signup page", () => {
@@ -29,6 +31,7 @@ describe("Signup page", () => {
   beforeEach(() => {
     signUp.mockReset();
     push.mockReset();
+    useSearchParams.mockReturnValue(new URLSearchParams());
     signUp.mockResolvedValue({ data: { user: { id: "u1" } } });
   });
 
@@ -87,5 +90,32 @@ describe("Signup page", () => {
     expect(confirmPassword).toHaveAttribute("type", "text");
     fireEvent.click(screen.getAllByRole("button", { name: "Hide password" })[0]);
     expect(confirmPassword).toHaveAttribute("type", "password");
+  });
+
+  it("redirects to next path after signup when provided", async () => {
+    useSearchParams.mockReturnValue(new URLSearchParams("next=/invite/invite-1"));
+
+    render(<SignupPageClient googleEnabled={false} />);
+
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Ada" } });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ada@example.com" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password123" } });
+    fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "password123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith("/invite/invite-1");
+    });
+  });
+
+  it("links to login with the same next path", () => {
+    useSearchParams.mockReturnValue(new URLSearchParams("next=/invite/invite-1"));
+
+    render(<SignupPageClient googleEnabled={false} />);
+
+    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute(
+      "href",
+      "/login?next=%2Finvite%2Finvite-1"
+    );
   });
 });

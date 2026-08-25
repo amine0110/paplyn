@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Nav } from "@/components/nav";
 import { Button } from "@/components/ui/button";
 import { formatMemberRole } from "@/lib/project-sharing";
+import { useSession } from "@/lib/auth-client";
 
 interface InvitePreview {
   id: string;
@@ -20,11 +21,15 @@ export default function InvitePage() {
   const params = useParams();
   const router = useRouter();
   const inviteId = params.id as string;
+  const { data: session, isPending: sessionPending } = useSession();
 
   const [invite, setInvite] = useState<InvitePreview | null>(null);
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
   const [error, setError] = useState("");
+
+  const invitePath = `/invite/${inviteId}`;
+  const authNext = encodeURIComponent(invitePath);
 
   useEffect(() => {
     async function loadInvite() {
@@ -45,7 +50,7 @@ export default function InvitePage() {
     setError("");
     const res = await fetch(`/api/invite/${inviteId}`, { method: "POST" });
     if (res.status === 401) {
-      router.push(`/login?next=${encodeURIComponent(`/invite/${inviteId}`)}`);
+      router.push(`/login?next=${authNext}`);
       return;
     }
     if (!res.ok) {
@@ -58,7 +63,7 @@ export default function InvitePage() {
     router.push(result.projectUrl.replace(/^https?:\/\/[^/]+/, "") || `/project/${result.projectId}`);
   }
 
-  if (loading) {
+  if (loading || sessionPending) {
     return (
       <div className="min-h-screen">
         <Nav />
@@ -81,6 +86,8 @@ export default function InvitePage() {
     );
   }
 
+  const isLoggedIn = Boolean(session?.user);
+
   return (
     <div className="min-h-screen">
       <Nav />
@@ -96,12 +103,25 @@ export default function InvitePage() {
         {error && <p className="text-sm text-error text-center">{error}</p>}
 
         <div className="flex flex-col gap-2">
-          <Button onClick={acceptInvite} disabled={accepting || invite.accepted} className="w-full">
-            {accepting ? "Joining…" : invite.accepted ? "Already accepted" : "Accept invite"}
-          </Button>
-          <Button asChild variant="ghost" className="w-full">
-            <Link href="/login">Sign in with another account</Link>
-          </Button>
+          {isLoggedIn ? (
+            <>
+              <Button onClick={acceptInvite} disabled={accepting || invite.accepted} className="w-full">
+                {accepting ? "Joining…" : invite.accepted ? "Already accepted" : "Accept invite"}
+              </Button>
+              <Button asChild variant="ghost" className="w-full">
+                <Link href={`/login?next=${authNext}`}>Sign in with another account</Link>
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button asChild className="w-full">
+                <Link href={`/login?next=${authNext}`}>Sign in</Link>
+              </Button>
+              <Button asChild variant="outline" className="w-full">
+                <Link href={`/signup?next=${authNext}`}>Create account</Link>
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </div>

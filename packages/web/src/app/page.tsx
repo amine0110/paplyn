@@ -1,6 +1,5 @@
-import Link from "next/link";
 import { Nav } from "@/components/nav";
-import { Button } from "@/components/ui/button";
+import { LandingHero } from "@/components/landing-hero";
 import { IntegrationsStrip } from "@/components/integrations-strip";
 import { config } from "@/lib/config";
 import { PRODUCT } from "@/lib/product";
@@ -22,14 +21,7 @@ export default function LandingPage() {
           <p className="text-lg text-ink-muted max-w-2xl mx-auto mb-10">
             {PRODUCT.name} {PRODUCT.landingLead}
           </p>
-          <div className="flex gap-4 justify-center">
-            <Link href="/signup">
-              <Button size="lg">Start writing</Button>
-            </Link>
-            <Link href="/login">
-              <Button variant="outline" size="lg">Sign in</Button>
-            </Link>
-          </div>
+          <LandingHero />
         </section>
 
         <IntegrationsStrip items={integrations} />

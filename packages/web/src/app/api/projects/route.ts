@@ -6,7 +6,6 @@ import { getSession } from "@/lib/session";
 import { templates, type TemplateId } from "@/lib/templates";
 import { generateId } from "@/lib/utils";
 import { checkProjectLimit } from "@/lib/usage";
-import { acceptPendingInvites } from "@/lib/project-access";
 import { z } from "zod";
 
 const createSchema = z.object({
@@ -19,8 +18,6 @@ export async function GET() {
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  await acceptPendingInvites(session.user as Parameters<typeof acceptPendingInvites>[0]);
 
   const owned = await db
     .select()

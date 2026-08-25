@@ -1,5 +1,5 @@
 import React from "react";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { LoginPageClient } from "@/app/login/login-form";
 import * as LoginPageModule from "@/app/login/page";
@@ -15,12 +15,18 @@ vi.mock("@/lib/auth-client", () => ({
   },
 }));
 
+const useSearchParams = vi.fn();
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => useSearchParams(),
 }));
 
 describe("Login page", () => {
+  beforeEach(() => {
+    useSearchParams.mockReturnValue(new URLSearchParams());
+  });
+
   it("evaluates Google auth at request time", () => {
     expect(LoginPageModule.dynamic).toBe("force-dynamic");
   });
@@ -61,5 +67,16 @@ describe("Login page", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Hide password" }));
     expect(password).toHaveAttribute("type", "password");
+  });
+
+  it("links to signup with the same next path", () => {
+    useSearchParams.mockReturnValue(new URLSearchParams("next=/invite/invite-1"));
+
+    render(<LoginPageClient googleEnabled={false} />);
+
+    expect(screen.getByRole("link", { name: "Create one" })).toHaveAttribute(
+      "href",
+      "/signup?next=%2Finvite%2Finvite-1"
+    );
   });
 });

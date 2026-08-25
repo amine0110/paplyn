@@ -1,4 +1,4 @@
-import { eq, and, isNotNull } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "./db";
 import { project, projectMember, projectInvite } from "./schema";
 import type { User } from "./schema";
@@ -136,31 +136,4 @@ export async function revokeProjectInvite(
     .where(and(eq(projectInvite.id, inviteId), eq(projectInvite.projectId, projectId)));
 
   return { ok: true };
-}
-
-export async function acceptPendingInvites(user: User) {
-  const invites = await db
-    .select()
-    .from(projectInvite)
-    .where(
-      and(
-        eq(projectInvite.email, user.email),
-        eq(projectInvite.accepted, false),
-        isNotNull(projectInvite.email)
-      )
-    );
-
-  for (const invite of invites) {
-    await db.insert(projectMember).values({
-      id: crypto.randomUUID(),
-      projectId: invite.projectId,
-      userId: user.id,
-      role: invite.role,
-    });
-
-    await db
-      .update(projectInvite)
-      .set({ accepted: true })
-      .where(eq(projectInvite.id, invite.id));
-  }
 }

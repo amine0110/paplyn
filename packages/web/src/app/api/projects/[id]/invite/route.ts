@@ -5,12 +5,11 @@ import { projectMember, projectInvite, user } from "@/lib/schema";
 import { getSession } from "@/lib/session";
 import { getProjectAccess } from "@/lib/project-access";
 import { generateId } from "@/lib/utils";
-import { buildInviteUrl, buildProjectUrl, formatMemberRole } from "@/lib/project-sharing";
+import { buildInviteUrl, formatMemberRole } from "@/lib/project-sharing";
 import { getServerAppUrl } from "@/lib/urls";
 import { sendPlicumEmail, type SendEmailResult } from "@/lib/email/send";
-import { renderInviteEmail, renderProjectAddedEmail } from "@/lib/email/templates";
+import { renderInviteEmail } from "@/lib/email/templates";
 import {
-  addedExistingUserEmailFields,
   alreadyMemberEmailFields,
   inviteEmailFieldsFromSendResult,
   linkOnlyInviteEmailFields,
@@ -54,36 +53,6 @@ async function sendInviteEmail({
   const result = await sendPlicumEmail({ to, subject, html, text });
   if (!result.sent) {
     console.warn(`[invite] Email not sent to ${to}: ${result.reason}`);
-  }
-  return result;
-}
-
-async function sendProjectAddedEmail({
-  to,
-  ownerName,
-  projectName,
-  role,
-  projectId,
-}: {
-  to: string;
-  ownerName: string;
-  projectName: string;
-  role: "editor" | "viewer";
-  projectId: string;
-}): Promise<SendEmailResult> {
-  const projectUrl = buildProjectUrl(getServerAppUrl(), projectId);
-  const { subject, html, text } = renderProjectAddedEmail({
-    productName: PRODUCT_NAME,
-    ownerName,
-    projectName,
-    roleLabel: formatMemberRole(role),
-    projectUrl,
-    appUrl: getServerAppUrl(),
-  });
-
-  const result = await sendPlicumEmail({ to, subject, html, text });
-  if (!result.sent) {
-    console.warn(`[invite] Added-user email not sent to ${to}: ${result.reason}`);
   }
   return result;
 }
@@ -177,32 +146,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (existingMember) {
         return NextResponse.json({
           success: true,
-          added: true,
           alreadyMember: true,
           ...alreadyMemberEmailFields(),
         });
       }
-
-      await db.insert(projectMember).values({
-        id: generateId(),
-        projectId: id,
-        userId: existingUser.id,
-        role,
-      });
-
-      const emailResult = await sendProjectAddedEmail({
-        to: email,
-        ownerName,
-        projectName: access.project.name,
-        role,
-        projectId: id,
-      });
-
-      return NextResponse.json({
-        success: true,
-        added: true,
-        ...addedExistingUserEmailFields(emailResult),
-      });
     }
 
     const [invite] = await db
