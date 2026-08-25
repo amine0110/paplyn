@@ -72,7 +72,7 @@ export const PRODUCT = {
   },
 
   get footerLine() {
-    return `${PRODUCT_NAME} — ${TAGLINE}. MIT License.`;
+    return `${PRODUCT_NAME} — ${TAGLINE}.`;
   },
 
   get signInHeading() {
