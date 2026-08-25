@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useSession, signOut } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth-client";
+import { signOutAndLeave } from "@/lib/auth-redirect";
 import { Button } from "@/components/ui/button";
 import { PlicumWordmark } from "@/components/plicum-wordmark";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -11,8 +12,8 @@ export function Nav() {
 
   return (
     <header className="border-b border-border bg-surface/80 backdrop-blur-sm sticky top-0 z-50">
-      <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-2 min-w-0">
-        <Link href="/" className="flex items-center shrink-0 min-w-0">
+      <div className="max-w-6xl mx-auto px-4 sm:px-5 h-14 flex items-center justify-between gap-2 min-w-0">
+        <Link href="/" className="flex items-center shrink-0 min-w-0 pl-0.5 sm:pl-1">
           <PlicumWordmark className="h-10" priority />
         </Link>
 
@@ -31,7 +32,7 @@ export function Nav() {
                   Admin
                 </Link>
               )}
-              <Button variant="ghost" size="sm" onClick={() => signOut()}>
+              <Button variant="ghost" size="sm" onClick={() => void signOutAndLeave()}>
                 Sign out
               </Button>
             </>

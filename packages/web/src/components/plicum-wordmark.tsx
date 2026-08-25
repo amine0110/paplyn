@@ -50,7 +50,7 @@ export function PlicumWordmark({ className, priority, showName = false }: Plicum
         width={MARK_WIDTH}
         height={MARK_HEIGHT}
         priority={priority}
-        className="h-full w-auto shrink-0"
+        className="h-full w-auto shrink-0 object-left"
         aria-hidden
       />
       <span

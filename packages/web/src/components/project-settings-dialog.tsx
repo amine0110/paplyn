@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { SUPPORTED_COMPILERS, type SupportedCompiler } from "@/lib/project-ops";
 import type { Project } from "@/lib/schema";
 import { Settings } from "lucide-react";
+import { useSession } from "@/lib/auth-client";
+import { leaveForLogin } from "@/lib/auth-redirect";
 
 interface ProjectSettingsDialogProps {
   project: Project;
@@ -21,6 +23,8 @@ export function ProjectSettingsDialog({
   onClose,
   onSaved,
 }: ProjectSettingsDialogProps) {
+  const { data: session, isPending } = useSession();
+  const isAuthenticated = !!session?.user;
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description ?? "");
   const [mainFile, setMainFile] = useState(project.mainFile);
@@ -35,6 +39,11 @@ export function ProjectSettingsDialog({
 
   useEffect(() => {
     if (!open) return;
+    if (!isPending && !isAuthenticated) {
+      onClose();
+      leaveForLogin(`/project/${project.id}`);
+      return;
+    }
     setName(project.name);
     setDescription(project.description ?? "");
     setMainFile(project.mainFile);
@@ -46,15 +55,23 @@ export function ProjectSettingsDialog({
     setError(null);
 
     fetch(`/api/projects/${project.id}/files`)
-      .then((res) => res.json())
-      .then((files: { path: string }[]) => {
-        const paths = files.map((f) => f.path).filter((p) => p.endsWith(".tex"));
+      .then((res) => {
+        if (res.status === 401) {
+          onClose();
+          leaveForLogin(`/project/${project.id}`);
+          return null;
+        }
+        return res.json();
+      })
+      .then((files) => {
+        if (!files) return;
+        const paths = (files as { path: string }[]).map((f) => f.path).filter((p) => p.endsWith(".tex"));
         setTexFiles(paths.length > 0 ? paths.sort() : [project.mainFile]);
       })
       .catch(() => setTexFiles([project.mainFile]));
-  }, [open, project]);
+  }, [open, project, isPending, isAuthenticated, onClose]);
 
-  if (!open) return null;
+  if (!open || isPending || !isAuthenticated) return null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -73,6 +90,11 @@ export function ProjectSettingsDialog({
     });
 
     if (!res.ok) {
+      if (res.status === 401) {
+        onClose();
+        leaveForLogin(`/project/${project.id}`);
+        return;
+      }
       const data = await res.json();
       setError(typeof data.error === "string" ? data.error : "Failed to save settings");
       setSaving(false);

@@ -13,6 +13,8 @@ import type { Project } from "@/lib/schema";
 import { useUiFeedback } from "@/components/ui-feedback";
 import { cn } from "@/components/ui/cn";
 import { CHROME_MENU_ITEM } from "@/lib/chrome-interactive";
+import { leaveForLogin } from "@/lib/auth-redirect";
+import { useRequireSession } from "@/lib/use-require-session";
 
 const TEMPLATES = [
   { id: "blank", name: "Blank Article", desc: "Simple article with sections" },
@@ -23,6 +25,7 @@ const TEMPLATES = [
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { isAuthenticated } = useRequireSession({ loginNext: "/dashboard" });
   const { confirm, notice } = useUiFeedback();
   const [owned, setOwned] = useState<Project[]>([]);
   const [shared, setShared] = useState<(Project & { memberRole?: string })[]>([]);
@@ -41,18 +44,31 @@ export default function DashboardPage() {
   const loadProjects = useCallback(async () => {
     const res = await fetch("/api/projects");
     if (res.status === 401) {
-      router.push("/login");
+      setOwned([]);
+      setShared([]);
+      setLoading(false);
+      leaveForLogin("/dashboard");
       return;
     }
     const data = await res.json();
     setOwned(data.owned || []);
     setShared(data.shared || []);
     setLoading(false);
-  }, [router]);
+  }, []);
 
   useEffect(() => {
-    loadProjects();
-  }, [loadProjects]);
+    if (!isAuthenticated) {
+      setOwned([]);
+      setShared([]);
+      setSettingsProject(null);
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadProjects();
+    }
+  }, [isAuthenticated, loadProjects]);
 
   async function createProject(e: React.FormEvent) {
     e.preventDefault();
@@ -166,6 +182,14 @@ export default function DashboardPage() {
     setSettingsProject(null);
   }
 
+  function openProjectSettings(project: Project) {
+    if (!isAuthenticated) {
+      leaveForLogin("/dashboard");
+      return;
+    }
+    setSettingsProject(project);
+  }
+
   const activeOwned = owned.filter((p) => !p.archived);
   const archivedOwned = owned.filter((p) => p.archived);
   const hasProjectLists =
@@ -177,6 +201,10 @@ export default function DashboardPage() {
     <div className="min-h-screen">
       <Nav />
       <main className="max-w-4xl mx-auto px-4 py-8">
+        {!isAuthenticated ? (
+          <p className="text-ink-muted">Loading...</p>
+        ) : (
+          <>
         <div className="flex items-center justify-between mb-8">
           <h1 className="font-serif text-2xl font-semibold">Projects</h1>
           <div className="flex gap-2">
@@ -212,7 +240,7 @@ export default function DashboardPage() {
                           onArchive={archiveProject}
                           onDuplicate={duplicateProject}
                           onDelete={deleteProject}
-                          onSettings={setSettingsProject}
+                          onSettings={openProjectSettings}
                         />
                       ))}
                     </div>
@@ -230,7 +258,7 @@ export default function DashboardPage() {
                           onArchive={archiveProject}
                           onDuplicate={duplicateProject}
                           onDelete={deleteProject}
-                          onSettings={setSettingsProject}
+                          onSettings={openProjectSettings}
                         />
                       ))}
                     </div>
@@ -276,9 +304,11 @@ export default function DashboardPage() {
             )}
           </>
         )}
+          </>
+        )}
       </main>
 
-      {showImport && (
+      {isAuthenticated && showImport && (
         <div className="fixed inset-0 bg-ink/20 flex items-center justify-center z-50 p-4">
           <div className="bg-surface rounded-lg border border-border p-6 w-full max-w-md shadow-lg">
             <h2 className="font-serif text-xl font-semibold mb-4">Import from zip</h2>
@@ -322,7 +352,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {showCreate && (
+      {isAuthenticated && showCreate && (
         <div className="fixed inset-0 bg-ink/20 flex items-center justify-center z-50 p-4">
           <div className="bg-surface rounded-lg border border-border p-6 w-full max-w-md shadow-lg">
             <h2 className="font-serif text-xl font-semibold mb-4">New project</h2>
@@ -360,7 +390,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {settingsProject && (
+      {isAuthenticated && settingsProject && (
         <ProjectSettingsDialog
           project={settingsProject}
           open={!!settingsProject}

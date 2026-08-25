@@ -5,6 +5,19 @@ import DashboardPage from "@/app/dashboard/page";
 import { UiFeedbackProvider } from "@/components/ui-feedback";
 import type { Project } from "@/lib/schema";
 
+const leaveForLogin = vi.hoisted(() => vi.fn());
+const mockUseRequireSession = vi.hoisted(() =>
+  vi.fn(() => ({ isAuthenticated: true }))
+);
+
+vi.mock("@/lib/auth-redirect", () => ({
+  leaveForLogin,
+}));
+
+vi.mock("@/lib/use-require-session", () => ({
+  useRequireSession: (...args: unknown[]) => mockUseRequireSession(...args),
+}));
+
 vi.mock("@/components/nav", () => ({
   Nav: () => <nav data-testid="nav" />,
 }));
@@ -47,6 +60,8 @@ function renderDashboard() {
 
 describe("Dashboard destructive actions", () => {
   beforeEach(() => {
+    leaveForLogin.mockReset();
+    mockUseRequireSession.mockReturnValue({ isAuthenticated: true });
     vi.restoreAllMocks();
     vi.spyOn(window, "confirm").mockImplementation(() => true);
     vi.spyOn(global, "fetch").mockResolvedValue({
@@ -100,6 +115,8 @@ describe("Dashboard destructive actions", () => {
 
 describe("Dashboard archived projects", () => {
   beforeEach(() => {
+    leaveForLogin.mockReset();
+    mockUseRequireSession.mockReturnValue({ isAuthenticated: true });
     vi.restoreAllMocks();
     vi.spyOn(window, "confirm").mockImplementation(() => true);
     vi.spyOn(global, "fetch").mockResolvedValue({
@@ -185,5 +202,43 @@ describe("Dashboard archived projects", () => {
     expect(window.confirm).not.toHaveBeenCalled();
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
     expect(screen.getByText("Are you sure you want to unarchive this project?")).toBeInTheDocument();
+  });
+});
+
+describe("Dashboard session loss", () => {
+  beforeEach(() => {
+    leaveForLogin.mockReset();
+    mockUseRequireSession.mockReturnValue({ isAuthenticated: true });
+    vi.restoreAllMocks();
+  });
+
+  it("clears project lists and redirects on 401", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({}),
+    } as Response);
+
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(leaveForLogin).toHaveBeenCalledWith("/dashboard");
+    });
+
+    expect(screen.queryByText("Thesis Draft")).not.toBeInTheDocument();
+  });
+
+  it("does not render project lists when unauthenticated", () => {
+    mockUseRequireSession.mockReturnValue({ isAuthenticated: false });
+    vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ owned: [sampleProject], shared: [] }),
+    } as Response);
+
+    renderDashboard();
+
+    expect(screen.queryByText("Thesis Draft")).not.toBeInTheDocument();
+    expect(screen.getByText("Loading...")).toBeInTheDocument();
   });
 });

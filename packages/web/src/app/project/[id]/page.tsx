@@ -56,6 +56,8 @@ import {
 } from "@/lib/chrome-interactive";
 import { cn } from "@/components/ui/cn";
 import { useMediaQuery } from "@/lib/use-media-query";
+import { leaveForLogin } from "@/lib/auth-redirect";
+import { useRequireSession } from "@/lib/use-require-session";
 import {
   Play,
   Share2,
@@ -121,6 +123,7 @@ export default function ProjectPage() {
   const router = useRouter();
   const { confirm, notice } = useUiFeedback();
   const projectId = params.id as string;
+  const { isAuthenticated } = useRequireSession({ loginNext: `/project/${projectId}` });
 
   const [project, setProject] = useState<Project | null>(null);
   const [files, setFiles] = useState<FileNode[]>([]);
@@ -230,7 +233,9 @@ export default function ProjectPage() {
     ]);
 
     if (projRes.status === 401) {
-      router.push("/login");
+      setProject(null);
+      setFiles([]);
+      leaveForLogin(`/project/${projectId}`);
       return;
     }
     if (projRes.status === 404) {
@@ -267,11 +272,17 @@ export default function ProjectPage() {
       );
       setActiveFile(preferred?.path || firstSelectable?.path || fileList[0].path);
     }
-  }, [projectId, router, activeFile]);
+  }, [projectId, activeFile]);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      setProject(null);
+      setFiles([]);
+      setShowSettings(false);
+      return;
+    }
     loadProject();
-  }, [loadProject]);
+  }, [isAuthenticated, loadProject]);
 
   useEffect(() => {
     collabTokenRef.current = collabToken;
@@ -892,7 +903,7 @@ export default function ProjectPage() {
     );
   }
 
-  if (!project) {
+  if (!isAuthenticated || !project) {
     return (
       <div className="flex items-center justify-center h-[100dvh] text-ink-muted font-serif">
         Loading manuscript…
@@ -1180,7 +1191,7 @@ export default function ProjectPage() {
         />
       )}
 
-      {showSettings && project && (
+      {isAuthenticated && showSettings && project && (
         <ProjectSettingsDialog
           project={project}
           open={showSettings}

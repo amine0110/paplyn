@@ -1,8 +1,11 @@
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Nav } from "@/components/nav";
+
+const signOutAndLeave = vi.hoisted(() => vi.fn());
+const useSession = vi.hoisted(() => vi.fn());
 
 vi.mock("next/image", () => ({
   default: (props: React.ImgHTMLAttributes<HTMLImageElement>) => (
@@ -11,13 +14,18 @@ vi.mock("next/image", () => ({
   ),
 }));
 
+vi.mock("@/lib/auth-redirect", () => ({
+  signOutAndLeave,
+}));
+
 vi.mock("@/lib/auth-client", () => ({
-  useSession: () => ({ data: null }),
-  signOut: vi.fn(),
+  useSession: () => useSession(),
 }));
 
 describe("Nav", () => {
   beforeEach(() => {
+    signOutAndLeave.mockReset();
+    useSession.mockReturnValue({ data: null, isPending: false });
     Object.defineProperty(window, "matchMedia", {
       writable: true,
       value: vi.fn().mockImplementation((query: string) => ({
@@ -42,5 +50,21 @@ describe("Nav", () => {
 
     expect(screen.getByRole("group", { name: "Theme" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Theme: /i })).toBeInTheDocument();
+  });
+
+  it("sign out leaves the app via a hard redirect helper", () => {
+    useSession.mockReturnValue({
+      data: { user: { id: "u1", email: "a@b.com", name: "A" } },
+      isPending: false,
+    });
+
+    render(
+      <ThemeProvider>
+        <Nav />
+      </ThemeProvider>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    expect(signOutAndLeave).toHaveBeenCalledOnce();
   });
 });

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useSession, updateUser, changePassword } from "@/lib/auth-client";
+import { updateUser, changePassword } from "@/lib/auth-client";
+import { useRequireSession } from "@/lib/use-require-session";
 import { Nav } from "@/components/nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,7 @@ import {
 } from "@/lib/profile-validation";
 
 export default function SettingsPage() {
-  const router = useRouter();
-  const { data: session, isPending } = useSession();
+  const { session, isPending, isAuthenticated } = useRequireSession({ loginNext: "/settings" });
 
   const [name, setName] = useState("");
   const [profileMessage, setProfileMessage] = useState("");
@@ -34,11 +33,6 @@ export default function SettingsPage() {
   const [passwordError, setPasswordError] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
 
-  useEffect(() => {
-    if (!isPending && !session?.user) {
-      router.push("/login?next=/settings");
-    }
-  }, [session, isPending, router]);
 
   useEffect(() => {
     if (session?.user?.name) {
@@ -109,7 +103,7 @@ export default function SettingsPage() {
     }
   }
 
-  if (isPending || !session?.user) {
+  if (isPending || !isAuthenticated || !session?.user) {
     return (
       <div className="min-h-screen">
         <Nav />
@@ -117,6 +111,8 @@ export default function SettingsPage() {
       </div>
     );
   }
+
+  const user = session.user;
 
   return (
     <div className="min-h-screen">
@@ -140,7 +136,7 @@ export default function SettingsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" value={session.user.email || ""} disabled />
+                  <Input id="email" value={user.email || ""} disabled />
                   <p className="text-xs text-ink-muted">
                     Email cannot be changed here. Contact your administrator if you need to update it.
                   </p>

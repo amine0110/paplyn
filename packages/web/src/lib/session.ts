@@ -10,10 +10,12 @@ export async function getSession() {
   return session;
 }
 
-export async function requireAuth(): Promise<{ user: User; session: NonNullable<Awaited<ReturnType<typeof getSession>>> }> {
+export async function requireAuth(
+  nextPath?: string
+): Promise<{ user: User; session: NonNullable<Awaited<ReturnType<typeof getSession>>> }> {
   const session = await getSession();
   if (!session?.user) {
-    redirect("/login");
+    redirect(nextPath ? `/login?next=${encodeURIComponent(nextPath)}` : "/login");
   }
   return { user: session.user as User, session };
 }
