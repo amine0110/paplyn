@@ -16,12 +16,14 @@ const OPTIONS: { value: ThemePreference; label: string; icon: typeof Sun }[] = [
   { value: "system", label: "System", icon: Monitor },
 ];
 
+const CYCLE_ORDER: ThemePreference[] = ["light", "dark", "system"];
+
 interface ThemeToggleProps {
   compact?: boolean;
   className?: string;
 }
 
-export function ThemeToggle({ compact = false, className }: ThemeToggleProps) {
+function ThemeSegmentGroup({ compact, className }: { compact: boolean; className?: string }) {
   const { theme, setTheme } = useTheme();
 
   return (
@@ -50,5 +52,40 @@ export function ThemeToggle({ compact = false, className }: ThemeToggleProps) {
         </button>
       ))}
     </div>
+  );
+}
+
+function ThemeCycleButton({ className }: { className?: string }) {
+  const { theme, setTheme } = useTheme();
+  const current = OPTIONS.find((o) => o.value === theme) ?? OPTIONS[0];
+  const Icon = current.icon;
+
+  function cycleTheme() {
+    const idx = CYCLE_ORDER.indexOf(theme);
+    setTheme(CYCLE_ORDER[(idx + 1) % CYCLE_ORDER.length]);
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={cycleTheme}
+      className={cn(
+        "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border border-border bg-paper text-ink-muted transition-colors hover:bg-accent/15 hover:text-ink dark:hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper",
+        className
+      )}
+      aria-label={`Theme: ${current.label}. Tap to switch.`}
+      title={`Theme: ${current.label}`}
+    >
+      <Icon className="h-4 w-4" />
+    </button>
+  );
+}
+
+export function ThemeToggle({ compact = false, className }: ThemeToggleProps) {
+  return (
+    <>
+      <ThemeCycleButton className={cn("md:hidden", className)} />
+      <ThemeSegmentGroup compact={compact} className={cn("hidden md:inline-flex", className)} />
+    </>
   );
 }

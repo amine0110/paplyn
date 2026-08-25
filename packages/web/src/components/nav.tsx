@@ -11,12 +11,12 @@ export function Nav() {
 
   return (
     <header className="border-b border-border bg-surface/80 backdrop-blur-sm sticky top-0 z-50">
-      <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-        <Link href="/" className="flex items-center">
+      <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-2 min-w-0">
+        <Link href="/" className="flex items-center shrink-0 min-w-0">
           <PlicumWordmark className="h-10" priority />
         </Link>
 
-        <nav className="flex items-center gap-3">
+        <nav className="flex items-center gap-2 sm:gap-3 shrink min-w-0">
           <ThemeToggle compact />
           {session?.user ? (
             <>

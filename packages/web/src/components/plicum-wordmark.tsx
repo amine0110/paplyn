@@ -27,16 +27,21 @@ type PlicumWordmarkProps = {
   /** Tailwind height class for the mark (text scales alongside). */
   className?: string;
   priority?: boolean;
+  /** When true, always show mark + name (e.g. marketing). Default: responsive chrome. */
+  showName?: boolean;
 };
 
 /**
  * Header lockup: folded-P mark at natural aspect plus product name as text.
  * Does not use the wide wordmark PNG cards in chrome.
+ *
+ * Below `sm`, only the mark is shown so the name never clips mid-word on narrow
+ * viewports. From `sm` up, mark + full product name are always shown together.
  */
-export function PlicumWordmark({ className, priority }: PlicumWordmarkProps) {
+export function PlicumWordmark({ className, priority, showName = false }: PlicumWordmarkProps) {
   return (
     <span
-      className={cn("inline-flex items-center gap-2.5 shrink-0", className)}
+      className={cn("inline-flex items-center gap-2.5 shrink-0 min-w-0", className)}
       aria-label={PRODUCT_NAME}
     >
       <Image
@@ -48,7 +53,12 @@ export function PlicumWordmark({ className, priority }: PlicumWordmarkProps) {
         className="h-full w-auto shrink-0"
         aria-hidden
       />
-      <span className="font-serif text-[1.125em] font-semibold leading-none tracking-tight text-navy">
+      <span
+        className={cn(
+          "font-serif text-[1.125em] font-semibold leading-none tracking-tight text-navy whitespace-nowrap shrink-0",
+          !showName && "hidden sm:inline"
+        )}
+      >
         {PRODUCT_NAME}
       </span>
     </span>

@@ -215,6 +215,13 @@ export default function ProjectPage() {
     [updateLayoutMode]
   );
 
+  const openFromMobileMenu = useCallback((open: () => void) => {
+    setShowMobileMenu(false);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => open());
+    });
+  }, []);
+
   const loadProject = useCallback(async () => {
     const [projRes, filesRes, collabRes] = await Promise.all([
       fetch(`/api/projects/${projectId}`),
@@ -962,15 +969,19 @@ export default function ProjectPage() {
             <span className="hidden sm:inline">Share</span>
           </button>
           <div className="relative sm:hidden">
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
+              type="button"
               onClick={() => setShowMobileMenu(!showMobileMenu)}
+              className={cn(
+                CHROME_ICON_BTN_MD,
+                "flex h-11 w-11 items-center justify-center"
+              )}
               aria-expanded={showMobileMenu}
               aria-haspopup="menu"
+              aria-label="More actions"
             >
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </Button>
+              <MoreHorizontal className="h-5 w-5" />
+            </button>
             {showMobileMenu && (
               <>
                 <div
@@ -985,11 +996,8 @@ export default function ProjectPage() {
                   <button
                     type="button"
                     role="menuitem"
-                    className={`${CHROME_MENU_ITEM} px-3 py-2 text-sm`}
-                    onClick={() => {
-                      setShowMobileMenu(false);
-                      setShowShare(true);
-                    }}
+                    className={cn(CHROME_MENU_ITEM, "w-full px-3 py-2.5 text-sm text-left")}
+                    onClick={() => openFromMobileMenu(() => setShowShare(true))}
                   >
                     Share
                   </button>
@@ -997,11 +1005,8 @@ export default function ProjectPage() {
                     <button
                       type="button"
                       role="menuitem"
-                      className={`${CHROME_MENU_ITEM} px-3 py-2 text-sm`}
-                      onClick={() => {
-                        setShowMobileMenu(false);
-                        setShowHistory(true);
-                      }}
+                      className={cn(CHROME_MENU_ITEM, "w-full px-3 py-2.5 text-sm text-left")}
+                      onClick={() => openFromMobileMenu(() => setShowHistory(true))}
                     >
                       History
                     </button>
@@ -1010,11 +1015,8 @@ export default function ProjectPage() {
                     <button
                       type="button"
                       role="menuitem"
-                      className={`${CHROME_MENU_ITEM} px-3 py-2 text-sm`}
-                      onClick={() => {
-                        setShowMobileMenu(false);
-                        setShowSettings(true);
-                      }}
+                      className={cn(CHROME_MENU_ITEM, "w-full px-3 py-2.5 text-sm text-left")}
+                      onClick={() => openFromMobileMenu(() => setShowSettings(true))}
                     >
                       Settings
                     </button>

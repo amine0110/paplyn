@@ -41,5 +41,6 @@ describe("Nav", () => {
     );
 
     expect(screen.getByRole("group", { name: "Theme" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Theme: /i })).toBeInTheDocument();
   });
 });

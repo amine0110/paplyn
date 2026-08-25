@@ -16,8 +16,11 @@ describe("workspace chrome class usage", () => {
     expect(src).toContain("CHROME_SEGMENT_ACTIVE");
   });
 
-  it("theme-toggle inactive options use CHROME_SEGMENT_INACTIVE", () => {
+  it("theme-toggle exposes a mobile cycle control and md+ segment group", () => {
     const src = readSource("components/theme-toggle.tsx");
+    expect(src).toContain("ThemeCycleButton");
+    expect(src).toContain("md:hidden");
+    expect(src).toContain("hidden md:inline-flex");
     expect(src).toContain("CHROME_SEGMENT_INACTIVE");
     expect(src).toContain("CHROME_SEGMENT_ACTIVE");
   });
@@ -37,6 +40,32 @@ describe("workspace chrome class usage", () => {
     expect(src).toMatch(/History[\s\S]*CHROME_TOOLBAR_BTN|CHROME_TOOLBAR_BTN[\s\S]*History/);
     expect(src).toMatch(/Settings[\s\S]*CHROME_TOOLBAR_BTN|CHROME_TOOLBAR_BTN[\s\S]*Settings/);
     expect(src).toMatch(/Share[\s\S]*CHROME_TOOLBAR_BTN|CHROME_TOOLBAR_BTN[\s\S]*Share/);
+  });
+
+  it("project topbar mobile overflow menu uses a 44px tap target and deferred dialog open", () => {
+    const src = readSource("app/project/[id]/page.tsx");
+    expect(src).toContain("openFromMobileMenu");
+    expect(src).toContain('aria-label="More actions"');
+    expect(src).toMatch(/h-11 w-11/);
+    expect(src).toContain("openFromMobileMenu(() => setShowShare(true))");
+    expect(src).toContain("openFromMobileMenu(() => setShowHistory(true))");
+    expect(src).toContain("openFromMobileMenu(() => setShowSettings(true))");
+  });
+
+  it("dashboard project rows use a mobile actions menu and pointer-events-none hover reveal on md+", () => {
+    const src = readSource("app/dashboard/page.tsx");
+    expect(src).toContain('aria-label="Project actions"');
+    expect(src).toContain("pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto");
+    expect(src).toContain("hidden md:flex");
+    expect(src).toContain("relative md:hidden");
+  });
+
+  it("pdf preview defaults to 50% zoom on mobile via getDefaultPdfScale", () => {
+    const previewSrc = readSource("components/pdf-preview.tsx");
+    expect(previewSrc).toContain("getDefaultPdfScale");
+    const scaleSrc = readSource("lib/pdf-preview-scale.ts");
+    expect(scaleSrc).toContain("0.5");
+    expect(scaleSrc).toContain("0.95");
   });
 
   it("outline collapse controls use CHROME_ICON_BTN_SM", () => {
