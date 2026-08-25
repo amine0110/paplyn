@@ -9,14 +9,14 @@ import { PRODUCT_NAME } from "@/lib/product";
 
 const APP_URL = "https://app.paplyn.test";
 
-function expectBrandedWordmarkHeader(html: string, appUrl = APP_URL): void {
+function expectBrandedHeader(html: string, appUrl = APP_URL): void {
   const base = appUrl.replace(/\/$/, "");
-  expect(html).toContain(`${base}/brand/paplyn-wordmark-light.png`);
-  expect(html).toContain(`alt="${PRODUCT_NAME}"`);
-  expect(html).toContain('align="center"');
-  expect(html).toContain("display:block;margin:0 auto");
-  expect(html).not.toMatch(/width:28px;height:28px/);
-  expect(html).not.toMatch(/Georgia.*>P</);
+  expect(html).toContain(`${base}/brand/paplyn-mark.png`);
+  expect(html).toContain(`>${PRODUCT_NAME}</span>`);
+  expect(html).toContain('width="32"');
+  expect(html).toContain('height="32"');
+  expect(html).not.toContain("/brand/paplyn-wordmark-light.png");
+  expect(html).not.toContain("/brand/paplyn-wordmark-dark.png");
 }
 
 describe("email templates", () => {
@@ -36,13 +36,13 @@ describe("email templates", () => {
     expect(html).toContain("Dissertation Draft");
     expect(html).toContain(inviteUrl);
     expect(html).toContain("Open the manuscript");
-    expectBrandedWordmarkHeader(html);
+    expectBrandedHeader(html);
     expect(text).toContain("Dissertation Draft");
     expect(text).toContain(inviteUrl);
     expect(text).toContain("Can edit");
   });
 
-  it("renders project-added email with wordmark and project URL", () => {
+  it("renders project-added email with mark lockup and project URL", () => {
     const projectUrl = "https://app.paplyn.test/project/proj-1";
     const { subject, html, text } = renderProjectAddedEmail({
       ownerName: "Ada Lovelace",
@@ -57,11 +57,11 @@ describe("email templates", () => {
     );
     expect(html).toContain("added you to");
     expect(html).toContain(projectUrl);
-    expectBrandedWordmarkHeader(html);
+    expectBrandedHeader(html);
     expect(text).toContain(projectUrl);
   });
 
-  it("renders reset password email with branded wordmark header", () => {
+  it("renders reset password email with branded mark header", () => {
     const resetUrl = "https://app.paplyn.test/reset/token-abc";
     const { subject, html, text } = renderResetPasswordEmail({
       userName: "Ada Lovelace",
@@ -72,11 +72,11 @@ describe("email templates", () => {
     expect(subject).toBe(`Reset your ${PRODUCT_NAME} password`);
     expect(html).toContain("Reset password");
     expect(html).toContain(resetUrl);
-    expectBrandedWordmarkHeader(html);
+    expectBrandedHeader(html);
     expect(text).toContain(resetUrl);
   });
 
-  it("builds wordmark URL from appUrl without trailing slash", () => {
+  it("builds mark URL from appUrl without trailing slash", () => {
     const { html } = renderInviteEmail({
       ownerName: "Owner",
       projectName: "Paper",
@@ -85,7 +85,7 @@ describe("email templates", () => {
       appUrl: "https://app.paplyn.test/",
     });
 
-    expect(html).toContain("https://app.paplyn.test/brand/paplyn-wordmark-light.png");
+    expect(html).toContain("https://app.paplyn.test/brand/paplyn-mark.png");
     expect(html).not.toContain("https://app.paplyn.test//brand/");
   });
 
@@ -102,7 +102,7 @@ describe("email templates", () => {
     expect(html).not.toContain("<script>");
     expect(html).toContain(escapeHtml(maliciousTitle));
     expect(html).toContain("&lt;evil&gt;");
-    expectBrandedWordmarkHeader(html);
+    expectBrandedHeader(html);
     expect(text).toContain(maliciousTitle);
   });
 });
