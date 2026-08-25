@@ -3,11 +3,14 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "./db";
 import * as schema from "./schema";
 import { config } from "./config";
+import { getGoogleAuthConfig } from "./auth-providers";
 import { getSelfHostedTrustedOrigins, getServerAppUrl } from "./urls";
 import { sendPlicumEmail } from "./email/send";
 import { renderResetPasswordEmail } from "./email/templates";
 import { PRODUCT_NAME } from "./product";
 import { eq, count } from "drizzle-orm";
+
+const googleAuth = getGoogleAuthConfig();
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -19,6 +22,19 @@ export const auth = betterAuth({
       verification: schema.verification,
     },
   }),
+  account: {
+    accountLinking: {
+      enabled: true,
+    },
+  },
+  socialProviders: googleAuth
+    ? {
+        google: {
+          clientId: googleAuth.clientId,
+          clientSecret: googleAuth.clientSecret,
+        },
+      }
+    : undefined,
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 8,
