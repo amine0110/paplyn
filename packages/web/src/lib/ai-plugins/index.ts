@@ -1,8 +1,16 @@
+import { arxivPlugin } from "./arxiv";
+import { citeDoiPlugin } from "./cite-doi";
+import { githubImportPlugin } from "./github-import";
 import { semanticScholarPlugin } from "./semantic-scholar";
 import type { AiPlugin, ResolvedAiPlugins } from "./types";
 
 /** Register new plugins here — one file per capability. */
-const ALL_PLUGINS: AiPlugin[] = [semanticScholarPlugin];
+const ALL_PLUGINS: AiPlugin[] = [
+  semanticScholarPlugin,
+  citeDoiPlugin,
+  arxivPlugin,
+  githubImportPlugin,
+];
 
 export function listAiPlugins(): AiPlugin[] {
   return [...ALL_PLUGINS];
@@ -42,10 +50,16 @@ export function getPluginByToolName(toolName: string): AiPlugin | undefined {
 
 export function pluginDisplayName(
   plugin: AiPlugin,
-  options?: { source?: "semantic-scholar" | "openalex" }
+  options?: { source?: string }
 ): string {
   if (plugin.id === "semantic-scholar" && options?.source === "openalex") {
     return "OpenAlex";
+  }
+  if (plugin.id === "cite-doi" && options?.source === "openalex") {
+    return "OpenAlex";
+  }
+  if (plugin.id === "cite-doi" && options?.source === "crossref") {
+    return "Crossref";
   }
   return plugin.name;
 }

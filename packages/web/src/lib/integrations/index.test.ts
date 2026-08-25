@@ -8,6 +8,9 @@ describe("getLandingIntegrations", () => {
     const ids = items.map((item) => item.id);
     expect(ids).toContain("latex");
     expect(ids).toContain("semantic-scholar");
+    expect(ids).toContain("cite-doi");
+    expect(ids).toContain("arxiv");
+    expect(ids).toContain("github-import");
     expect(ids).toContain("groq");
   });
 

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProjectSettingsDialog } from "@/components/project-settings-dialog";
-import { Plus, Archive, ArchiveRestore, FileText, Copy, Settings, Trash2, Upload, MoreHorizontal } from "lucide-react";
+import { Plus, Archive, ArchiveRestore, FileText, Copy, Settings, Trash2, Upload, MoreHorizontal, Github } from "lucide-react";
 import type { Project } from "@/lib/schema";
 import { useUiFeedback } from "@/components/ui-feedback";
 import { cn } from "@/components/ui/cn";
@@ -32,12 +32,16 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showGitHubImport, setShowGitHubImport] = useState(false);
   const [name, setName] = useState("");
   const [importName, setImportName] = useState("");
   const [importZip, setImportZip] = useState<File | null>(null);
+  const [githubImportName, setGithubImportName] = useState("");
+  const [githubRepo, setGithubRepo] = useState("");
   const [template, setTemplate] = useState("blank");
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [importingGitHub, setImportingGitHub] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [settingsProject, setSettingsProject] = useState<Project | null>(null);
 
@@ -119,6 +123,48 @@ export default function DashboardPage() {
     setImportName("");
     setImportZip(null);
     setShowImport(true);
+  }
+
+  function openGitHubImportDialog() {
+    setGithubImportName("");
+    setGithubRepo("");
+    setShowGitHubImport(true);
+  }
+
+  async function importGitHubProject(e: React.FormEvent) {
+    e.preventDefault();
+    if (!githubRepo.trim()) {
+      notice("Enter a GitHub owner/repo or URL");
+      return;
+    }
+
+    setImportingGitHub(true);
+    const res = await fetch("/api/projects/import-github", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: githubImportName, repo: githubRepo }),
+    });
+
+    if (res.ok) {
+      const project = await res.json();
+      router.push(`/project/${project.id}`);
+    } else {
+      const err = await res.json();
+      notice(err.error || "Failed to import GitHub repository");
+    }
+    setImportingGitHub(false);
+  }
+
+  function handleGitHubRepoChange(value: string) {
+    setGithubRepo(value);
+    if (!githubImportName.trim()) {
+      const parsed = value.trim().match(/github\.com\/[^/]+\/([^/\s#?]+)/i);
+      const slug = parsed?.[1]?.replace(/\.git$/i, "");
+      if (slug) setGithubImportName(slug);
+      else if (value.includes("/") && !value.includes("://")) {
+        setGithubImportName(value.split("/").pop()?.replace(/\.git$/i, "") ?? "");
+      }
+    }
   }
 
   function handleImportZipChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -208,6 +254,9 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between mb-8">
           <h1 className="font-serif text-2xl font-semibold">Projects</h1>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={openGitHubImportDialog}>
+              <Github className="h-4 w-4" /> Import GitHub
+            </Button>
             <Button variant="outline" onClick={openImportDialog}>
               <Upload className="h-4 w-4" /> Import zip
             </Button>
@@ -307,6 +356,47 @@ export default function DashboardPage() {
           </>
         )}
       </main>
+
+      {isAuthenticated && showGitHubImport && (
+        <div className="fixed inset-0 bg-ink/20 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface rounded-lg border border-border p-6 w-full max-w-md shadow-lg">
+            <h2 className="font-serif text-xl font-semibold mb-4">Import from GitHub</h2>
+            <p className="text-sm text-ink-muted mb-4">
+              Open a public repository with .tex, .bib, and figure files. Private repos are not supported.
+            </p>
+            <form onSubmit={importGitHubProject} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="github-repo">Repository</Label>
+                <Input
+                  id="github-repo"
+                  value={githubRepo}
+                  onChange={(e) => handleGitHubRepoChange(e.target.value)}
+                  required
+                  placeholder="owner/repo or https://github.com/owner/repo"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="github-import-name">Project name</Label>
+                <Input
+                  id="github-import-name"
+                  value={githubImportName}
+                  onChange={(e) => setGithubImportName(e.target.value)}
+                  required
+                  placeholder="My Paper"
+                />
+              </div>
+              <div className="flex gap-2 justify-end pt-2">
+                <Button type="button" variant="ghost" onClick={() => setShowGitHubImport(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={importingGitHub}>
+                  {importingGitHub ? "Importing..." : "Import"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {isAuthenticated && showImport && (
         <div className="fixed inset-0 bg-ink/20 flex items-center justify-center z-50 p-4">

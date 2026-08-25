@@ -24,6 +24,7 @@ import {
   seedYTextIfEmpty,
 } from "@/lib/collab-seed";
 import { buildCollabEditorSyncExtensions } from "@/lib/latex-editor-extensions";
+import { createDoiPasteExtension } from "@/lib/doi-paste-extension";
 import {
   COLLAB_CONNECTION_LOST_MS,
   COLLAB_SAVE_MAX_WAIT_MS,
@@ -71,6 +72,7 @@ interface LatexEditorProps {
   onStatsChange?: (stats: DocumentStats) => void;
   onSaveStatusChange?: (status: SaveStatus) => void;
   jumpToLine?: number | null;
+  onDoiPaste?: (doi: string) => void;
 }
 
 export function LatexEditor({
@@ -85,6 +87,7 @@ export function LatexEditor({
   onStatsChange,
   onSaveStatusChange,
   jumpToLine,
+  onDoiPaste,
 }: LatexEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -301,6 +304,7 @@ export function LatexEditor({
         },
       }),
       spellcheckCompartment.of(spellcheckExtensions(readStoredSpellcheckEnabled())),
+      ...(onDoiPaste && canEdit ? [createDoiPasteExtension(onDoiPaste)] : []),
     ];
 
     const state = EditorState.create({
@@ -330,7 +334,7 @@ export function LatexEditor({
       provider?.destroy();
       ydoc.destroy();
     };
-  }, [filePath, projectId, collabToken, collabBaseUrl, canEdit, isDark, onSaveStatusChange]);
+  }, [filePath, projectId, collabToken, collabBaseUrl, canEdit, isDark, onSaveStatusChange, onDoiPaste]);
 
   useEffect(() => {
     if (jumpToLine && viewRef.current && jumpToLine > 0) {

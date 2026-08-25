@@ -36,6 +36,8 @@ import { buildCompileFixNoEditMessage } from "@/lib/ai-compile-fix-failure";
 import { detectFixCompileIntent } from "@/lib/ai-compile-fix-intent";
 import { getPluginActionPrompt, resolveAiPlugins } from "@/lib/ai-plugins";
 import {
+  collectArxivPapersFromToolResults,
+  collectDoiCitationsFromToolResults,
   collectPapersFromToolResults,
   collectUsedPlugins,
   collectClientActionsFromToolResults,
@@ -621,6 +623,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
         const usedPlugins = collectUsedPlugins(result, plugins);
         const papers = collectPapersFromToolResults(result);
+        const doiCitations = collectDoiCitationsFromToolResults(result);
+        const arxivPapers = collectArxivPapersFromToolResults(result);
         const actions = collectClientActionsFromToolResults(result);
         const appliedActions = toAppliedActionSummaries(actions);
         const toolReads = collectToolReadChips(result);
@@ -632,6 +636,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           content,
           ...(usedPlugins.length > 0 ? { usedPlugins } : {}),
           ...(papers.length > 0 ? { papers } : {}),
+          ...(doiCitations.length > 0 ? { doiCitations } : {}),
+          ...(arxivPapers.length > 0 ? { arxivPapers } : {}),
           ...(actions.length > 0 ? { actions, appliedActions } : {}),
           ...(toolReads.length > 0 ? { toolReads } : {}),
         };

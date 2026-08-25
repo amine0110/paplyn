@@ -82,6 +82,8 @@ export async function consumeAiStream(
           content: event.content,
           ...(event.usedPlugins ? { usedPlugins: event.usedPlugins } : {}),
           ...(event.papers ? { papers: event.papers } : {}),
+          ...(event.doiCitations ? { doiCitations: event.doiCitations } : {}),
+          ...(event.arxivPapers ? { arxivPapers: event.arxivPapers } : {}),
           ...(event.actions ? { actions: event.actions } : {}),
           ...(event.appliedActions ? { appliedActions: event.appliedActions } : {}),
           ...(event.toolReads ? { toolReads: event.toolReads } : {}),

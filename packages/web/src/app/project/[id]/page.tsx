@@ -77,10 +77,11 @@ import { countDocumentStats } from "@/lib/document-stats";
 import type { SaveStatus } from "@/lib/save-status";
 import { saveProjectFile } from "@/lib/save-file";
 import { runCollabSaveFallback } from "@/lib/collab-save-fallback";
-import type { AiPaper } from "@/lib/ai-types";
+import type { AiPaper, DoiCitationPayload } from "@/lib/ai-types";
 import {
   appendBibEntry,
   formatBibtexEntry,
+  mergeBibtexEntry,
   parseBibKeys,
   resolveProjectBibPath,
   suggestCitationKey,
@@ -644,6 +645,87 @@ export default function ProjectPage() {
     onSwitchFile: (path: string) => setActiveFile(path),
   };
 
+  async function applyDoiCitation(result: {
+    bibtex: string;
+    citationKey: string;
+    title: string;
+    source: string;
+  }) {
+    if (!canEdit || !project) return;
+
+    const filePaths = files.map((file) => file.path);
+    const fileContents = Object.fromEntries(files.map((file) => [file.path, file.content]));
+    const bibPath = resolveProjectBibPath({
+      mainFile: project.mainFile,
+      filePaths,
+      fileContents,
+    });
+
+    const existingBib = fileContents[bibPath] ?? "";
+    const { content: updatedBib, merged } = mergeBibtexEntry(
+      existingBib,
+      result.bibtex,
+      result.citationKey
+    );
+
+    if (merged || !existingBib) {
+      await saveFile(bibPath, updatedBib, false);
+    }
+
+    handleInsertAtCursor(`\\cite{${result.citationKey}}`);
+    const sourceLabel = result.source === "openalex" ? "OpenAlex" : "Crossref";
+    notice(`Cited “${result.title}” (${sourceLabel})`);
+  }
+
+  async function handleDoiPaste(doi: string) {
+    if (!canEdit) return;
+
+    const res = await fetch(`/api/projects/${projectId}/integrations/cite-doi`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ doi }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      notice(typeof err.error === "string" ? err.error : "Could not resolve DOI");
+      return;
+    }
+
+    const data = await res.json();
+    await applyDoiCitation(data);
+  }
+
+  async function handleApplyDoiCitation(citation: DoiCitationPayload) {
+    await applyDoiCitation(citation);
+  }
+
+  async function handleImportArxiv(
+    arxivId: string,
+    options?: { attachPdf?: boolean; importSource?: boolean }
+  ) {
+    if (!canEdit) return;
+
+    const res = await fetch(`/api/projects/${projectId}/integrations/arxiv/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        arxivId,
+        attachPdf: options?.attachPdf ?? true,
+        importSource: options?.importSource ?? false,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      notice(typeof err.error === "string" ? err.error : "Failed to import from arXiv");
+      return;
+    }
+
+    await loadProject();
+    notice(`Imported arXiv:${arxivId}`);
+  }
+
   async function handleCitePaper(paper: AiPaper) {
     if (!canEdit || !project) return;
 
@@ -755,6 +837,7 @@ export default function ProjectPage() {
           onStatsChange={setDocumentStats}
           onSaveStatusChange={canEdit ? setSaveStatus : undefined}
           jumpToLine={jumpToLine}
+          onDoiPaste={canEdit ? handleDoiPaste : undefined}
         />
       );
     }
@@ -1135,6 +1218,8 @@ export default function ProjectPage() {
                   onInsert={handleInsertAtCursor}
                   onReplace={handleReplaceSelection}
                   onCitePaper={canEdit ? handleCitePaper : undefined}
+                  onApplyDoiCitation={canEdit ? handleApplyDoiCitation : undefined}
+                  onImportArxiv={canEdit ? handleImportArxiv : undefined}
                   applyActionsContext={canEdit ? aiApplyActionsContext : undefined}
                   onClose={() => setShowAi(false)}
                   variant="sheet"
@@ -1155,6 +1240,8 @@ export default function ProjectPage() {
                   onInsert={handleInsertAtCursor}
                   onReplace={handleReplaceSelection}
                   onCitePaper={canEdit ? handleCitePaper : undefined}
+                  onApplyDoiCitation={canEdit ? handleApplyDoiCitation : undefined}
+                  onImportArxiv={canEdit ? handleImportArxiv : undefined}
                   applyActionsContext={canEdit ? aiApplyActionsContext : undefined}
                   onClose={() => setShowAi(false)}
                   variant="sidebar"

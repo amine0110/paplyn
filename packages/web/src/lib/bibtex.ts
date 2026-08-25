@@ -128,3 +128,16 @@ export function appendBibEntry(bibContent: string, entry: string, key: string): 
   if (!trimmed) return `${entry}\n`;
   return `${trimmed}\n\n${entry}\n`;
 }
+
+/** Merge a BibTeX entry without duplicating the same cite key. */
+export function mergeBibtexEntry(
+  bibContent: string,
+  entry: string,
+  key: string
+): { content: string; merged: boolean } {
+  const keys = parseBibKeys(bibContent);
+  if (keys.has(key)) {
+    return { content: bibContent, merged: false };
+  }
+  return { content: appendBibEntry(bibContent, entry, key), merged: true };
+}

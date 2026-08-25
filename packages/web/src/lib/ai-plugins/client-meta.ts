@@ -15,6 +15,24 @@ export const AI_PLUGIN_CLIENT_META: AiPluginClientMeta[] = [
     toolName: "search_literature",
     loadingLabel: "Searching Semantic Scholar…",
   },
+  {
+    id: "cite-doi",
+    name: "Crossref",
+    toolName: "cite_from_doi",
+    loadingLabel: "Resolving DOI…",
+  },
+  {
+    id: "arxiv",
+    name: "arXiv",
+    toolName: "search_arxiv",
+    loadingLabel: "Searching arXiv…",
+  },
+  {
+    id: "github-import",
+    name: "GitHub",
+    toolName: "parse_github_repo",
+    loadingLabel: "Checking GitHub repo…",
+  },
 ];
 
 export function getClientPluginMetaByToolName(toolName: string): AiPluginClientMeta | undefined {
@@ -22,11 +40,24 @@ export function getClientPluginMetaByToolName(toolName: string): AiPluginClientM
 }
 
 export function loadingLabelForLiteratureAction(action?: string, userMessage?: string): string | null {
+  const lower = (userMessage ?? "").toLowerCase();
+
+  if (/\b10\.\d{4,9}\//.test(userMessage ?? "") || lower.includes("doi")) {
+    return getClientPluginMetaByToolName("cite_from_doi")?.loadingLabel ?? null;
+  }
+
+  if (lower.includes("arxiv")) {
+    return getClientPluginMetaByToolName("search_arxiv")?.loadingLabel ?? null;
+  }
+
+  if (lower.includes("github") && (lower.includes("import") || lower.includes("repo"))) {
+    return getClientPluginMetaByToolName("parse_github_repo")?.loadingLabel ?? null;
+  }
+
   if (action === "find-papers" || action === "citation") {
     return getClientPluginMetaByToolName("search_literature")?.loadingLabel ?? null;
   }
 
-  const lower = (userMessage ?? "").toLowerCase();
   if (
     lower.includes("paper") ||
     lower.includes("literature") ||
