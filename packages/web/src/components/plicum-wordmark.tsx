@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { cn } from "@/components/ui/cn";
+import { PRODUCT_NAME } from "@/lib/product";
 
 /** Public paths for brand assets (see packages/web/public/brand/). */
 export const BRAND = {
@@ -18,7 +19,7 @@ type PlicumWordmarkProps = {
 };
 
 /**
- * Theme-aware Plicum wordmark. Shows the light mark in light mode and the dark
+ * Theme-aware product wordmark. Shows the light mark in light mode and the dark
  * mark in dark mode — never both at once.
  */
 export function PlicumWordmark({ className, priority }: PlicumWordmarkProps) {
@@ -26,7 +27,7 @@ export function PlicumWordmark({ className, priority }: PlicumWordmarkProps) {
     <span className={cn("relative inline-flex shrink-0", className)}>
       <Image
         src={BRAND.wordmarkLight}
-        alt="Plicum"
+        alt={PRODUCT_NAME}
         width={789}
         height={225}
         priority={priority}
@@ -34,7 +35,7 @@ export function PlicumWordmark({ className, priority }: PlicumWordmarkProps) {
       />
       <Image
         src={BRAND.wordmarkDark}
-        alt="Plicum"
+        alt={PRODUCT_NAME}
         width={970}
         height={264}
         priority={priority}

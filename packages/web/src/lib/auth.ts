@@ -4,7 +4,11 @@ import { db } from "./db";
 import * as schema from "./schema";
 import { config } from "./config";
 import { getGoogleAuthConfig } from "./auth-providers";
-import { getSelfHostedTrustedOrigins, getServerAppUrl } from "./urls";
+import {
+  getBrandTrustedOrigins,
+  getSelfHostedTrustedOrigins,
+  getServerAppUrl,
+} from "./urls";
 import { sendPlicumEmail } from "./email/send";
 import { renderResetPasswordEmail } from "./email/templates";
 import { PRODUCT_NAME } from "./product";
@@ -63,7 +67,7 @@ export const auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET || "dev-secret-change-me-in-production",
   trustedOrigins: config.isSelfHosted
     ? (request) => getSelfHostedTrustedOrigins(request)
-    : [config.appUrl],
+    : [...new Set([config.appUrl, ...getBrandTrustedOrigins()])],
   advanced: config.isSelfHosted
     ? { trustedProxyHeaders: true }
     : undefined,

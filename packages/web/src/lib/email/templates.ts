@@ -1,7 +1,7 @@
 import { BRAND } from "@/components/plicum-wordmark";
-import { PRODUCT_NAME } from "@/lib/product";
+import { PRODUCT_NAME, PUBLIC_SITE_URL } from "@/lib/product";
 
-const DEFAULT_APP_URL = "https://plicum.com";
+const DEFAULT_APP_URL = PUBLIC_SITE_URL;
 
 const ACCENT = "#3d8585";
 const INK = "#1c1917";
@@ -30,7 +30,7 @@ function wordmarkHtml(appUrl: string): string {
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
       <tr>
         <td align="center" style="text-align:center;">
-          <img src="${src}" alt="Plicum" width="180" style="display:block;margin:0 auto;height:auto;border:0;outline:none;text-decoration:none;" />
+          <img src="${src}" alt="${escapeHtml(PRODUCT_NAME)}" width="180" style="display:block;margin:0 auto;height:auto;border:0;outline:none;text-decoration:none;" />
         </td>
       </tr>
     </table>

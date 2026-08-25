@@ -5,13 +5,14 @@ import {
   renderProjectAddedEmail,
   renderResetPasswordEmail,
 } from "@/lib/email/templates";
+import { PRODUCT_NAME } from "@/lib/product";
 
-const APP_URL = "https://app.plicum.test";
+const APP_URL = "https://app.paplyn.test";
 
 function expectBrandedWordmarkHeader(html: string, appUrl = APP_URL): void {
   const base = appUrl.replace(/\/$/, "");
   expect(html).toContain(`${base}/brand/plicum-wordmark-light.png`);
-  expect(html).toContain('alt="Plicum"');
+  expect(html).toContain(`alt="${PRODUCT_NAME}"`);
   expect(html).toContain('align="center"');
   expect(html).toContain("display:block;margin:0 auto");
   expect(html).not.toMatch(/width:28px;height:28px/);
@@ -20,7 +21,7 @@ function expectBrandedWordmarkHeader(html: string, appUrl = APP_URL): void {
 
 describe("email templates", () => {
   it("renders invite email with project name, invite URL, and CTA", () => {
-    const inviteUrl = "https://app.plicum.test/invite/inv-123";
+    const inviteUrl = "https://app.paplyn.test/invite/inv-123";
     const { subject, html, text } = renderInviteEmail({
       ownerName: "Ada Lovelace",
       projectName: "Dissertation Draft",
@@ -29,7 +30,9 @@ describe("email templates", () => {
       appUrl: APP_URL,
     });
 
-    expect(subject).toBe("Ada Lovelace invited you to Dissertation Draft on Plicum");
+    expect(subject).toBe(
+      `Ada Lovelace invited you to Dissertation Draft on ${PRODUCT_NAME}`
+    );
     expect(html).toContain("Dissertation Draft");
     expect(html).toContain(inviteUrl);
     expect(html).toContain("Open the manuscript");
@@ -40,7 +43,7 @@ describe("email templates", () => {
   });
 
   it("renders project-added email with wordmark and project URL", () => {
-    const projectUrl = "https://app.plicum.test/project/proj-1";
+    const projectUrl = "https://app.paplyn.test/project/proj-1";
     const { subject, html, text } = renderProjectAddedEmail({
       ownerName: "Ada Lovelace",
       projectName: "Dissertation Draft",
@@ -49,7 +52,9 @@ describe("email templates", () => {
       appUrl: APP_URL,
     });
 
-    expect(subject).toBe("Ada Lovelace added you to Dissertation Draft on Plicum");
+    expect(subject).toBe(
+      `Ada Lovelace added you to Dissertation Draft on ${PRODUCT_NAME}`
+    );
     expect(html).toContain("added you to");
     expect(html).toContain(projectUrl);
     expectBrandedWordmarkHeader(html);
@@ -57,14 +62,14 @@ describe("email templates", () => {
   });
 
   it("renders reset password email with branded wordmark header", () => {
-    const resetUrl = "https://app.plicum.test/reset/token-abc";
+    const resetUrl = "https://app.paplyn.test/reset/token-abc";
     const { subject, html, text } = renderResetPasswordEmail({
       userName: "Ada Lovelace",
       resetUrl,
       appUrl: APP_URL,
     });
 
-    expect(subject).toBe("Reset your Plicum password");
+    expect(subject).toBe(`Reset your ${PRODUCT_NAME} password`);
     expect(html).toContain("Reset password");
     expect(html).toContain(resetUrl);
     expectBrandedWordmarkHeader(html);
@@ -76,12 +81,12 @@ describe("email templates", () => {
       ownerName: "Owner",
       projectName: "Paper",
       roleLabel: "Can view",
-      inviteUrl: "https://app.plicum.test/invite/inv-1",
-      appUrl: "https://app.plicum.test/",
+      inviteUrl: "https://app.paplyn.test/invite/inv-1",
+      appUrl: "https://app.paplyn.test/",
     });
 
-    expect(html).toContain("https://app.plicum.test/brand/plicum-wordmark-light.png");
-    expect(html).not.toContain("https://app.plicum.test//brand/");
+    expect(html).toContain("https://app.paplyn.test/brand/plicum-wordmark-light.png");
+    expect(html).not.toContain("https://app.paplyn.test//brand/");
   });
 
   it("escapes HTML in user-provided names and project titles", () => {
@@ -90,7 +95,7 @@ describe("email templates", () => {
       ownerName: 'Eve <evil>',
       projectName: maliciousTitle,
       roleLabel: "Can view",
-      inviteUrl: "https://app.plicum.test/invite/inv-1",
+      inviteUrl: "https://app.paplyn.test/invite/inv-1",
       appUrl: APP_URL,
     });
 

@@ -1,3 +1,5 @@
+import { BRAND_TRUSTED_ORIGINS } from "./product";
+
 const LOCAL_COLLAB_PORT = process.env.COLLAB_PORT || "1234";
 
 function isSelfHostedMode(): boolean {
@@ -82,9 +84,14 @@ export function getRequestOrigin(request: Request): string | null {
   return `${protocol}://${host}`;
 }
 
+/** Trusted origins for Better Auth (canonical Paplyn + legacy plicum.com cutover). */
+export function getBrandTrustedOrigins(): string[] {
+  return [...BRAND_TRUSTED_ORIGINS];
+}
+
 /** Trusted origins for better-auth in self-host mode. */
 export function getSelfHostedTrustedOrigins(request?: Request): string[] {
-  const origins = new Set<string>([getServerAppUrl()]);
+  const origins = new Set<string>([getServerAppUrl(), ...getBrandTrustedOrigins()]);
 
   if (request) {
     const requestOrigin = getRequestOrigin(request);

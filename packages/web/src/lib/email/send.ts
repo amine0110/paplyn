@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { PRODUCT_NAME } from "../product";
 
 export type SendEmailResult =
   | { sent: true }
@@ -49,7 +50,7 @@ function getSmtpConfig() {
     port: Number(process.env.SMTP_PORT || "587"),
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
-    from: process.env.SMTP_FROM || "Plicum <hello.plicum@gmail.com>",
+    from: process.env.SMTP_FROM || `${PRODUCT_NAME} <hello.plicum@gmail.com>`,
   };
 }
 

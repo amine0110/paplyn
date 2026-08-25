@@ -11,7 +11,24 @@
  */
 
 export const PRODUCT_NAME =
-  process.env.NEXT_PUBLIC_PRODUCT_NAME || process.env.PRODUCT_NAME || "Plicum";
+  process.env.NEXT_PUBLIC_PRODUCT_NAME || process.env.PRODUCT_NAME || "Paplyn";
+
+/** Canonical public hostname (SaaS). */
+export const PUBLIC_SITE_HOST = "paplyn.com";
+
+/** Canonical public site URL for links, user-agent strings, and email fallbacks. */
+export const PUBLIC_SITE_URL = `https://${PUBLIC_SITE_HOST}`;
+
+/**
+ * Origins accepted during the Paplyn brand cutover (canonical + legacy plicum.com).
+ * Used by Better Auth trustedOrigins so existing sessions survive the domain switch.
+ */
+export const BRAND_TRUSTED_ORIGINS = [
+  PUBLIC_SITE_URL,
+  `https://www.${PUBLIC_SITE_HOST}`,
+  "https://plicum.com",
+  "https://www.plicum.com",
+] as const;
 
 /** Internal npm / Docker scope. Not shown in the UI. */
 export const PACKAGE_SCOPE = "quire";

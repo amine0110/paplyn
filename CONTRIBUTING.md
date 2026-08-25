@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve Plicum.
+Thanks for helping improve Paplyn.
 
 ## Development setup
 
@@ -37,7 +37,7 @@ Describe what changed, why, and how you verified it. Link related issues if appl
 
 - Match existing patterns in the package you are editing.
 - Product-facing strings belong in [`packages/web/src/lib/product.ts`](packages/web/src/lib/product.ts).
-- Internal npm scope remains `@quire`; public name is Plicum.
+- Internal npm scope remains `@quire`; public name is Paplyn.
 
 ## Questions
 
