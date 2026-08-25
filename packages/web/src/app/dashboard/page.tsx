@@ -251,17 +251,34 @@ export default function DashboardPage() {
           <p className="text-ink-muted">Loading...</p>
         ) : (
           <>
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="font-serif text-2xl font-semibold">Projects</h1>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={openGitHubImportDialog}>
-              <Github className="h-4 w-4" /> Import GitHub
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
+          <h1 className="font-serif text-2xl font-semibold shrink-0">Projects</h1>
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            <Button
+              variant="outline"
+              onClick={openGitHubImportDialog}
+              aria-label="Import GitHub"
+              className="h-9 w-9 px-0 sm:w-auto sm:px-4"
+            >
+              <Github className="h-4 w-4 shrink-0" />
+              <span className="hidden sm:inline">Import GitHub</span>
             </Button>
-            <Button variant="outline" onClick={openImportDialog}>
-              <Upload className="h-4 w-4" /> Import zip
+            <Button
+              variant="outline"
+              onClick={openImportDialog}
+              aria-label="Import zip"
+              className="h-9 w-9 px-0 sm:w-auto sm:px-4"
+            >
+              <Upload className="h-4 w-4 shrink-0" />
+              <span className="hidden sm:inline">Import zip</span>
             </Button>
-            <Button onClick={() => setShowCreate(true)}>
-              <Plus className="h-4 w-4" /> New project
+            <Button
+              onClick={() => setShowCreate(true)}
+              aria-label="New project"
+              className="h-9 w-9 px-0 sm:w-auto sm:px-4"
+            >
+              <Plus className="h-4 w-4 shrink-0" />
+              <span className="hidden sm:inline">New project</span>
             </Button>
           </div>
         </div>

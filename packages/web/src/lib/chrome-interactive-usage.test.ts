@@ -60,6 +60,16 @@ describe("workspace chrome class usage", () => {
     expect(src).toContain("relative md:hidden");
   });
 
+  it("dashboard header stacks on small screens and shortens action labels below sm", () => {
+    const src = readSource("app/dashboard/page.tsx");
+    expect(src).toContain("flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between");
+    expect(src).toContain("flex flex-wrap gap-2 sm:justify-end");
+    expect(src).toContain('aria-label="Import GitHub"');
+    expect(src).toContain('aria-label="Import zip"');
+    expect(src).toContain('aria-label="New project"');
+    expect(src).toContain("hidden sm:inline");
+  });
+
   it("pdf preview defaults to 50% zoom on mobile via getDefaultPdfScale", () => {
     const previewSrc = readSource("components/pdf-preview.tsx");
     expect(previewSrc).toContain("getDefaultPdfScale");
