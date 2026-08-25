@@ -907,7 +907,7 @@ export default function ProjectPage() {
 
         <div className="flex items-center gap-1.5 shrink-0">
           <LayoutModeSwitcher mode={layoutMode} onChange={updateLayoutMode} className="hidden sm:inline-flex" />
-          <ThemeToggle compact className="hidden md:inline-flex" />
+          <ThemeToggle compact />
           <Button variant="default" size="sm" onClick={compile} disabled={compiling}>
             <Play className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">{compiling ? "Typesetting…" : "Compile"}</span>
@@ -1007,10 +1007,6 @@ export default function ProjectPage() {
                       Settings
                     </button>
                   )}
-                  <div className="border-t border-border my-1" />
-                  <div className="px-3 py-2">
-                    <ThemeToggle compact />
-                  </div>
                 </div>
               </>
             )}
