@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProjectSettingsDialog } from "@/components/project-settings-dialog";
-import { Plus, Archive, FileText, Copy, Settings, Trash2, Upload } from "lucide-react";
+import { Plus, Archive, ArchiveRestore, FileText, Copy, Settings, Trash2, Upload } from "lucide-react";
 import type { Project } from "@/lib/schema";
 import { useUiFeedback } from "@/components/ui-feedback";
 
@@ -164,7 +164,12 @@ export default function DashboardPage() {
     setSettingsProject(null);
   }
 
-  const visibleOwned = owned.filter((p) => showArchived || !p.archived);
+  const activeOwned = owned.filter((p) => !p.archived);
+  const archivedOwned = owned.filter((p) => p.archived);
+  const hasProjectLists =
+    activeOwned.length > 0 ||
+    (showArchived && archivedOwned.length > 0) ||
+    shared.length > 0;
 
   return (
     <div className="min-h-screen">
@@ -186,7 +191,7 @@ export default function DashboardPage() {
           <p className="text-ink-muted">Loading...</p>
         ) : (
           <>
-            {visibleOwned.length === 0 && shared.length === 0 ? (
+            {!hasProjectLists ? (
               <div className="text-center py-16 border border-dashed border-border rounded-lg">
                 <FileText className="h-10 w-10 text-ink-faint mx-auto mb-4" />
                 <p className="text-ink-muted mb-4">No projects yet. Create your first LaTeX document.</p>
@@ -194,11 +199,29 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-6">
-                {visibleOwned.length > 0 && (
+                {activeOwned.length > 0 && (
                   <section>
                     <h2 className="text-sm font-medium text-ink-muted mb-3">Your projects</h2>
                     <div className="space-y-2">
-                      {visibleOwned.map((p) => (
+                      {activeOwned.map((p) => (
+                        <ProjectRow
+                          key={p.id}
+                          project={p}
+                          onArchive={archiveProject}
+                          onDuplicate={duplicateProject}
+                          onDelete={deleteProject}
+                          onSettings={setSettingsProject}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {showArchived && archivedOwned.length > 0 && (
+                  <section>
+                    <h2 className="text-sm font-medium text-ink-muted mb-3">Archived</h2>
+                    <div className="space-y-2">
+                      {archivedOwned.map((p) => (
                         <ProjectRow
                           key={p.id}
                           project={p}
@@ -392,8 +415,13 @@ function ProjectRow({
           onClick={() => onArchive(project.id, !project.archived)}
           className="opacity-0 group-hover:opacity-100 text-ink-faint hover:text-ink p-1"
           title={project.archived ? "Unarchive" : "Archive"}
+          aria-label={project.archived ? "Unarchive" : "Archive"}
         >
-          <Archive className="h-4 w-4" />
+          {project.archived ? (
+            <ArchiveRestore className="h-4 w-4" />
+          ) : (
+            <Archive className="h-4 w-4" />
+          )}
         </button>
         <button
           onClick={() => onDelete(project.id, project.name)}
