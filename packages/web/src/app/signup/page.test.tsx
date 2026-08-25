@@ -64,6 +64,8 @@ describe("Signup page", () => {
   it("shows Google button when Google auth is configured", () => {
     render(<SignupPageClient googleEnabled={true} />);
 
-    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
+    const button = screen.getByRole("button", { name: "Continue with Google" });
+    expect(button).toBeInTheDocument();
+    expect(button.querySelector("svg[aria-hidden='true']")).toBeInTheDocument();
   });
 });
