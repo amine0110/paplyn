@@ -29,6 +29,7 @@ import { CompilePanel } from "@/components/compile-panel";
 import { ProjectSettingsDialog } from "@/components/project-settings-dialog";
 import { ShareDialog } from "@/components/share-dialog";
 import { HistoryDialog } from "@/components/history-dialog";
+import { useUiFeedback } from "@/components/ui-feedback";
 import { CollabPresence } from "@/components/collab-presence";
 import { AiSidebar, type AiPendingRequest } from "@/components/ai-sidebar";
 import { AiSidebarPanel } from "@/components/ai-sidebar-panel";
@@ -118,6 +119,7 @@ interface CompileError {
 export default function ProjectPage() {
   const params = useParams();
   const router = useRouter();
+  const { confirm, notice } = useUiFeedback();
   const projectId = params.id as string;
 
   const [project, setProject] = useState<Project | null>(null);
@@ -465,7 +467,12 @@ export default function ProjectPage() {
 
   async function deleteFile(path: string) {
     if (!canEdit) return;
-    if (!confirm(`Delete ${path}?`)) return;
+    const ok = await confirm({
+      message: `Delete ${path}?`,
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
     await fetch(`/api/projects/${projectId}/files?path=${encodeURIComponent(path)}`, {
       method: "DELETE",
     });
@@ -477,14 +484,19 @@ export default function ProjectPage() {
 
   async function deleteFolder(path: string) {
     if (!canEdit) return;
-    if (!confirm(`Delete folder ${path} and all its contents?`)) return;
+    const ok = await confirm({
+      message: `Delete folder ${path} and all its contents?`,
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
     const res = await fetch(
       `/api/projects/${projectId}/files?path=${encodeURIComponent(path)}&recursive=true`,
       { method: "DELETE" }
     );
     if (!res.ok) {
       const err = await res.json();
-      alert(err.error || "Failed to delete folder");
+      notice(err.error || "Failed to delete folder");
       return;
     }
     const result = await res.json();
@@ -504,7 +516,7 @@ export default function ProjectPage() {
     });
     if (!res.ok) {
       const err = await res.json();
-      alert(err.error || "Failed to rename");
+      notice(err.error || "Failed to rename");
       return;
     }
 

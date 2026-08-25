@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { ProjectSettingsDialog } from "@/components/project-settings-dialog";
 import { Plus, Archive, FileText, Copy, Settings, Trash2, Upload } from "lucide-react";
 import type { Project } from "@/lib/schema";
+import { useUiFeedback } from "@/components/ui-feedback";
 
 const TEMPLATES = [
   { id: "blank", name: "Blank Article", desc: "Simple article with sections" },
@@ -20,6 +21,7 @@ const TEMPLATES = [
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { confirm, notice } = useUiFeedback();
   const [owned, setOwned] = useState<Project[]>([]);
   const [shared, setShared] = useState<(Project & { memberRole?: string })[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,7 +65,7 @@ export default function DashboardPage() {
       router.push(`/project/${project.id}`);
     } else {
       const err = await res.json();
-      alert(err.error || "Failed to create project");
+      notice(err.error || "Failed to create project");
     }
     setCreating(false);
   }
@@ -71,7 +73,7 @@ export default function DashboardPage() {
   async function importProject(e: React.FormEvent) {
     e.preventDefault();
     if (!importZip) {
-      alert("Choose a .zip file to import");
+      notice("Choose a .zip file to import");
       return;
     }
 
@@ -90,7 +92,7 @@ export default function DashboardPage() {
       router.push(`/project/${project.id}`);
     } else {
       const err = await res.json();
-      alert(err.error || "Failed to import project");
+      notice(err.error || "Failed to import project");
     }
     setImporting(false);
   }
@@ -113,7 +115,8 @@ export default function DashboardPage() {
 
   async function archiveProject(id: string, archived: boolean) {
     const label = archived ? "archive" : "unarchive";
-    if (!confirm(`Are you sure you want to ${label} this project?`)) return;
+    const ok = await confirm(`Are you sure you want to ${label} this project?`);
+    if (!ok) return;
 
     const res = await fetch(`/api/projects/${id}`, {
       method: "PATCH",
@@ -122,7 +125,7 @@ export default function DashboardPage() {
     });
     if (!res.ok) {
       const err = await res.json();
-      alert(err.error || `Failed to ${label} project`);
+      notice(err.error || `Failed to ${label} project`);
       return;
     }
     loadProjects();
@@ -136,22 +139,21 @@ export default function DashboardPage() {
       return;
     }
     const err = await res.json();
-    alert(err.error || "Failed to duplicate project");
+    notice(err.error || "Failed to duplicate project");
   }
 
   async function deleteProject(id: string, projectName: string) {
-    if (
-      !confirm(
-        `Permanently delete "${projectName}"? This removes all files and cannot be undone.`
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      message: `Permanently delete "${projectName}"? This removes all files and cannot be undone.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
 
     const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
     if (!res.ok) {
       const err = await res.json();
-      alert(err.error || "Failed to delete project");
+      notice(err.error || "Failed to delete project");
       return;
     }
     loadProjects();

@@ -5,9 +5,11 @@ import { Nav } from "@/components/nav";
 import { Button } from "@/components/ui/button";
 import { PLAN_LIMITS } from "@/lib/config";
 import { useSession } from "@/lib/auth-client";
+import { useUiFeedback } from "@/components/ui-feedback";
 
 export default function BillingPage() {
   const { data: session } = useSession();
+  const { notice } = useUiFeedback();
   const plan = (session?.user as { plan?: string })?.plan || "free";
   const limits = PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS] || PLAN_LIMITS.free;
   const [loading, setLoading] = useState<string | null>(null);
@@ -21,7 +23,7 @@ export default function BillingPage() {
     });
     const data = await res.json();
     if (data.url) window.location.href = data.url;
-    else alert(data.error || "Checkout failed");
+    else notice(data.error || "Checkout failed");
     setLoading(null);
   }
 
@@ -30,7 +32,7 @@ export default function BillingPage() {
     const res = await fetch("/api/stripe");
     const data = await res.json();
     if (data.url) window.location.href = data.url;
-    else alert(data.error || "Portal unavailable");
+    else notice(data.error || "Portal unavailable");
     setLoading(null);
   }
 
