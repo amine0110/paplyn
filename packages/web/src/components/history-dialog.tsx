@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import type { Project, ProjectFile } from "@/lib/schema";
 import { formatRevisionTimestamp } from "@/lib/format-date";
 import type { RevisionListItem } from "@/lib/project-revisions";
+import { useUiFeedback } from "@/components/ui-feedback";
 
 interface HistoryDialogProps {
   open: boolean;
@@ -25,6 +26,7 @@ export function HistoryDialog({
   onClose,
   onRestored,
 }: HistoryDialogProps) {
+  const { confirm } = useUiFeedback();
   const [revisions, setRevisions] = useState<RevisionListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -86,7 +88,12 @@ export function HistoryDialog({
       "Your current files will be overwritten.",
     ].join("\n\n");
 
-    if (!confirm(message)) return;
+    const ok = await confirm({
+      message,
+      confirmLabel: "Restore",
+      destructive: true,
+    });
+    if (!ok) return;
 
     setRestoringId(revision.id);
     setError("");

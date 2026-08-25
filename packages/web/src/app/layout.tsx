@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Newsreader, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
+import { UiFeedbackProvider } from "@/components/ui-feedback";
 import { ThemeScript } from "@/components/theme-script";
 import { BRAND } from "@/components/plicum-wordmark";
 import { PRODUCT, PUBLIC_SITE_URL } from "@/lib/product";
@@ -76,7 +77,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeScript />
       </head>
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <UiFeedbackProvider>{children}</UiFeedbackProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

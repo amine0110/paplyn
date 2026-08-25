@@ -9,6 +9,7 @@ import {
   CHROME_HOVER,
   CHROME_ICON_BTN_SM,
 } from "@/lib/chrome-interactive";
+import { useUiFeedback } from "@/components/ui-feedback";
 
 export interface FileNode {
   path: string;
@@ -44,6 +45,7 @@ export function FileTree({
   canEdit,
 }: FileTreeProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const { prompt } = useUiFeedback();
 
   const tree = buildFileTree(files.map((f) => f.path));
 
@@ -54,13 +56,13 @@ export function FileTree({
     setExpanded(next);
   }
 
-  function handleNewFile() {
-    const name = prompt("File name (e.g. section.tex or figures/chart.tex):");
+  async function handleNewFile() {
+    const name = await prompt("File name (e.g. section.tex or figures/chart.tex):");
     if (name) onCreate(normalizePath(name));
   }
 
-  function handleNewFolder() {
-    const name = prompt("Folder name (e.g. figures):");
+  async function handleNewFolder() {
+    const name = await prompt("Folder name (e.g. figures):");
     if (name) onCreateFolder(normalizePath(name));
   }
 
@@ -69,16 +71,24 @@ export function FileTree({
     e.target.value = "";
   }
 
-  function handleRename(node: FileTreeNode) {
+  async function handleRename(node: FileTreeNode) {
     if (node.isFile) {
-      const newPath = prompt("New path (rename or move):", node.path);
+      const newPath = await prompt({
+        message: "New path (rename or move):",
+        defaultValue: node.path,
+        confirmLabel: "Rename",
+      });
       if (!newPath) return;
       const normalized = normalizePath(newPath);
       if (normalized !== node.path) onRename(node.path, normalized);
       return;
     }
 
-    const newName = prompt(`Rename folder "${node.name}" to:`, node.name);
+    const newName = await prompt({
+      message: `Rename folder "${node.name}" to:`,
+      defaultValue: node.name,
+      confirmLabel: "Rename",
+    });
     if (!newName) return;
     const normalizedName = normalizePath(newName);
     if (normalizedName === node.name) return;
