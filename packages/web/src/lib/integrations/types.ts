@@ -6,7 +6,7 @@ export interface LandingIntegration {
   name: string;
   category: IntegrationCategory;
   href?: string;
-  /** Text wordmark — no raster or unofficial brand SVGs. */
+  /** Accessible name / legacy label (landing strip uses official logos). */
   wordmark: string;
   wordmarkClassName?: string;
   caption?: string;

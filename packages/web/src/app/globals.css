@@ -177,6 +177,51 @@
   }
 }
 
+/* Landing page — infinite integrations logo marquee (left → right flow) */
+.integrations-marquee-track {
+  width: max-content;
+  animation: integrations-marquee-ltr 42s linear infinite;
+  will-change: transform;
+}
+
+.integrations-marquee-viewport:hover .integrations-marquee-track {
+  animation-duration: 58s;
+}
+
+.integrations-marquee-viewport {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 10%,
+    black 90%,
+    transparent
+  );
+  mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+}
+
+@keyframes integrations-marquee-ltr {
+  from {
+    transform: translate3d(-50%, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .integrations-marquee-viewport {
+    display: none;
+  }
+
+  .integrations-marquee-static {
+    display: flex;
+  }
+
+  .integrations-marquee-track {
+    animation: none;
+  }
+}
+
 /* CodeMirror workspace editor */
 .cm-editor {
   height: 100%;
