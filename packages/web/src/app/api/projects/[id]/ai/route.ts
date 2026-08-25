@@ -34,7 +34,7 @@ import {
 import { formatCompileFixLineChangeSummary } from "@/lib/ai-compile-fix-validation";
 import { buildCompileFixNoEditMessage } from "@/lib/ai-compile-fix-failure";
 import { detectFixCompileIntent } from "@/lib/ai-compile-fix-intent";
-import { getPluginActionPrompt, resolveAiPlugins } from "@/lib/ai-plugins";
+import { getForcedToolPrompt, getPluginActionPrompt, isRegisteredPluginToolName, resolveAiPlugins } from "@/lib/ai-plugins";
 import {
   collectArxivPapersFromToolResults,
   collectDoiCitationsFromToolResults,
@@ -109,6 +109,8 @@ const chatSchema = z.object({
       "write",
     ])
     .optional(),
+  /** When set, the user picked a plugin tool in the composer — force that tool call. */
+  forcedTool: z.string().optional(),
   /** Inline selection bubble — require replace_selection, not file-wide edits. */
   inlineSelection: z.boolean().optional(),
   compileErrors: z
@@ -247,6 +249,13 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
       getPluginActionPrompt(data.action) ?? WRITING_ACTION_PROMPTS[data.action];
     if (actionPrompt) {
       systemPrompt += `\n\n${actionPrompt}`;
+    }
+  }
+
+  if (data.forcedTool && isRegisteredPluginToolName(data.forcedTool)) {
+    const forcedPrompt = getForcedToolPrompt(data.forcedTool);
+    if (forcedPrompt) {
+      systemPrompt += `\n\n${forcedPrompt}`;
     }
   }
 
@@ -561,6 +570,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       });
     }
 
+    const forcedToolName =
+      !compileFixRequest &&
+      requestData.forcedTool &&
+      isRegisteredPluginToolName(requestData.forcedTool) &&
+      requestData.forcedTool in pluginTools
+        ? requestData.forcedTool
+        : undefined;
+
     const streamResult = streamText({
       model,
       system: systemPrompt,
@@ -570,6 +587,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       tools: compileFixRequest
         ? workspaceTools
         : { ...pluginTools, ...workspaceTools },
+      ...(forcedToolName
+        ? { toolChoice: { type: "tool" as const, toolName: forcedToolName } }
+        : {}),
     });
 
     return { streamResult, systemPrompt };
