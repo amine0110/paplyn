@@ -48,7 +48,7 @@ export function PlicumWordmark({ className, priority }: PlicumWordmarkProps) {
         className="h-full w-auto shrink-0"
         aria-hidden
       />
-      <span className="font-serif text-[1.125em] font-semibold leading-none tracking-tight text-navy dark:text-ink">
+      <span className="font-serif text-[1.125em] font-semibold leading-none tracking-tight text-navy">
         {PRODUCT_NAME}
       </span>
     </span>
