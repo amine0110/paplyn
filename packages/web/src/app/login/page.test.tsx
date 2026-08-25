@@ -1,6 +1,6 @@
 import React from "react";
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { LoginPageClient } from "@/app/login/login-form";
 
 vi.mock("@/components/nav", () => ({
@@ -39,5 +39,20 @@ describe("Login page", () => {
     render(<LoginPageClient googleEnabled={true} />);
 
     expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
+  });
+
+  it("toggles password visibility", () => {
+    render(<LoginPageClient googleEnabled={false} />);
+
+    const password = screen.getByLabelText("Password");
+    expect(password).toHaveAttribute("type", "password");
+
+    const toggle = screen.getByRole("button", { name: "Show password" });
+    fireEvent.click(toggle);
+    expect(password).toHaveAttribute("type", "text");
+    expect(screen.getByRole("button", { name: "Hide password" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Hide password" }));
+    expect(password).toHaveAttribute("type", "password");
   });
 });

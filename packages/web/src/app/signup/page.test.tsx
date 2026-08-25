@@ -61,4 +61,24 @@ describe("Signup page", () => {
 
     expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
   });
+
+  it("toggles password visibility for password and confirm fields", () => {
+    render(<SignupPageClient googleEnabled={false} />);
+
+    const password = screen.getByLabelText("Password");
+    const confirmPassword = screen.getByLabelText("Confirm password");
+    expect(password).toHaveAttribute("type", "password");
+    expect(confirmPassword).toHaveAttribute("type", "password");
+
+    const [passwordToggle, confirmToggle] = screen.getAllByRole("button", { name: "Show password" });
+    fireEvent.click(passwordToggle);
+    expect(password).toHaveAttribute("type", "text");
+    fireEvent.click(screen.getAllByRole("button", { name: "Hide password" })[0]);
+    expect(password).toHaveAttribute("type", "password");
+
+    fireEvent.click(confirmToggle);
+    expect(confirmPassword).toHaveAttribute("type", "text");
+    fireEvent.click(screen.getAllByRole("button", { name: "Hide password" })[0]);
+    expect(confirmPassword).toHaveAttribute("type", "password");
+  });
 });
