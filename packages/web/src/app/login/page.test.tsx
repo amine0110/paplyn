@@ -2,6 +2,7 @@ import React from "react";
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { LoginPageClient } from "@/app/login/login-form";
+import * as LoginPageModule from "@/app/login/page";
 
 vi.mock("@/components/nav", () => ({
   Nav: () => <nav data-testid="nav" />,
@@ -20,6 +21,10 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("Login page", () => {
+  it("evaluates Google auth at request time", () => {
+    expect(LoginPageModule.dynamic).toBe("force-dynamic");
+  });
+
   it("renders forgot password link", () => {
     render(<LoginPageClient googleEnabled={false} />);
 

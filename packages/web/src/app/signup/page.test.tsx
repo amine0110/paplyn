@@ -2,6 +2,7 @@ import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { SignupPageClient } from "@/app/signup/signup-form";
+import * as SignupPageModule from "@/app/signup/page";
 
 vi.mock("@/components/nav", () => ({
   Nav: () => <nav data-testid="nav" />,
@@ -21,6 +22,10 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("Signup page", () => {
+  it("evaluates Google auth at request time", () => {
+    expect(SignupPageModule.dynamic).toBe("force-dynamic");
+  });
+
   beforeEach(() => {
     signUp.mockReset();
     push.mockReset();
