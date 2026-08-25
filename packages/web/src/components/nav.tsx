@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSession, signOut } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { PlicumWordmark } from "@/components/plicum-wordmark";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export function Nav() {
   const { data: session } = useSession();
@@ -16,6 +17,7 @@ export function Nav() {
         </Link>
 
         <nav className="flex items-center gap-3">
+          <ThemeToggle compact />
           {session?.user ? (
             <>
               <Link href="/dashboard" className="text-sm text-ink-muted hover:text-ink">
