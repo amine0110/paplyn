@@ -15,6 +15,16 @@ const LATEX_CORE_INTEGRATION: LandingIntegration = {
   caption: "Built-in editor & compile",
 };
 
+/** Ollama is supported via the same OpenAI-compatible provider path — not a separate plugin. */
+const OLLAMA_INTEGRATION: LandingIntegration = {
+  id: "ollama",
+  name: "Ollama",
+  category: "ai",
+  href: "https://ollama.com",
+  wordmark: "Ollama",
+  caption: "OpenAI-compatible API",
+};
+
 function pluginToLanding(plugin: AiPlugin): LandingIntegration | null {
   if (!plugin.landing) return null;
   return {
@@ -37,6 +47,8 @@ export function getLandingIntegrations(options: { isSelfHosted: boolean }): Land
 
   const aiProvider = resolveAiProviderLanding({ isSelfHosted: options.isSelfHosted });
   if (aiProvider) items.push(aiProvider);
+
+  items.push(OLLAMA_INTEGRATION);
 
   for (const plugin of getEnabledAiPlugins()) {
     const landing = pluginToLanding(plugin);

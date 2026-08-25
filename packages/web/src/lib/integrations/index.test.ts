@@ -3,15 +3,24 @@ import { resolveAiProviderLanding } from "@/lib/ai-config";
 import { getLandingIntegrations } from "./index";
 
 describe("getLandingIntegrations", () => {
-  it("includes LaTeX core, AI provider, and wired plugins", () => {
+  it("includes LaTeX core, AI provider, Ollama, and wired plugins", () => {
     const items = getLandingIntegrations({ isSelfHosted: false });
     const ids = items.map((item) => item.id);
     expect(ids).toContain("latex");
+    expect(ids).toContain("ollama");
     expect(ids).toContain("semantic-scholar");
     expect(ids).toContain("cite-doi");
     expect(ids).toContain("arxiv");
     expect(ids).toContain("github-import");
     expect(ids).toContain("groq");
+  });
+
+  it("includes Ollama with OpenAI-compatible caption", () => {
+    const ollama = getLandingIntegrations({ isSelfHosted: false }).find((item) => item.id === "ollama");
+    expect(ollama?.name).toBe("Ollama");
+    expect(ollama?.wordmark).toBe("Ollama");
+    expect(ollama?.caption).toBe("OpenAI-compatible API");
+    expect(ollama?.href).toBe("https://ollama.com");
   });
 
   it("derives Semantic Scholar landing from the plugin registry", () => {
@@ -27,6 +36,7 @@ describe("getLandingIntegrations", () => {
     const items = getLandingIntegrations({ isSelfHosted: true });
     expect(items.some((item) => item.id === "openai-compatible")).toBe(true);
     expect(items.some((item) => item.id === "groq")).toBe(false);
+    expect(items.some((item) => item.id === "ollama")).toBe(true);
   });
 
   it("never advertises xAI or Grok", () => {
