@@ -13,8 +13,8 @@ function expectBrandedHeader(html: string, appUrl = APP_URL): void {
   const base = appUrl.replace(/\/$/, "");
   expect(html).toContain(`${base}/brand/paplyn-mark.png`);
   expect(html).toContain(`>${PRODUCT_NAME}</span>`);
-  expect(html).toContain('width="32"');
-  expect(html).toContain('height="32"');
+  expect(html).toContain('height="40"');
+  expect(html).toContain("height:40px");
   expect(html).not.toContain("/brand/paplyn-wordmark-light.png");
   expect(html).not.toContain("/brand/paplyn-wordmark-dark.png");
 }
