@@ -39,6 +39,16 @@ describe("AI sidebar chat UX", () => {
     expect(src).toContain("toolReads");
   });
 
+  it("composer has a tools button and passes forcedTool when a plugin is attached", () => {
+    const src = readSource("components/ai-sidebar.tsx");
+    expect(src).toContain("Attach tool");
+    expect(src).toContain("listComposerToolOptions");
+    expect(src).toContain("selectedComposerTool");
+    expect(src).toContain("forcedTool: attachedToolName");
+    expect(src).toContain("handleSelectComposerTool");
+    expect(src).toMatch(/Plus className/);
+  });
+
   it("defines chat enter and typing animations in globals.css", () => {
     const css = readSource("app/globals.css");
     expect(css).toContain(".ai-message-enter");

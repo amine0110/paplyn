@@ -34,7 +34,11 @@ import {
 import { formatCompileFixLineChangeSummary } from "@/lib/ai-compile-fix-validation";
 import { buildCompileFixNoEditMessage } from "@/lib/ai-compile-fix-failure";
 import { detectFixCompileIntent } from "@/lib/ai-compile-fix-intent";
-import { getPluginActionPrompt, resolveAiPlugins } from "@/lib/ai-plugins";
+import {
+  buildForcedToolSystemPrompt,
+  getComposerToolByName,
+} from "@/lib/ai-composer-tools";
+import { getPluginActionPrompt, getPluginByToolName, resolveAiPlugins } from "@/lib/ai-plugins";
 import {
   collectArxivPapersFromToolResults,
   collectDoiCitationsFromToolResults,
@@ -124,6 +128,8 @@ const chatSchema = z.object({
       ])
     )
     .optional(),
+  /** User-attached composer tool — agent must call this tool first. */
+  forcedTool: z.string().min(1).optional(),
 });
 
 type ChatRequest = z.infer<typeof chatSchema>;
@@ -248,6 +254,13 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
     if (actionPrompt) {
       systemPrompt += `\n\n${actionPrompt}`;
     }
+  }
+
+  if (data.forcedTool) {
+    const plugin = getPluginByToolName(data.forcedTool);
+    const displayName =
+      plugin?.name ?? getComposerToolByName(data.forcedTool)?.displayName ?? data.forcedTool;
+    systemPrompt += `\n\n${buildForcedToolSystemPrompt(data.forcedTool, displayName)}`;
   }
 
   if (!compileFix && data.selectedText) {
@@ -494,6 +507,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       : {}
   );
 
+  const chatTools = compileFixRequest
+    ? workspaceTools
+    : { ...pluginTools, ...workspaceTools };
+
+  const effectiveRequest: ChatRequest = {
+    ...requestData,
+    forcedTool:
+      requestData.forcedTool && requestData.forcedTool in chatTools
+        ? requestData.forcedTool
+        : undefined,
+  };
+
   const openai = createOpenAI({
     apiKey: aiConfig.apiKey,
     baseURL: aiConfig.baseUrl,
@@ -531,7 +556,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         : undefined;
 
     const systemPrompt = buildSystemPrompt({
-      data: requestData,
+      data: effectiveRequest,
       compileErrors,
       fileContext,
       pluginSystemPrompt,

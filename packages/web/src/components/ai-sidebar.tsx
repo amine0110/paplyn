@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Send, X, Mic, MicOff, Square } from "lucide-react";
+import { Sparkles, Send, X, Mic, MicOff, Square, Plus } from "lucide-react";
 import { aiUnavailableBannerMessage, isClientSelfHosted } from "@/lib/ai-config";
 import { extractInsertableContent, hasInsertableContent } from "@/lib/ai-insert-content";
 import { detectFixCompileIntent } from "@/lib/ai-compile-fix-intent";
@@ -17,8 +17,13 @@ import { parseVoiceCommand, speechStatusMessage } from "@/lib/voice-commands";
 import {
   CHROME_CHIP,
   CHROME_ICON_BTN_MD,
+  CHROME_MENU_ITEM,
   CHROME_SEND_BTN,
 } from "@/lib/chrome-interactive";
+import {
+  type ComposerToolOption,
+  listComposerToolOptions,
+} from "@/lib/ai-composer-tools";
 import { cn } from "@/components/ui/cn";
 
 interface Message {
@@ -138,12 +143,17 @@ export function AiSidebar({
   const [citingKey, setCitingKey] = useState<string | null>(null);
   const [importingArxivId, setImportingArxivId] = useState<string | null>(null);
   const [voiceNote, setVoiceNote] = useState<string | null>(null);
+  const [selectedComposerTool, setSelectedComposerTool] = useState<ComposerToolOption | null>(
+    null
+  );
+  const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const userScrolledUpRef = useRef(false);
   const messagesRef = useRef(messages);
   const inputBeforeVoiceRef = useRef("");
+  const composerToolOptions = listComposerToolOptions();
   messagesRef.current = messages;
 
   const adjustTextareaHeight = useCallback(() => {
@@ -233,9 +243,13 @@ export function AiSidebar({
   async function sendMessage(
     content: string,
     action?: string,
-    options?: { autoCompileFixRetry?: boolean }
+    options?: { autoCompileFixRetry?: boolean; forcedTool?: string }
   ) {
     if (!content.trim() && !action) return;
+
+    const attachedToolName = options?.forcedTool ?? selectedComposerTool?.toolName;
+    setSelectedComposerTool(null);
+    setToolsMenuOpen(false);
 
     const fixIntent = detectFixCompileIntent(content, action);
     const effectiveAction = fixIntent ? "explain-errors" : action;
@@ -261,7 +275,7 @@ export function AiSidebar({
     userScrolledUpRef.current = false;
     setLoading(true);
     setHasStreamProgress(false);
-    setLoadingMessage(loadingLabelForAction(effectiveAction, content));
+    setLoadingMessage(loadingLabelForAction(effectiveAction, content, attachedToolName));
 
     const userMsg: Message = { role: "user", content: content || action || "" };
     setMessages((prev) => [...prev, userMsg]);
@@ -276,6 +290,7 @@ export function AiSidebar({
           activeFile,
           selectedText: selectedText || undefined,
           action: effectiveAction,
+          forcedTool: attachedToolName ?? undefined,
           compileErrors: compileErrors.length > 0 ? compileErrors : undefined,
         }),
       });
@@ -400,6 +415,12 @@ export function AiSidebar({
     }
   }
 
+  function handleSelectComposerTool(tool: ComposerToolOption) {
+    setSelectedComposerTool(tool);
+    setToolsMenuOpen(false);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }
+
   function handleVoiceToggle() {
     if (!speech.isSupported || speech.status === "denied") return;
     if (speech.isListening) {
@@ -451,6 +472,10 @@ export function AiSidebar({
   const canReplace = Boolean(selectedText && onReplace);
   const micDisabled = !speech.isSupported || speech.status === "denied" || loading;
   const canSend = Boolean(input.trim()) && !loading;
+  const composerPlaceholder = speech.isListening
+    ? "Listening…"
+    : selectedComposerTool?.placeholder ?? "Message the assistant…";
+  const iconBtnSize = variant === "sheet" ? "h-9 w-9" : "h-8 w-8";
 
   return (
     <div
@@ -698,49 +723,112 @@ export function AiSidebar({
               "focus-within:ring-2 focus-within:ring-accent/40 focus-within:ring-offset-1 focus-within:ring-offset-surface"
             )}
           >
+            {selectedComposerTool && (
+              <div className="flex flex-wrap gap-1 px-2.5 pt-2">
+                <span
+                  className="inline-flex max-w-full items-center gap-1 rounded-full border border-accent/40 bg-accent/10 pl-2.5 pr-1 py-0.5 text-[11px] font-medium text-ink"
+                >
+                  <span className="truncate">{selectedComposerTool.displayName}</span>
+                  <button
+                    type="button"
+                    className={cn(
+                      CHROME_ICON_BTN_MD,
+                      "h-6 w-6 shrink-0 rounded-full text-ink-muted hover:text-ink"
+                    )}
+                    onClick={() => setSelectedComposerTool(null)}
+                    aria-label={`Remove ${selectedComposerTool.displayName} tool`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              </div>
+            )}
             <textarea
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleComposerKeyDown}
-              placeholder={speech.isListening ? "Listening…" : "Message the assistant…"}
+              placeholder={composerPlaceholder}
               disabled={loading}
               rows={1}
               className={cn(
                 "block w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-sm leading-snug placeholder:text-ink-faint",
                 "focus-visible:outline-none",
                 "disabled:cursor-not-allowed disabled:opacity-50",
-                variant === "sheet" ? "min-h-[44px] text-base" : "min-h-[36px]"
+                variant === "sheet" ? "min-h-[44px] text-base" : "min-h-[36px]",
+                selectedComposerTool && "pt-2"
               )}
             />
             <div className="flex items-center justify-between gap-2 px-2 pb-2">
-              <Button
-                type="button"
-                size="icon"
-                variant={speech.isListening ? "default" : "ghost"}
-                className={cn(
-                  "shrink-0 rounded-lg text-ink-muted",
-                  variant === "sheet" ? "h-9 w-9" : "h-8 w-8"
-                )}
-                disabled={micDisabled}
-                onClick={handleVoiceToggle}
-                aria-label={speech.isListening ? "Stop voice input" : "Start voice input"}
-                title={speech.isListening ? "Stop and send" : "Voice input"}
-              >
-                {speech.isListening ? (
-                  <Square className="h-4 w-4" />
-                ) : speech.status === "denied" ? (
-                  <MicOff className="h-4 w-4" />
-                ) : (
-                  <Mic className="h-4 w-4" />
-                )}
-              </Button>
+              <div className="flex min-w-0 items-center gap-0.5">
+                <div className="relative shrink-0">
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant={toolsMenuOpen ? "default" : "ghost"}
+                    className={cn("shrink-0 rounded-lg text-ink-muted", iconBtnSize)}
+                    disabled={loading}
+                    onClick={() => setToolsMenuOpen((open) => !open)}
+                    aria-label="Attach tool"
+                    aria-expanded={toolsMenuOpen}
+                    aria-haspopup="menu"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                  {toolsMenuOpen && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setToolsMenuOpen(false)}
+                        aria-hidden
+                      />
+                      <div
+                        className="absolute bottom-full left-0 z-50 mb-1 w-[min(16rem,calc(100vw-2rem))] max-h-56 overflow-y-auto rounded-lg border border-border bg-paper py-1 shadow-lg"
+                        role="menu"
+                      >
+                        {composerToolOptions.map((tool) => (
+                          <button
+                            key={tool.toolName}
+                            type="button"
+                            role="menuitem"
+                            className={cn(
+                              CHROME_MENU_ITEM,
+                              "flex w-full items-center px-3 py-2.5 text-left text-sm text-ink"
+                            )}
+                            onClick={() => handleSelectComposerTool(tool)}
+                          >
+                            <span className="truncate">{tool.displayName}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant={speech.isListening ? "default" : "ghost"}
+                  className={cn("shrink-0 rounded-lg text-ink-muted", iconBtnSize)}
+                  disabled={micDisabled}
+                  onClick={handleVoiceToggle}
+                  aria-label={speech.isListening ? "Stop voice input" : "Start voice input"}
+                  title={speech.isListening ? "Stop and send" : "Voice input"}
+                >
+                  {speech.isListening ? (
+                    <Square className="h-4 w-4" />
+                  ) : speech.status === "denied" ? (
+                    <MicOff className="h-4 w-4" />
+                  ) : (
+                    <Mic className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
               <button
                 type="submit"
                 className={cn(
                   CHROME_SEND_BTN,
                   "shrink-0 rounded-full transition-opacity",
-                  variant === "sheet" ? "h-9 w-9" : "h-8 w-8",
+                  iconBtnSize,
                   !canSend && "opacity-40"
                 )}
                 disabled={!canSend}

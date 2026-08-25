@@ -81,7 +81,29 @@ const EDIT_ACTIONS = new Set([
   "write",
 ]);
 
-export function loadingLabelForAction(action?: string, userMessage?: string): string {
+export function loadingLabelForForcedTool(toolName?: string): string | null {
+  if (!toolName) return null;
+  const meta = getClientPluginMetaByToolName(toolName);
+  if (meta) return meta.loadingLabel;
+
+  switch (toolName) {
+    case "list_files":
+      return "Listing project files…";
+    case "get_file":
+      return "Reading file…";
+    default:
+      return null;
+  }
+}
+
+export function loadingLabelForAction(
+  action?: string,
+  userMessage?: string,
+  forcedTool?: string
+): string {
+  const forced = loadingLabelForForcedTool(forcedTool);
+  if (forced) return forced;
+
   const literature = loadingLabelForLiteratureAction(action, userMessage);
   if (literature) return literature;
 
