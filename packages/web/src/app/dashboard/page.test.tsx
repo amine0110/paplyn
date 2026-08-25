@@ -58,6 +58,50 @@ function renderDashboard() {
   );
 }
 
+describe("Dashboard header layout", () => {
+  beforeEach(() => {
+    leaveForLogin.mockReset();
+    mockUseRequireSession.mockReturnValue({ isAuthenticated: true });
+    vi.restoreAllMocks();
+    vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ owned: [], shared: [] }),
+    } as Response);
+  });
+
+  it("stacks the title above actions on small screens with wrapping action row", () => {
+    renderDashboard();
+
+    const heading = screen.getByRole("heading", { name: "Projects", level: 1 });
+    const header = heading.parentElement;
+
+    expect(header).not.toBeNull();
+    expect(header).toHaveClass("flex-col", "gap-4", "sm:flex-row", "sm:items-center", "sm:justify-between");
+
+    const actions = header?.querySelector(".flex-wrap");
+    expect(actions).not.toBeNull();
+    expect(actions).toHaveClass("flex-wrap", "gap-2", "sm:justify-end");
+  });
+
+  it("keeps Import GitHub and exposes icon-only actions with aria-labels for mobile", () => {
+    renderDashboard();
+
+    expect(screen.getByRole("button", { name: "Import GitHub" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Import zip" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New project" })).toBeInTheDocument();
+
+    const githubButton = screen.getByRole("button", { name: "Import GitHub" });
+    expect(githubButton.querySelector(".hidden.sm\\:inline")).toHaveTextContent("Import GitHub");
+
+    const zipButton = screen.getByRole("button", { name: "Import zip" });
+    expect(zipButton.querySelector(".hidden.sm\\:inline")).toHaveTextContent("Import zip");
+
+    const newButton = screen.getByRole("button", { name: "New project" });
+    expect(newButton.querySelector(".hidden.sm\\:inline")).toHaveTextContent("New project");
+  });
+});
+
 describe("Dashboard destructive actions", () => {
   beforeEach(() => {
     leaveForLogin.mockReset();
