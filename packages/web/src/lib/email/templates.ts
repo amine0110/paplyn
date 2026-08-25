@@ -19,18 +19,22 @@ export function escapeHtml(text: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function wordmarkImageUrl(appUrl: string): string {
+function markImageUrl(appUrl: string): string {
   const base = (appUrl || DEFAULT_APP_URL).replace(/\/$/, "");
-  return `${base}${BRAND.wordmarkLight}`;
+  return `${base}${BRAND.mark}`;
 }
 
-function wordmarkHtml(appUrl: string): string {
-  const src = escapeHtml(wordmarkImageUrl(appUrl));
+function brandHeaderHtml(appUrl: string): string {
+  const src = escapeHtml(markImageUrl(appUrl));
+  const name = escapeHtml(PRODUCT_NAME);
   return `
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
       <tr>
-        <td align="center" style="text-align:center;">
-          <img src="${src}" alt="${escapeHtml(PRODUCT_NAME)}" width="180" style="display:block;margin:0 auto;height:auto;border:0;outline:none;text-decoration:none;" />
+        <td align="center" style="text-align:center;padding:0 8px 0 0;vertical-align:middle;">
+          <img src="${src}" alt="" width="32" height="32" style="display:block;width:32px;height:32px;border:0;outline:none;text-decoration:none;" />
+        </td>
+        <td align="center" style="text-align:left;vertical-align:middle;">
+          <span style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:600;line-height:1;color:${INK};">${name}</span>
         </td>
       </tr>
     </table>
@@ -64,7 +68,7 @@ function emailShell({
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
           <tr>
             <td align="center" style="padding-bottom:24px;text-align:center;">
-              ${wordmarkHtml(appUrl)}
+              ${brandHeaderHtml(appUrl)}
             </td>
           </tr>
           <tr>
