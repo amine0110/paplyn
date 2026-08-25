@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
-import { serializeAdminUser } from "@/lib/admin-users";
+import { serializeAdminUser, deleteUserForAdmin } from "@/lib/admin-users";
 import { evaluateRequireAdmin } from "@/lib/session";
 
 describe("serializeAdminUser", () => {
@@ -173,5 +173,97 @@ describe("GET /api/admin/users", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ users });
     expect(listUsersForAdmin).toHaveBeenCalledWith("ada");
+  });
+});
+
+describe("deleteUserForAdmin", () => {
+  it("rejects deleting yourself", async () => {
+    const result = await deleteUserForAdmin("admin-1", "admin-1");
+
+    expect(result).toEqual({
+      ok: false,
+      status: 400,
+      error: "You cannot remove your own account.",
+    });
+  });
+});
+
+describe("DELETE /api/admin/users/[id]", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("returns 400 when admin tries to delete themselves", async () => {
+    vi.doMock("@/lib/admin-users", () => ({
+      isAdminPanelAvailable: vi.fn(async () => true),
+      deleteUserForAdmin: vi.fn(async () => ({
+        ok: false,
+        status: 400,
+        error: "You cannot remove your own account.",
+      })),
+    }));
+    vi.doMock("@/lib/session", () => ({
+      requireAdminApi: vi.fn(async () => ({
+        authorized: true,
+        user: { id: "admin-1", role: "admin" },
+      })),
+    }));
+
+    const { DELETE } = await import("@/app/api/admin/users/[id]/route");
+    const res = await DELETE(
+      new NextRequest("http://localhost/api/admin/users/admin-1"),
+      { params: Promise.resolve({ id: "admin-1" }) }
+    );
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "You cannot remove your own account." });
+  });
+
+  it("returns 400 when deleting the last admin", async () => {
+    vi.doMock("@/lib/admin-users", () => ({
+      isAdminPanelAvailable: vi.fn(async () => true),
+      deleteUserForAdmin: vi.fn(async () => ({
+        ok: false,
+        status: 400,
+        error: "Cannot remove the last admin on this instance.",
+      })),
+    }));
+    vi.doMock("@/lib/session", () => ({
+      requireAdminApi: vi.fn(async () => ({
+        authorized: true,
+        user: { id: "admin-2", role: "admin" },
+      })),
+    }));
+
+    const { DELETE } = await import("@/app/api/admin/users/[id]/route");
+    const res = await DELETE(
+      new NextRequest("http://localhost/api/admin/users/admin-1"),
+      { params: Promise.resolve({ id: "admin-1" }) }
+    );
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "Cannot remove the last admin on this instance." });
+  });
+
+  it("returns ok when user is deleted", async () => {
+    vi.doMock("@/lib/admin-users", () => ({
+      isAdminPanelAvailable: vi.fn(async () => true),
+      deleteUserForAdmin: vi.fn(async () => ({ ok: true })),
+    }));
+    vi.doMock("@/lib/session", () => ({
+      requireAdminApi: vi.fn(async () => ({
+        authorized: true,
+        user: { id: "admin-1", role: "admin" },
+      })),
+    }));
+
+    const { DELETE } = await import("@/app/api/admin/users/[id]/route");
+    const res = await DELETE(
+      new NextRequest("http://localhost/api/admin/users/user-2"),
+      { params: Promise.resolve({ id: "user-2" }) }
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
   });
 });

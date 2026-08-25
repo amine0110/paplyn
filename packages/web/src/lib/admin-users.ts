@@ -1,7 +1,13 @@
-import { desc, eq, ilike, or } from "drizzle-orm";
+import { desc, eq, ilike, or, count } from "drizzle-orm";
 import { db } from "./db";
 import { config } from "./config";
-import { user, type User } from "./schema";
+import {
+  compileLog,
+  projectInvite,
+  projectRevision,
+  user,
+  type User,
+} from "./schema";
 import { toUtcIsoString } from "./format-date";
 
 export type AdminUserSummary = {
@@ -67,4 +73,52 @@ export async function listUsersForAdmin(search?: string): Promise<AdminUserSumma
         .orderBy(desc(user.createdAt));
 
   return rows.map(serializeAdminUser);
+}
+
+export type DeleteUserForAdminResult =
+  | { ok: true }
+  | { ok: false; status: number; error: string };
+
+export async function deleteUserForAdmin(
+  targetUserId: string,
+  actorUserId: string
+): Promise<DeleteUserForAdminResult> {
+  if (targetUserId === actorUserId) {
+    return { ok: false, status: 400, error: "You cannot remove your own account." };
+  }
+
+  const [target] = await db
+    .select({
+      id: user.id,
+      role: user.role,
+    })
+    .from(user)
+    .where(eq(user.id, targetUserId))
+    .limit(1);
+
+  if (!target) {
+    return { ok: false, status: 404, error: "User not found" };
+  }
+
+  if (target.role === "admin") {
+    const [adminCount] = await db
+      .select({ count: count() })
+      .from(user)
+      .where(eq(user.role, "admin"));
+
+    if (adminCount.count <= 1) {
+      return {
+        ok: false,
+        status: 400,
+        error: "Cannot remove the last admin on this instance.",
+      };
+    }
+  }
+
+  await db.delete(projectInvite).where(eq(projectInvite.invitedBy, targetUserId));
+  await db.delete(compileLog).where(eq(compileLog.userId, targetUserId));
+  await db.delete(projectRevision).where(eq(projectRevision.userId, targetUserId));
+  await db.delete(user).where(eq(user.id, targetUserId));
+
+  return { ok: true };
 }

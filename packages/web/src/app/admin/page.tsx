@@ -34,6 +34,8 @@ export default function AdminPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [usersError, setUsersError] = useState("");
+  const [removingUserId, setRemovingUserId] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState("");
 
   const loadUsers = useCallback(async (search?: string) => {
     setUsersLoading(true);
@@ -72,6 +74,18 @@ export default function AdminPage() {
     }, 300);
     return () => clearTimeout(timer);
   }, [userSearch, loadUsers]);
+
+  async function confirmRemoveUser(user: AdminUserSummary) {
+    setRemoveError("");
+    const res = await fetch(`/api/admin/users/${user.id}`, { method: "DELETE" });
+    if (res.ok) {
+      setRemovingUserId(null);
+      await loadUsers(userSearch);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      setRemoveError(err.error || "Failed to remove user");
+    }
+  }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -133,6 +147,7 @@ export default function AdminPage() {
             />
           </div>
           {usersError && <p className="text-sm text-destructive">{usersError}</p>}
+          {removeError && <p className="text-sm text-destructive">{removeError}</p>}
           {usersLoading ? (
             <p className="text-sm text-ink-muted">Loading users...</p>
           ) : users.length === 0 ? (
@@ -145,7 +160,8 @@ export default function AdminPage() {
                     <th className="py-2 pr-4 font-medium">Email</th>
                     <th className="py-2 pr-4 font-medium">Name</th>
                     <th className="py-2 pr-4 font-medium">Role</th>
-                    <th className="py-2 font-medium">Joined</th>
+                    <th className="py-2 pr-4 font-medium">Joined</th>
+                    <th className="py-2 font-medium">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -154,8 +170,50 @@ export default function AdminPage() {
                       <td className="py-2 pr-4">{u.email}</td>
                       <td className="py-2 pr-4">{u.name}</td>
                       <td className="py-2 pr-4">{u.isAdmin ? "Admin" : u.role}</td>
-                      <td className="py-2 text-ink-muted">
+                      <td className="py-2 pr-4 text-ink-muted">
                         {formatRevisionTimestamp(u.createdAt)}
+                      </td>
+                      <td className="py-2">
+                        {removingUserId === u.id ? (
+                          <div className="space-y-2">
+                            <p className="text-xs text-ink">
+                              Remove {u.name}? This cannot be undone.
+                            </p>
+                            <div className="flex gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => confirmRemoveUser(u)}
+                              >
+                                Confirm remove
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setRemovingUserId(null);
+                                  setRemoveError("");
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setRemoveError("");
+                              setRemovingUserId(u.id);
+                            }}
+                          >
+                            Remove
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))}
