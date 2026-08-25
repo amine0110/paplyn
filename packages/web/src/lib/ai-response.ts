@@ -4,6 +4,9 @@ import type {
   AiPaper,
   AiToolRead,
   AiUsedPlugin,
+  ArxivPaperResult,
+  ArxivSearchPayload,
+  DoiCitationPayload,
   LiteratureToolPayload,
 } from "@/lib/ai-types";
 import {
@@ -55,6 +58,22 @@ function isLiteratureToolPayload(result: unknown): result is LiteratureToolPaylo
   );
 }
 
+function isDoiCitationPayload(result: unknown): result is DoiCitationPayload {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    (result as DoiCitationPayload).kind === "doi-citation"
+  );
+}
+
+function isArxivSearchPayload(result: unknown): result is ArxivSearchPayload {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    (result as ArxivSearchPayload).kind === "arxiv-search"
+  );
+}
+
 function isClientActionRejected(
   result: unknown
 ): result is { kind: "client-action-rejected"; reason: string } {
@@ -86,6 +105,16 @@ export function summarizeToolResult(toolName: string, result: unknown): string |
   if (result == null) return null;
 
   if (isLiteratureToolPayload(result)) {
+    const trimmed = result.summary.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  if (isDoiCitationPayload(result)) {
+    const trimmed = result.summary.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  if (isArxivSearchPayload(result)) {
     const trimmed = result.summary.trim();
     return trimmed.length > 0 ? trimmed : null;
   }
@@ -139,6 +168,14 @@ export function summarizeToolResult(toolName: string, result: unknown): string |
 function stringifyToolResult(result: unknown): string | null {
   if (result == null) return null;
   if (isLiteratureToolPayload(result)) {
+    const trimmed = result.summary.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (isDoiCitationPayload(result)) {
+    const trimmed = result.summary.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (isArxivSearchPayload(result)) {
     const trimmed = result.summary.trim();
     return trimmed.length > 0 ? trimmed : null;
   }
@@ -351,8 +388,9 @@ function collectLiteraturePayloads(result: LooseGenerateTextResult): LiteratureT
 }
 
 function sourceFromToolResult(result: unknown): AiUsedPlugin["source"] | undefined {
-  if (!isLiteratureToolPayload(result)) return undefined;
-  return result.source;
+  if (isLiteratureToolPayload(result)) return result.source;
+  if (isDoiCitationPayload(result)) return result.source;
+  return undefined;
 }
 
 function collectToolUsages(result: LooseGenerateTextResult): { toolName: string; toolResult?: unknown }[] {
@@ -405,6 +443,74 @@ export function collectPapersFromToolResults<TOOLS extends ToolSet>(
     (payload) => payload.papers
   );
   return dedupePapers(papers);
+}
+
+function collectDoiCitationPayloads(result: LooseGenerateTextResult): DoiCitationPayload[] {
+  const payloads: DoiCitationPayload[] = [];
+
+  for (const toolResult of result.toolResults) {
+    if (isDoiCitationPayload(toolResult.result)) {
+      payloads.push(toolResult.result);
+    }
+  }
+
+  for (const step of result.steps) {
+    for (const toolResult of step.toolResults) {
+      if (isDoiCitationPayload(toolResult.result)) {
+        payloads.push(toolResult.result);
+      }
+    }
+  }
+
+  return payloads;
+}
+
+export function collectDoiCitationsFromToolResults<TOOLS extends ToolSet>(
+  result: GenerateTextResult<TOOLS, unknown>
+): DoiCitationPayload[] {
+  return collectDoiCitationPayloads(asLooseGenerateTextResult(result));
+}
+
+function collectArxivSearchPayloads(result: LooseGenerateTextResult): ArxivSearchPayload[] {
+  const payloads: ArxivSearchPayload[] = [];
+
+  for (const toolResult of result.toolResults) {
+    if (isArxivSearchPayload(toolResult.result)) {
+      payloads.push(toolResult.result);
+    }
+  }
+
+  for (const step of result.steps) {
+    for (const toolResult of step.toolResults) {
+      if (isArxivSearchPayload(toolResult.result)) {
+        payloads.push(toolResult.result);
+      }
+    }
+  }
+
+  return payloads;
+}
+
+function arxivPaperKey(paper: ArxivPaperResult): string {
+  return `arxiv:${paper.id.toLowerCase()}`;
+}
+
+export function collectArxivPapersFromToolResults<TOOLS extends ToolSet>(
+  result: GenerateTextResult<TOOLS, unknown>
+): ArxivPaperResult[] {
+  const seen = new Set<string>();
+  const papers: ArxivPaperResult[] = [];
+
+  for (const payload of collectArxivSearchPayloads(asLooseGenerateTextResult(result))) {
+    for (const paper of payload.papers) {
+      const key = arxivPaperKey(paper);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      papers.push(paper);
+    }
+  }
+
+  return papers;
 }
 
 function collectClientActionPayloads(result: LooseGenerateTextResult): ClientActionToolPayload[] {

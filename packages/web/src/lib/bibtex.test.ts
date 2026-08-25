@@ -3,6 +3,7 @@ import type { AiPaper } from "@/lib/ai-types";
 import {
   appendBibEntry,
   formatBibtexEntry,
+  mergeBibtexEntry,
   parseBibKeys,
   resolveProjectBibPath,
   suggestCitationKey,
@@ -50,6 +51,16 @@ describe("bibtex helpers", () => {
     const appended = appendBibEntry(bib, formatBibtexEntry(samplePaper, "vaswani2017"), "vaswani2017");
     expect(appended).toContain("@article{existing");
     expect(appended).toContain("@article{vaswani2017");
+  });
+
+  it("mergeBibtexEntry reports whether a new entry was merged", () => {
+    const bib = "@article{existing, title={Old}}\n";
+    const entry = formatBibtexEntry(samplePaper, "existing");
+    expect(mergeBibtexEntry(bib, entry, "existing")).toEqual({ content: bib, merged: false });
+
+    const merged = mergeBibtexEntry(bib, formatBibtexEntry(samplePaper, "vaswani2017"), "vaswani2017");
+    expect(merged.merged).toBe(true);
+    expect(merged.content).toContain("vaswani2017");
   });
 
   it("resolves bib path from bibliography command in main tex", () => {

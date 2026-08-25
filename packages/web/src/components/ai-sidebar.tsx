@@ -8,7 +8,7 @@ import { extractInsertableContent, hasInsertableContent } from "@/lib/ai-insert-
 import { detectFixCompileIntent } from "@/lib/ai-compile-fix-intent";
 import type { AiCompileError } from "@/lib/ai-compile-fix-context";
 import { AiMarkdown } from "@/components/ai-markdown";
-import type { AiAppliedAction, AiClientAction, AiPaper, AiToolRead, AiUsedPlugin } from "@/lib/ai-types";
+import type { AiAppliedAction, AiClientAction, AiPaper, AiToolRead, AiUsedPlugin, ArxivPaperResult, DoiCitationPayload } from "@/lib/ai-types";
 import { loadingLabelForAction } from "@/lib/ai-plugins/client-meta";
 import { applyAiClientActions, type ApplyAiActionsContext } from "@/lib/apply-ai-client-actions";
 import { consumeAiStream } from "@/lib/ai-stream";
@@ -26,6 +26,7 @@ interface Message {
   content: string;
   usedPlugins?: AiUsedPlugin[];
   papers?: AiPaper[];
+  arxivPapers?: ArxivPaperResult[];
   appliedActions?: AiAppliedAction[];
   toolReads?: AiToolRead[];
 }
@@ -45,6 +46,11 @@ interface AiSidebarProps {
   onInsert: (text: string) => void;
   onReplace?: (text: string) => void;
   onCitePaper?: (paper: AiPaper) => void | Promise<void>;
+  onApplyDoiCitation?: (citation: DoiCitationPayload) => void | Promise<void>;
+  onImportArxiv?: (
+    arxivId: string,
+    options?: { attachPdf?: boolean; importSource?: boolean }
+  ) => void | Promise<void>;
   onClose: () => void;
   /** Context for applying agentic editor actions (collab-safe). */
   applyActionsContext?: Omit<ApplyAiActionsContext, "hasSelection">;
@@ -112,6 +118,8 @@ export function AiSidebar({
   onInsert,
   onReplace,
   onCitePaper,
+  onApplyDoiCitation,
+  onImportArxiv,
   onClose,
   applyActionsContext,
   variant = "sidebar",
@@ -128,6 +136,7 @@ export function AiSidebar({
   const [hasStreamProgress, setHasStreamProgress] = useState(false);
   const [available, setAvailable] = useState(true);
   const [citingKey, setCitingKey] = useState<string | null>(null);
+  const [importingArxivId, setImportingArxivId] = useState<string | null>(null);
   const [voiceNote, setVoiceNote] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -318,8 +327,20 @@ export function AiSidebar({
 
       const usedPlugins = Array.isArray(data.usedPlugins) ? (data.usedPlugins as AiUsedPlugin[]) : undefined;
       const papers = Array.isArray(data.papers) ? (data.papers as AiPaper[]) : undefined;
+      const arxivPapers = Array.isArray(data.arxivPapers)
+        ? (data.arxivPapers as ArxivPaperResult[])
+        : undefined;
+      const doiCitations = Array.isArray(data.doiCitations)
+        ? (data.doiCitations as DoiCitationPayload[])
+        : undefined;
       const toolReads = Array.isArray(data.toolReads) ? (data.toolReads as AiToolRead[]) : undefined;
       const actions = Array.isArray(data.actions) ? (data.actions as AiClientAction[]) : [];
+
+      if (doiCitations?.length && onApplyDoiCitation) {
+        for (const citation of doiCitations) {
+          await onApplyDoiCitation(citation);
+        }
+      }
 
       let appliedActions: AiAppliedAction[] | undefined;
       if (actions.length > 0 && applyActionsContext) {
@@ -338,6 +359,7 @@ export function AiSidebar({
           content: assistantContent,
           ...(usedPlugins?.length ? { usedPlugins } : {}),
           ...(papers?.length ? { papers } : {}),
+          ...(arxivPapers?.length ? { arxivPapers } : {}),
           ...(appliedActions?.length ? { appliedActions } : {}),
           ...(toolReads?.length ? { toolReads } : {}),
         },
@@ -351,6 +373,19 @@ export function AiSidebar({
     } finally {
       setLoading(false);
       setHasStreamProgress(false);
+    }
+  }
+
+  async function handleImportArxiv(
+    arxivId: string,
+    options?: { attachPdf?: boolean; importSource?: boolean }
+  ) {
+    if (!onImportArxiv) return;
+    setImportingArxivId(arxivId);
+    try {
+      await onImportArxiv(arxivId, options);
+    } finally {
+      setImportingArxivId(null);
     }
   }
 
@@ -547,6 +582,57 @@ export function AiSidebar({
                         >
                           {isCiting ? "Citing…" : "Cite"}
                         </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {msg.role === "assistant" && msg.arxivPapers && msg.arxivPapers.length > 0 && onImportArxiv && (
+                <div className="mt-2.5 space-y-1.5 border-t border-border/70 pt-2">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">
+                    Import from arXiv
+                  </p>
+                  {msg.arxivPapers.map((paper) => {
+                    const isImporting = importingArxivId === paper.id;
+                    return (
+                      <div
+                        key={paper.id}
+                        className="flex items-start justify-between gap-2 rounded-lg border border-border/60 bg-canvas-dark/30 px-2 py-1.5"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium leading-snug text-ink line-clamp-2">
+                            {paper.title}
+                          </p>
+                          <p className="mt-0.5 text-[10px] text-ink-muted">
+                            {formatAuthors(paper.authors)}
+                            {paper.year != null ? ` · ${paper.year}` : ""} · arXiv:{paper.id}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 flex-col gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-[11px]"
+                            disabled={loading || isImporting}
+                            onClick={() => void handleImportArxiv(paper.id, { attachPdf: true })}
+                          >
+                            {isImporting ? "Importing…" : "PDF"}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-[11px]"
+                            disabled={loading || isImporting}
+                            onClick={() =>
+                              void handleImportArxiv(paper.id, {
+                                attachPdf: false,
+                                importSource: true,
+                              })
+                            }
+                          >
+                            TeX
+                          </Button>
+                        </div>
                       </div>
                     );
                   })}

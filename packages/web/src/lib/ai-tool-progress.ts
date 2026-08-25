@@ -50,6 +50,12 @@ export function formatToolProgressStart(
       return "Replacing selection…";
     case "search_literature":
       return "Searching literature…";
+    case "cite_from_doi":
+      return "Resolving DOI…";
+    case "search_arxiv":
+      return "Searching arXiv…";
+    case "parse_github_repo":
+      return "Checking GitHub repo…";
     default:
       return null;
   }
