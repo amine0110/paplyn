@@ -48,12 +48,16 @@ export function getPluginByToolName(toolName: string): AiPlugin | undefined {
   return getEnabledAiPlugins().find((plugin) => plugin.toolName === toolName);
 }
 
-export function getForcedToolPrompt(toolName: string): string | undefined {
-  const plugin = getPluginByToolName(toolName);
-  if (!plugin) return undefined;
-
-  return `The user manually selected the ${plugin.name} tool for this message. You MUST call ${plugin.toolName} with arguments derived from the user's message. Do not skip the tool call or substitute a different tool.`;
-}
+export {
+  getForcedToolDisplayName,
+  getForcedToolPrompt,
+  isForcedToolCapabilityQuestion,
+  isPluginToolName,
+  PLUGIN_TOOL_NAMES,
+  resolveForcedToolChoice,
+  type PluginToolName,
+  type PluginToolsRecord,
+} from "./forced-tool";
 
 export function isRegisteredPluginToolName(toolName: string): boolean {
   return getEnabledAiPlugins().some((plugin) => plugin.toolName === toolName);

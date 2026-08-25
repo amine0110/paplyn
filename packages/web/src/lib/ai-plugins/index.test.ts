@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   getEnabledAiPlugins,
-  getForcedToolPrompt,
   getPluginActionPrompt,
   listAiPlugins,
   resolveAiPlugins,
 } from "./index";
+import { getForcedToolPrompt } from "./forced-tool";
 
 describe("ai-plugins registry", () => {
   it("lists semantic scholar as the first plugin", () => {
@@ -39,8 +39,10 @@ describe("ai-plugins registry", () => {
 
   it("builds a forced-tool prompt for composer tool picks", () => {
     const prompt = getForcedToolPrompt("search_literature");
+    expect(prompt).toContain("Semantic Scholar");
     expect(prompt).toContain("search_literature");
-    expect(prompt).toContain("MUST call");
+    expect(prompt).toContain("this tool");
+    expect(prompt).toContain("list_files");
     expect(getForcedToolPrompt("not-a-tool")).toBeUndefined();
   });
 

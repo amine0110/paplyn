@@ -36,6 +36,10 @@ import { buildCompileFixNoEditMessage } from "@/lib/ai-compile-fix-failure";
 import { detectFixCompileIntent } from "@/lib/ai-compile-fix-intent";
 import { getForcedToolPrompt, getPluginActionPrompt, isRegisteredPluginToolName, resolveAiPlugins } from "@/lib/ai-plugins";
 import {
+  asPluginToolsRecord,
+  resolveForcedToolChoice,
+} from "@/lib/ai-plugins/forced-tool";
+import {
   collectArxivPapersFromToolResults,
   collectDoiCitationsFromToolResults,
   collectPapersFromToolResults,
@@ -570,16 +574,43 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       });
     }
 
-    const streamResult = streamText({
-      model,
-      system: systemPrompt,
-      messages,
-      maxRetries: 0,
-      maxSteps: compileFixRequest ? COMPILE_FIX_MAX_STEPS : CHAT_MAX_STEPS,
-      tools: compileFixRequest
-        ? workspaceTools
-        : { ...pluginTools, ...workspaceTools },
-    });
+    const lastUserMessage = getLastUserMessage(requestData.messages);
+    const pluginToolsRecord = !compileFixRequest ? asPluginToolsRecord(pluginTools) : null;
+    const forcedToolName = pluginToolsRecord
+      ? resolveForcedToolChoice({
+          forcedTool: requestData.forcedTool,
+          userMessage: lastUserMessage,
+          pluginTools: pluginToolsRecord,
+        })
+      : undefined;
+
+    const streamResult = compileFixRequest
+      ? streamText({
+          model,
+          system: systemPrompt,
+          messages,
+          maxRetries: 0,
+          maxSteps: COMPILE_FIX_MAX_STEPS,
+          tools: workspaceTools,
+        })
+      : forcedToolName && pluginToolsRecord
+        ? streamText({
+            model,
+            system: systemPrompt,
+            messages,
+            maxRetries: 0,
+            maxSteps: CHAT_MAX_STEPS,
+            tools: { ...pluginToolsRecord, ...workspaceTools },
+            toolChoice: { type: "tool", toolName: forcedToolName },
+          })
+        : streamText({
+            model,
+            system: systemPrompt,
+            messages,
+            maxRetries: 0,
+            maxSteps: CHAT_MAX_STEPS,
+            tools: { ...pluginTools, ...workspaceTools },
+          });
 
     return { streamResult, systemPrompt };
   }
