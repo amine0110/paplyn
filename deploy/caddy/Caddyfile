@@ -1,0 +1,22 @@
+# Paplyn SaaS reverse-proxy snippet for the shared VPS Caddy config.
+# Merge into /etc/caddy/Caddyfile (or your site imports). viewer.pycad.co is
+# hosted on the same machine — do not modify its site block.
+#
+# Canonical host: paplyn.com. Legacy plicum.com hosts redirect with 301.
+# Web app is bound to localhost via docker-compose.prod.yml (127.0.0.1:3000).
+
+www.paplyn.com {
+	redir https://paplyn.com{uri} permanent
+}
+
+www.plicum.com {
+	redir https://paplyn.com{uri} permanent
+}
+
+plicum.com {
+	redir https://paplyn.com{uri} permanent
+}
+
+paplyn.com {
+	reverse_proxy 127.0.0.1:3000
+}

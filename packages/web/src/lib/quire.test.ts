@@ -4,6 +4,7 @@ import { PRODUCT, PRODUCT_NAME } from "@/lib/product";
 import { templates, getTemplateList } from "@/lib/templates";
 import { createCollabToken } from "@/lib/collab-token";
 import {
+  getBrandTrustedOrigins,
   getCollabWsUrl,
   getRequestOrigin,
   getSelfHostedTrustedOrigins,
@@ -13,6 +14,10 @@ import {
 } from "@/lib/urls";
 
 describe("product branding", () => {
+  it("defaults PRODUCT_NAME to Paplyn", () => {
+    expect(PRODUCT_NAME).toBe("Paplyn");
+  });
+
   it("exposes a single PRODUCT_NAME constant", () => {
     expect(PRODUCT_NAME).toBeTruthy();
     expect(PRODUCT.name).toBe(PRODUCT_NAME);
@@ -82,62 +87,77 @@ describe("url resolution", () => {
 
   it("prefers BETTER_AUTH_URL over NEXT_PUBLIC_APP_URL on the server", () => {
     process.env.NEXT_PUBLIC_APP_URL = "http://localhost:3000";
-    process.env.BETTER_AUTH_URL = "https://plicum.com";
-    expect(getServerAppUrl()).toBe("https://plicum.com");
-    expect(config.appUrl).toBe("https://plicum.com");
+    process.env.BETTER_AUTH_URL = "https://paplyn.com";
+    expect(getServerAppUrl()).toBe("https://paplyn.com");
+    expect(config.appUrl).toBe("https://paplyn.com");
   });
 
   it("derives request origin from proxy headers", () => {
     const request = new Request("http://internal/api/auth/get-session", {
       headers: {
-        host: "plicum.com",
+        host: "paplyn.com",
         "x-forwarded-proto": "https",
       },
     });
-    expect(getRequestOrigin(request)).toBe("https://plicum.com");
+    expect(getRequestOrigin(request)).toBe("https://paplyn.com");
   });
 
-  it("includes request origin in self-hosted trusted origins", () => {
-    process.env.BETTER_AUTH_URL = "https://plicum.com";
+  it("includes canonical and legacy origins in brand trusted origins", () => {
+    expect(getBrandTrustedOrigins()).toEqual(
+      expect.arrayContaining([
+        "https://paplyn.com",
+        "https://www.paplyn.com",
+        "https://plicum.com",
+        "https://www.plicum.com",
+      ])
+    );
+  });
+
+  it("includes request origin and legacy cutover origins in self-hosted trusted origins", () => {
+    process.env.BETTER_AUTH_URL = "https://paplyn.com";
     const request = new Request("https://plicum.com/api/auth/get-session", {
       headers: { host: "plicum.com" },
     });
-    expect(getSelfHostedTrustedOrigins(request)).toEqual([
-      "https://plicum.com",
-    ]);
+    expect(getSelfHostedTrustedOrigins(request)).toEqual(
+      expect.arrayContaining([
+        "https://paplyn.com",
+        "https://plicum.com",
+        "https://www.plicum.com",
+      ])
+    );
   });
 
   it("uses explicit non-localhost collab URL when configured", () => {
     process.env.COLLAB_URL = "wss://collab.example.com";
-    const request = new Request("https://plicum.com/api/projects/1/collab", {
-      headers: { host: "plicum.com" },
+    const request = new Request("https://paplyn.com/api/projects/1/collab", {
+      headers: { host: "paplyn.com" },
     });
     expect(resolveCollabUrl(request)).toBe("wss://collab.example.com");
   });
 
   it("ignores localhost explicit collab URL on a public host", () => {
     process.env.COLLAB_URL = "ws://localhost:1234";
-    const request = new Request("https://plicum.com/api/projects/1/collab", {
+    const request = new Request("https://paplyn.com/api/projects/1/collab", {
       headers: {
-        host: "plicum.com",
+        host: "paplyn.com",
         "x-forwarded-proto": "https",
       },
     });
-    expect(resolveCollabUrl(request)).toBe("wss://plicum.com");
+    expect(resolveCollabUrl(request)).toBe("wss://paplyn.com");
     expect(getCollabWsUrl("proj-1", "token-abc", request)).toBe(
-      "wss://plicum.com/proj-1?token=token-abc"
+      "wss://paplyn.com/proj-1?token=token-abc"
     );
   });
 
   it("ignores NEXT_PUBLIC localhost collab URL on a public host", () => {
     process.env.NEXT_PUBLIC_COLLAB_URL = "ws://localhost:1234";
-    const request = new Request("https://plicum.com/api/projects/1/collab", {
+    const request = new Request("https://paplyn.com/api/projects/1/collab", {
       headers: {
-        host: "plicum.com",
+        host: "paplyn.com",
         "x-forwarded-proto": "https",
       },
     });
-    expect(resolveCollabUrl(request)).toBe("wss://plicum.com");
+    expect(resolveCollabUrl(request)).toBe("wss://paplyn.com");
   });
 
   it("derives local collab websocket on localhost dev", () => {
@@ -164,21 +184,21 @@ describe("url resolution", () => {
   });
 
   it("derives same-host wss collab URL in self-host production", () => {
-    const request = new Request("https://plicum.com/api/projects/1/collab", {
+    const request = new Request("https://paplyn.com/api/projects/1/collab", {
       headers: {
-        host: "plicum.com",
+        host: "paplyn.com",
         "x-forwarded-proto": "https",
       },
     });
-    expect(resolveCollabUrl(request)).toBe("wss://plicum.com");
+    expect(resolveCollabUrl(request)).toBe("wss://paplyn.com");
   });
 
   it("prefers COLLAB_HTTP_URL over ws-to-http rewrite for server calls", () => {
-    process.env.COLLAB_URL = "wss://plicum.com";
+    process.env.COLLAB_URL = "wss://paplyn.com";
     process.env.COLLAB_HTTP_URL = "http://collab:1234";
-    const request = new Request("https://plicum.com/api/projects/1/collab", {
+    const request = new Request("https://paplyn.com/api/projects/1/collab", {
       headers: {
-        host: "plicum.com",
+        host: "paplyn.com",
         "x-forwarded-proto": "https",
       },
     });

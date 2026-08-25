@@ -3,7 +3,7 @@ import { Newsreader, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeScript } from "@/components/theme-script";
 import { BRAND } from "@/components/plicum-wordmark";
-import { PRODUCT } from "@/lib/product";
+import { PRODUCT, PUBLIC_SITE_URL } from "@/lib/product";
 import "./globals.css";
 
 const newsreader = Newsreader({
@@ -42,6 +42,20 @@ export const metadata: Metadata = {
   openGraph: {
     title: PRODUCT.pageTitle,
     description: PRODUCT.metaDescription,
+    images: [
+      {
+        url: `${PUBLIC_SITE_URL}${BRAND.ogImage}`,
+        width: 1536,
+        height: 1024,
+        alt: PRODUCT.name,
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: PRODUCT.pageTitle,
+    description: PRODUCT.metaDescription,
+    images: [`${PUBLIC_SITE_URL}${BRAND.ogImage}`],
   },
 };
 

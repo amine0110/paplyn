@@ -6,7 +6,7 @@
  * OpenAlex is a live fallback when S2 is unavailable.
  */
 
-import { PRODUCT_NAME } from "@/lib/product";
+import { PRODUCT_NAME, PUBLIC_SITE_URL } from "@/lib/product";
 
 export const LITERATURE_SEARCH_LIMIT = 8;
 /** Fetch extra hits from live search, then re-rank for recency before trimming. */
@@ -17,7 +17,7 @@ export const RECENT_YEAR_WINDOW = 5;
 /** Prefer surfacing papers from this many years back (still includes older hits). */
 export const PREFER_RECENT_YEARS = 8;
 
-const USER_AGENT = `${PRODUCT_NAME} academic assistant (https://plicum.com)`;
+const USER_AGENT = `${PRODUCT_NAME} academic assistant (${PUBLIC_SITE_URL})`;
 const S2_LIVE_SEARCH_URL = "https://api.semanticscholar.org/graph/v1/paper/search";
 
 export interface LiteraturePaper {
@@ -280,7 +280,7 @@ async function searchOpenAlex(query: string): Promise<LiteraturePaper[]> {
     "select",
     "title,publication_year,authorships,primary_location,cited_by_count,abstract_inverted_index,doi,id"
   );
-  url.searchParams.set("mailto", "ai@plicum.com");
+  url.searchParams.set("mailto", "ai@paplyn.com");
 
   const res = await fetch(url, {
     headers: { Accept: "application/json", "User-Agent": USER_AGENT },
@@ -307,7 +307,7 @@ async function searchOpenAlex(query: string): Promise<LiteraturePaper[]> {
       "select",
       "title,publication_year,authorships,primary_location,cited_by_count,abstract_inverted_index,doi,id"
     );
-    recentUrl.searchParams.set("mailto", "ai@plicum.com");
+    recentUrl.searchParams.set("mailto", "ai@paplyn.com");
 
     const recentRes = await fetch(recentUrl, {
       headers: { Accept: "application/json", "User-Agent": USER_AGENT },

@@ -1,18 +1,20 @@
-# Plicum
+# Paplyn
 
 Collaborative LaTeX for researchers and students. Write, compile, and share documents in real time.
 
-**Live:** [plicum.com](https://plicum.com)
+**Live:** [paplyn.com](https://paplyn.com) (formerly Plicum / plicum.com — legacy domain redirects to paplyn.com)
 
-Product name, tagline, and UI copy are defined in [`packages/web/src/lib/product.ts`](packages/web/src/lib/product.ts). Override the public name with `PRODUCT_NAME` or `NEXT_PUBLIC_PRODUCT_NAME` if needed. Internal npm and Docker identifiers still use the `@quire` scope.
+The public product name is **Paplyn**. This repository remains [amine0110/plicum](https://github.com/amine0110/plicum) on GitHub; internal npm and Docker identifiers use the `@quire` scope.
+
+Product name, tagline, and UI copy are defined in [`packages/web/src/lib/product.ts`](packages/web/src/lib/product.ts). Override the public name with `PRODUCT_NAME` or `NEXT_PUBLIC_PRODUCT_NAME` if needed.
 
 ## Deployment
 
-Plicum runs in two modes, controlled by `DEPLOYMENT_MODE` and `NEXT_PUBLIC_DEPLOYMENT_MODE`:
+Paplyn runs in two modes, controlled by `DEPLOYMENT_MODE` and `NEXT_PUBLIC_DEPLOYMENT_MODE`:
 
 | Mode | Use case |
 |------|----------|
-| **Hosted (SaaS)** | Multi-tenant cloud at [plicum.com](https://plicum.com). Stripe billing, plan limits, managed infrastructure. |
+| **Hosted (SaaS)** | Multi-tenant cloud at [paplyn.com](https://paplyn.com). Stripe billing, plan limits, managed infrastructure. |
 | **Self-hosted** | Single organization on your own server via Docker Compose. No billing UI; first registered user becomes admin. |
 
 Both modes share the same codebase and feature set. Self-hosting is the supported path for running from this repository.
@@ -57,11 +59,14 @@ Bind services to localhost and put nginx, Caddy, or similar in front of the web 
 cp .env.example .env
 # Set BETTER_AUTH_SECRET, COLLAB_SECRET, BETTER_AUTH_URL, NEXT_PUBLIC_APP_URL,
 # NEXT_PUBLIC_COLLAB_URL, and other values for your domain (do not commit .env)
+# SaaS example: BETTER_AUTH_URL=https://paplyn.com, NEXT_PUBLIC_APP_URL=https://paplyn.com
 
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 ```
 
 `docker-compose.prod.yml` overrides port bindings to `127.0.0.1` only.
+
+For Caddy on the production VPS, see [`deploy/caddy/Caddyfile`](deploy/caddy/Caddyfile) (paplyn.com canonical; plicum.com redirects).
 
 ### Services
 
