@@ -62,4 +62,24 @@ describe("Reset password page", () => {
       });
     });
   });
+
+  it("toggles password visibility for new and confirm fields", () => {
+    render(<ResetPasswordPage />);
+
+    const newPassword = screen.getByLabelText("New password");
+    const confirmPassword = screen.getByLabelText("Confirm password");
+    expect(newPassword).toHaveAttribute("type", "password");
+    expect(confirmPassword).toHaveAttribute("type", "password");
+
+    const [newPasswordToggle, confirmToggle] = screen.getAllByRole("button", { name: "Show password" });
+    fireEvent.click(newPasswordToggle);
+    expect(newPassword).toHaveAttribute("type", "text");
+    fireEvent.click(screen.getAllByRole("button", { name: "Hide password" })[0]);
+    expect(newPassword).toHaveAttribute("type", "password");
+
+    fireEvent.click(confirmToggle);
+    expect(confirmPassword).toHaveAttribute("type", "text");
+    fireEvent.click(screen.getAllByRole("button", { name: "Hide password" })[0]);
+    expect(confirmPassword).toHaveAttribute("type", "password");
+  });
 });

@@ -1,6 +1,6 @@
 import React from "react";
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { LoginPageClient } from "@/app/login/login-form";
 import * as LoginPageModule from "@/app/login/page";
 
@@ -46,5 +46,20 @@ describe("Login page", () => {
     const button = screen.getByRole("button", { name: "Continue with Google" });
     expect(button).toBeInTheDocument();
     expect(button.querySelector("svg[aria-hidden='true']")).toBeInTheDocument();
+  });
+
+  it("toggles password visibility", () => {
+    render(<LoginPageClient googleEnabled={false} />);
+
+    const password = screen.getByLabelText("Password");
+    expect(password).toHaveAttribute("type", "password");
+
+    const toggle = screen.getByRole("button", { name: "Show password" });
+    fireEvent.click(toggle);
+    expect(password).toHaveAttribute("type", "text");
+    expect(screen.getByRole("button", { name: "Hide password" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Hide password" }));
+    expect(password).toHaveAttribute("type", "password");
   });
 });
