@@ -25,17 +25,6 @@ describe("invite email notice (client-safe)", () => {
     ).toBe("They are already on this project.");
   });
 
-  it("shows added + email failure without invite-created wording", () => {
-    const notice = resolveInviteEmailNotice({
-      emailSent: false,
-      emailStatus: "added-existing-user",
-      emailReason: "Email could not be sent: Connection refused",
-    });
-    expect(notice?.message).toContain("Added to the project");
-    expect(notice?.message).not.toContain("Invite created");
-    expect(notice?.message).toContain("Connection refused");
-  });
-
   it("shows invite failure reason for not-configured status", () => {
     const notice = resolveInviteEmailNotice({
       emailSent: false,

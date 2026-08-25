@@ -3,7 +3,6 @@ export type InviteEmailStatus =
   | "not-configured"
   | "send-failed"
   | "not-applicable"
-  | "added-existing-user"
   | "already-member";
 
 export interface InviteEmailResponseFields {
@@ -24,16 +23,6 @@ export function resolveInviteEmailNotice(
       return { tone: "muted", message: "They are already on this project." };
     case "sent":
       return { tone: "success", message: "Invite email sent." };
-    case "added-existing-user":
-      if (fields.emailSent) {
-        return { tone: "success", message: "Added to the project. Notification email sent." };
-      }
-      return {
-        tone: "muted",
-        message: fields.emailReason
-          ? `Added to the project. ${fields.emailReason}`
-          : "Added to the project. Notification email could not be sent.",
-      };
     case "not-configured":
     case "send-failed":
       return {

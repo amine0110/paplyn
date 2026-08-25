@@ -7,18 +7,25 @@ const dbMocks = vi.hoisted(() => {
   const select = vi.fn(() => ({ from }));
   const deleteWhere = vi.fn();
   const deleteFn = vi.fn(() => ({ where: deleteWhere }));
+  const set = vi.fn();
+  const updateWhere = vi.fn();
+  const update = vi.fn(() => ({ set, where: updateWhere }));
+  const values = vi.fn();
+  const insert = vi.fn(() => ({ values }));
 
-  return { limit, where, from, select, deleteWhere, deleteFn };
+  return { limit, where, from, select, deleteWhere, deleteFn, set, updateWhere, update, values, insert };
 });
 
 vi.mock("@/lib/db", () => ({
   db: {
     select: dbMocks.select,
     delete: dbMocks.deleteFn,
+    insert: dbMocks.insert,
+    update: dbMocks.update,
   },
 }));
 
-import { removeProjectMember, revokeProjectInvite } from "@/lib/project-access";
+import { removeProjectMember, revokeProjectInvite, acceptInviteForUser } from "@/lib/project-access";
 
 const projectId = "proj-1";
 const ownerId = "owner-1";
@@ -52,6 +59,15 @@ const inviteRow = {
   invitedBy: ownerId,
   accepted: false,
   createdAt: new Date(),
+};
+
+const acceptingUser = {
+  id: "user-accept",
+  email: "guest@example.com",
+  name: "Guest",
+  role: "user" as const,
+  createdAt: new Date(),
+  updatedAt: new Date(),
 };
 
 function mockProjectAccessAsOwner() {
@@ -164,5 +180,41 @@ describe("revokeProjectInvite", () => {
     const result = await revokeProjectInvite(projectId, ownerId, "missing");
 
     expect(result).toEqual({ ok: false, status: 404, error: "Not found" });
+  });
+});
+
+describe("acceptInviteForUser", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    dbMocks.set.mockReturnValue({ where: dbMocks.updateWhere });
+    dbMocks.updateWhere.mockResolvedValue(undefined);
+    dbMocks.values.mockResolvedValue(undefined);
+    dbMocks.insert.mockReturnValue({ values: dbMocks.values });
+  });
+
+  it("adds membership only when the invite is explicitly accepted", async () => {
+    dbMocks.limit
+      .mockResolvedValueOnce([inviteRow])
+      .mockResolvedValueOnce([projectRow])
+      .mockResolvedValueOnce([]);
+
+    const result = await acceptInviteForUser(inviteId, acceptingUser);
+
+    expect(result).toEqual({ ok: true, projectId, alreadyMember: false });
+    expect(dbMocks.insert).toHaveBeenCalledTimes(1);
+    expect(dbMocks.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not insert membership when the user is already a member", async () => {
+    dbMocks.limit
+      .mockResolvedValueOnce([inviteRow])
+      .mockResolvedValueOnce([projectRow])
+      .mockResolvedValueOnce([memberRow]);
+
+    const result = await acceptInviteForUser(inviteId, acceptingUser);
+
+    expect(result).toEqual({ ok: true, projectId, alreadyMember: true });
+    expect(dbMocks.insert).not.toHaveBeenCalled();
+    expect(dbMocks.update).toHaveBeenCalledTimes(1);
   });
 });

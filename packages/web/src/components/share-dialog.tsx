@@ -148,7 +148,7 @@ export function ShareDialog({
     };
     const notice = resolveInviteEmailNotice(emailFields);
 
-    if (result.added) {
+    if (result.alreadyMember) {
       await reloadSharing();
       if (notice) {
         setInviteNotice(notice);

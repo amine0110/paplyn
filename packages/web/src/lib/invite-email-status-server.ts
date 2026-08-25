@@ -21,13 +21,3 @@ export function linkOnlyInviteEmailFields(): InviteEmailResponseFields {
 export function alreadyMemberEmailFields(): InviteEmailResponseFields {
   return { emailSent: false, emailStatus: "already-member" };
 }
-
-export function addedExistingUserEmailFields(
-  result: SendEmailResult
-): InviteEmailResponseFields {
-  return {
-    emailSent: result.sent,
-    emailStatus: "added-existing-user",
-    ...(result.sent ? {} : { emailReason: formatEmailFailureReason(result) }),
-  };
-}

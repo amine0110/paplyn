@@ -88,7 +88,16 @@ function LoginForm({ googleEnabled }: LoginFormProps) {
         </form>
         <p className="text-sm text-ink-muted text-center mt-6">
           No account?{" "}
-          <Link href="/signup" className="text-navy hover:underline">Create one</Link>
+          <Link
+            href={
+              callbackURL !== "/dashboard"
+                ? `/signup?next=${encodeURIComponent(callbackURL)}`
+                : "/signup"
+            }
+            className="text-navy hover:underline"
+          >
+            Create one
+          </Link>
         </p>
       </div>
     </div>

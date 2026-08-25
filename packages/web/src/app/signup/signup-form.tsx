@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signUp } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,14 +16,23 @@ type SignupFormProps = {
   googleEnabled: boolean;
 };
 
-export function SignupPageClient({ googleEnabled }: SignupFormProps) {
+function SignupForm({ googleEnabled }: SignupFormProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = searchParams.get("next") || "/dashboard";
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const callbackURL = nextPath.startsWith("/") ? nextPath : "/dashboard";
+  const loginHref =
+    callbackURL !== "/dashboard"
+      ? `/login?next=${encodeURIComponent(callbackURL)}`
+      : "/login";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -42,7 +51,7 @@ export function SignupPageClient({ googleEnabled }: SignupFormProps) {
       if (result.error) {
         setError(result.error.message || "Could not create account");
       } else {
-        router.push("/dashboard");
+        router.push(callbackURL);
       }
     } catch {
       setError("Something went wrong");
@@ -59,7 +68,7 @@ export function SignupPageClient({ googleEnabled }: SignupFormProps) {
 
         {googleEnabled && (
           <div className="space-y-4 mb-6">
-            <GoogleSignInButton callbackURL="/dashboard" />
+            <GoogleSignInButton callbackURL={callbackURL} />
             <p className="text-xs text-center text-ink-muted">or sign up with email</p>
           </div>
         )}
@@ -100,9 +109,17 @@ export function SignupPageClient({ googleEnabled }: SignupFormProps) {
         </form>
         <p className="text-sm text-ink-muted text-center mt-6">
           Already have an account?{" "}
-          <Link href="/login" className="text-navy hover:underline">Sign in</Link>
+          <Link href={loginHref} className="text-navy hover:underline">Sign in</Link>
         </p>
       </div>
     </div>
+  );
+}
+
+export function SignupPageClient({ googleEnabled }: SignupFormProps) {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-ink-muted">Loading…</div>}>
+      <SignupForm googleEnabled={googleEnabled} />
+    </Suspense>
   );
 }

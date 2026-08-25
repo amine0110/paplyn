@@ -50,16 +50,4 @@ describe("Share invite email notice copy", () => {
     expect(screen.getByRole("status")).not.toHaveTextContent("Invite created");
     expect(screen.getByRole("status")).not.toHaveTextContent("email not sent");
   });
-
-  it("shows added + email failure without invite-created wording", () => {
-    render(
-      <InviteNotice
-        emailSent={false}
-        emailStatus="added-existing-user"
-        emailReason="Email could not be sent: Connection refused"
-      />
-    );
-    expect(screen.getByRole("status")).toHaveTextContent("Added to the project.");
-    expect(screen.getByRole("status")).not.toHaveTextContent("Invite created");
-  });
 });
