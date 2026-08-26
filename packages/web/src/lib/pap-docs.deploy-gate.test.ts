@@ -39,6 +39,18 @@ describe("Paplyn docs deploy gate", () => {
     expect(nav).toMatch(/ThemeToggle[\s\S]*href="\/docs"/);
   });
 
+  it("uses session-aware chrome actions in docs shell header", () => {
+    const docsShell = readSrc("components/docs/docs-shell.tsx");
+    expect(docsShell).toContain("ChromeSessionActions");
+    expect(docsShell).toContain('variant="docs"');
+
+    const sessionActions = readSrc("components/chrome-session-actions.tsx");
+    expect(sessionActions).toContain("useSession");
+    expect(sessionActions).toContain("signOutAndLeave");
+    expect(sessionActions).toContain('href="/dashboard"');
+    expect(sessionActions).toContain('href="/settings"');
+  });
+
   it("exposes Docs in the project editor header and mobile overflow menu", () => {
     const projectPage = readSrc("app/project/[id]/page.tsx");
     expect(projectPage).toContain('href="/docs"');

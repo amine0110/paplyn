@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
+import { ChromeSessionActions } from "@/components/chrome-session-actions";
 import { PlicumWordmark } from "@/components/plicum-wordmark";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { DocsSidebar } from "@/components/docs/docs-sidebar";
@@ -51,17 +52,7 @@ export function DocsShell({ sections, children }: DocsShellProps) {
 
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <ThemeToggle compact />
-            <Link href="/login" className={cn("hidden sm:inline text-sm", CHROME_LINK)}>
-              Sign in
-            </Link>
-            <Link
-              href="/signup"
-              className={cn(
-                "inline-flex items-center rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent-light cursor-pointer"
-              )}
-            >
-              Get started
-            </Link>
+            <ChromeSessionActions variant="docs" />
           </div>
         </div>
       </header>
