@@ -32,6 +32,7 @@ import { useUiFeedback } from "@/components/ui-feedback";
 import { CollabPresence } from "@/components/collab-presence";
 import { AiSidebar, type AiPendingRequest } from "@/components/ai-sidebar";
 import { AiSidebarPanel } from "@/components/ai-sidebar-panel";
+import { useProjectAiChatThread } from "@/lib/use-project-ai-chat-thread";
 import { buildCompileFixAiRequest, buildCompileFixAutoRetryRequest } from "@/lib/ai-compile-fix-intent";
 import {
   beginCompileFixRetrySession,
@@ -158,6 +159,8 @@ export default function ProjectPage() {
   const [showAi, setShowAi] = useState(false);
   const [selectedText, setSelectedText] = useState("");
   const [aiPendingRequest, setAiPendingRequest] = useState<AiPendingRequest | null>(null);
+  const { messages: aiChatMessages, setMessages: setAiChatMessages } =
+    useProjectAiChatThread(projectId);
   const isNarrow = useMediaQuery("(max-width: 639px)");
   const [showShare, setShowShare] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -1260,6 +1263,8 @@ export default function ProjectPage() {
                   onCompileFixActionsApplied={canEdit ? handleCompileFixActionsApplied : undefined}
                   onCompileFixSessionStart={canEdit ? handleCompileFixSessionStart : undefined}
                   onCompileFixRetryNoOp={canEdit ? handleCompileFixRetryNoOp : undefined}
+                  messages={aiChatMessages}
+                  setMessages={setAiChatMessages}
                 />
               </div>
             ) : (
@@ -1282,6 +1287,8 @@ export default function ProjectPage() {
                   onCompileFixActionsApplied={canEdit ? handleCompileFixActionsApplied : undefined}
                   onCompileFixSessionStart={canEdit ? handleCompileFixSessionStart : undefined}
                   onCompileFixRetryNoOp={canEdit ? handleCompileFixRetryNoOp : undefined}
+                  messages={aiChatMessages}
+                  setMessages={setAiChatMessages}
                 />
               </AiSidebarPanel>
             )}

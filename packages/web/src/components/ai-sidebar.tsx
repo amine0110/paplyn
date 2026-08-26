@@ -20,9 +20,10 @@ import {
   CHROME_ICON_BTN_MD,
   CHROME_SEND_BTN,
 } from "@/lib/chrome-interactive";
+import { resolveComposerForcedTool } from "@/lib/ai-composer-forced-tool";
 import { cn } from "@/components/ui/cn";
 
-interface Message {
+export interface AiChatMessage {
   role: "user" | "assistant";
   content: string;
   usedPlugins?: AiUsedPlugin[];
@@ -63,6 +64,9 @@ interface AiSidebarProps {
   onCompileFixSessionStart?: () => void;
   /** Auto-retry returned actions but none were applied (all rejected/skipped). */
   onCompileFixRetryNoOp?: () => void;
+  /** Project-scoped thread; keeps chat when the sidebar panel is closed. */
+  messages: AiChatMessage[];
+  setMessages: React.Dispatch<React.SetStateAction<AiChatMessage[]>>;
 }
 
 const SCROLL_THRESHOLD_PX = 80;
@@ -126,8 +130,9 @@ export function AiSidebar({
   onCompileFixActionsApplied,
   onCompileFixSessionStart,
   onCompileFixRetryNoOp,
+  messages,
+  setMessages,
 }: AiSidebarProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("Thinking…");
@@ -144,7 +149,9 @@ export function AiSidebar({
   const userScrolledUpRef = useRef(false);
   const messagesRef = useRef(messages);
   const inputBeforeVoiceRef = useRef("");
+  const selectedToolRef = useRef<string | null>(null);
   messagesRef.current = messages;
+  selectedToolRef.current = selectedTool;
 
   const adjustTextareaHeight = useCallback(() => {
     const el = textareaRef.current;
@@ -237,7 +244,13 @@ export function AiSidebar({
   ) {
     if (!content.trim() && !action) return;
 
-    const forcedTool = options?.forcedTool;
+    const forcedTool = resolveComposerForcedTool(
+      options?.forcedTool,
+      selectedToolRef.current
+    );
+    setSelectedTool(null);
+    setToolInputPlaceholder(null);
+
     const fixIntent = detectFixCompileIntent(content, action);
     const effectiveAction = fixIntent ? "explain-errors" : action;
 
@@ -246,7 +259,7 @@ export function AiSidebar({
     }
 
     if (fixIntent && compileErrors.length === 0) {
-      const userMsg: Message = { role: "user", content: content || action || "" };
+      const userMsg: AiChatMessage = { role: "user", content: content || action || "" };
       setMessages((prev) => [
         ...prev,
         userMsg,
@@ -256,8 +269,6 @@ export function AiSidebar({
         },
       ]);
       setInput("");
-      setSelectedTool(null);
-      setToolInputPlaceholder(null);
       return;
     }
 
@@ -266,11 +277,9 @@ export function AiSidebar({
     setHasStreamProgress(false);
     setLoadingMessage(loadingLabelForAction(effectiveAction, content, forcedTool));
 
-    const userMsg: Message = { role: "user", content: content || action || "" };
+    const userMsg: AiChatMessage = { role: "user", content: content || action || "" };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
-    setSelectedTool(null);
-    setToolInputPlaceholder(null);
 
     try {
       const res = await fetch(`/api/projects/${projectId}/ai`, {
@@ -412,18 +421,19 @@ export function AiSidebar({
   }
 
   function handleSelectTool(toolName: string, meta: AiPluginClientMeta) {
+    selectedToolRef.current = toolName;
     setSelectedTool(toolName);
     setToolInputPlaceholder(meta.inputPlaceholder ?? null);
   }
 
   function handleClearTool() {
+    selectedToolRef.current = null;
     setSelectedTool(null);
     setToolInputPlaceholder(null);
   }
 
   function submitComposer() {
-    const forcedTool = selectedTool ?? undefined;
-    void sendMessage(input, undefined, { forcedTool });
+    void sendMessage(input);
   }
 
   function handleVoiceToggle() {
@@ -432,12 +442,8 @@ export function AiSidebar({
       speech.stop();
       const command = parseVoiceCommand(input);
       if (command.message.trim()) {
-        void sendMessage(command.message, command.action, {
-          forcedTool: selectedTool ?? undefined,
-        });
+        void sendMessage(command.message, command.action);
         setInput("");
-        setSelectedTool(null);
-        setToolInputPlaceholder(null);
       }
       return;
     }
