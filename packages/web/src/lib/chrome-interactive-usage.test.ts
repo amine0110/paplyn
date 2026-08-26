@@ -156,12 +156,16 @@ describe("workspace chrome class usage", () => {
     expect(css).toContain("disabled:cursor-not-allowed");
   });
 
-  it("project editor back control links to the dashboard manuscripts list", () => {
+  it("project editor back control hard-navigates to the dashboard manuscripts list", () => {
     const src = readSource("app/project/[id]/page.tsx");
     expect(src).toMatch(
-      /<Link[\s\S]*href="\/dashboard"[\s\S]*aria-label="Back to manuscripts"[\s\S]*CHROME_ICON_BTN_MD/
+      /<a[\s\S]*href="\/dashboard"[\s\S]*aria-label="Back to manuscripts"[\s\S]*CHROME_ICON_BTN_MD[\s\S]*handleDashboardBackClick/
     );
-    expect(src).not.toMatch(/title="Back to manuscripts"[\s\S]*onClick=\{\(\) => \{\}\}/);
+    expect(src).not.toMatch(/<Link[\s\S]*href="\/dashboard"/);
+
+    const hardNav = readSource("lib/hard-navigation.ts");
+    expect(hardNav).toContain("window.location.assign");
+    expect(hardNav).toContain("handleDashboardBackClick");
   });
 
   it("Button base styles use pointer cursor with disabled not-allowed", () => {

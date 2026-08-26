@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { FileTree, type FileNode } from "@/components/file-tree";
 import { ImagePreview } from "@/components/image-preview";
@@ -57,6 +56,7 @@ import {
 import { cn } from "@/components/ui/cn";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { leaveForLogin } from "@/lib/auth-redirect";
+import { handleDashboardBackClick } from "@/lib/hard-navigation";
 import { useRequireSession } from "@/lib/use-require-session";
 import {
   Play,
@@ -1021,14 +1021,15 @@ export default function ProjectPage() {
     <div className="h-[100dvh] flex flex-col bg-canvas overflow-hidden">
       <header className="relative z-30 h-11 shrink-0 flex items-center justify-between gap-2 px-3 sm:px-4 border-b border-border bg-paper/90 backdrop-blur-sm pt-[env(safe-area-inset-top,0px)]">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <Link
+          <a
             href="/dashboard"
             aria-label="Back to manuscripts"
             title="Back to manuscripts"
             className={CHROME_ICON_BTN_MD}
+            onClick={handleDashboardBackClick}
           >
             <ChevronLeft className="h-4 w-4" />
-          </Link>
+          </a>
           <button
             onClick={() => setShowOutline(!showOutline)}
             className={`${CHROME_ICON_BTN_MD} hidden sm:block lg:hidden`}
