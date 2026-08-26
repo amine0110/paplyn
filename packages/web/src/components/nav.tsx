@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { ChromeSessionActions } from "@/components/chrome-session-actions";
 import { cn } from "@/components/ui/cn";
-import { CHROME_LINK } from "@/lib/chrome-interactive";
+import {
+  CHROME_LINK,
+  CHROME_NAV_CLUSTER_MIN,
+  CHROME_NAV_LINK_PAD,
+  CHROME_NAV_THEME_SEP,
+} from "@/lib/chrome-interactive";
 import { PlicumWordmark } from "@/components/plicum-wordmark";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -15,9 +20,9 @@ export function Nav() {
           <PlicumWordmark className="h-10" priority />
         </Link>
 
-        <nav className="flex items-center gap-2 sm:gap-3 shrink min-w-0">
-          <ThemeToggle compact />
-          <Link href="/docs" className={cn("text-sm", CHROME_LINK)}>
+        <nav className={CHROME_NAV_CLUSTER_MIN}>
+          <ThemeToggle compact className={CHROME_NAV_THEME_SEP} />
+          <Link href="/docs" className={cn("text-sm", CHROME_NAV_LINK_PAD, CHROME_LINK)}>
             Docs
           </Link>
           <ChromeSessionActions />

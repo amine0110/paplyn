@@ -5,7 +5,7 @@ import { useSession } from "@/lib/auth-client";
 import { signOutAndLeave } from "@/lib/auth-redirect";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
-import { CHROME_LINK } from "@/lib/chrome-interactive";
+import { CHROME_LINK, CHROME_NAV_LINK_PAD } from "@/lib/chrome-interactive";
 
 type ChromeSessionActionsVariant = "nav" | "docs";
 
@@ -15,18 +15,23 @@ export function ChromeSessionActions({ variant = "nav" }: { variant?: ChromeSess
   if (session?.user) {
     return (
       <>
-        <Link href="/dashboard" className={cn("text-sm", CHROME_LINK)}>
+        <Link href="/dashboard" className={cn("text-sm", CHROME_NAV_LINK_PAD, CHROME_LINK)}>
           Projects
         </Link>
-        <Link href="/settings" className={cn("text-sm", CHROME_LINK)}>
+        <Link href="/settings" className={cn("text-sm", CHROME_NAV_LINK_PAD, CHROME_LINK)}>
           Settings
         </Link>
         {(session.user as { role?: string }).role === "admin" && (
-          <Link href="/admin" className={cn("text-sm", CHROME_LINK)}>
+          <Link href="/admin" className={cn("text-sm", CHROME_NAV_LINK_PAD, CHROME_LINK)}>
             Admin
           </Link>
         )}
-        <Button variant="ghost" size="sm" onClick={() => void signOutAndLeave()}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={CHROME_NAV_LINK_PAD}
+          onClick={() => void signOutAndLeave()}
+        >
           Sign out
         </Button>
       </>
@@ -36,7 +41,7 @@ export function ChromeSessionActions({ variant = "nav" }: { variant?: ChromeSess
   if (variant === "docs") {
     return (
       <>
-        <Link href="/login" className={cn("hidden sm:inline text-sm", CHROME_LINK)}>
+        <Link href="/login" className={cn("hidden sm:inline text-sm", CHROME_NAV_LINK_PAD, CHROME_LINK)}>
           Sign in
         </Link>
         <Link

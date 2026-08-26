@@ -1,7 +1,13 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it, expect } from "vitest";
-import { CHROME_SEND_BTN, CHROME_TOOLBAR_BTN } from "@/lib/chrome-interactive";
+import {
+  CHROME_NAV_CLUSTER,
+  CHROME_NAV_LINK_PAD,
+  CHROME_NAV_THEME_SEP,
+  CHROME_SEND_BTN,
+  CHROME_TOOLBAR_BTN,
+} from "@/lib/chrome-interactive";
 
 const ROOT = join(import.meta.dirname, "..");
 
@@ -189,5 +195,12 @@ describe("chrome-interactive class constants", () => {
   it("exports toolbar and send button classes", () => {
     expect(CHROME_TOOLBAR_BTN).toBe("chrome-toolbar-btn");
     expect(CHROME_SEND_BTN).toBe("chrome-send-btn");
+  });
+
+  it("exports nav cluster spacing for top-bar chrome", () => {
+    expect(CHROME_NAV_CLUSTER).toContain("md:gap-6");
+    expect(CHROME_NAV_CLUSTER).toContain("gap-2");
+    expect(CHROME_NAV_LINK_PAD).toBe("px-1.5");
+    expect(CHROME_NAV_THEME_SEP).toBe("md:mr-2");
   });
 });
