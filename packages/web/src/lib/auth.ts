@@ -3,7 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "./db";
 import * as schema from "./schema";
 import { config } from "./config";
-import { getGoogleAuthConfig } from "./auth-providers";
+import { getGithubAuthConfig, getGoogleAuthConfig } from "./auth-providers";
 import {
   getBrandTrustedOrigins,
   getSelfHostedTrustedOrigins,
@@ -15,6 +15,26 @@ import { PRODUCT_NAME } from "./product";
 import { eq, count } from "drizzle-orm";
 
 const googleAuth = getGoogleAuthConfig();
+const githubAuth = getGithubAuthConfig();
+
+const socialProviders = {
+  ...(googleAuth
+    ? {
+        google: {
+          clientId: googleAuth.clientId,
+          clientSecret: googleAuth.clientSecret,
+        },
+      }
+    : {}),
+  ...(githubAuth
+    ? {
+        github: {
+          clientId: githubAuth.clientId,
+          clientSecret: githubAuth.clientSecret,
+        },
+      }
+    : {}),
+};
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -31,14 +51,7 @@ export const auth = betterAuth({
       enabled: true,
     },
   },
-  socialProviders: googleAuth
-    ? {
-        google: {
-          clientId: googleAuth.clientId,
-          clientSecret: googleAuth.clientSecret,
-        },
-      }
-    : undefined,
+  socialProviders: Object.keys(socialProviders).length > 0 ? socialProviders : undefined,
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 8,

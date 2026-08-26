@@ -36,14 +36,14 @@ describe("Signup page", () => {
   });
 
   it("renders confirm password field", () => {
-    render(<SignupPageClient googleEnabled={false} />);
+    render(<SignupPageClient googleEnabled={false} githubEnabled={false} />);
 
     expect(screen.getByLabelText("Password")).toBeInTheDocument();
     expect(screen.getByLabelText("Confirm password")).toBeInTheDocument();
   });
 
   it("shows error and does not sign up when passwords differ", async () => {
-    render(<SignupPageClient googleEnabled={false} />);
+    render(<SignupPageClient googleEnabled={false} githubEnabled={false} />);
 
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Ada" } });
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ada@example.com" } });
@@ -59,21 +59,36 @@ describe("Signup page", () => {
   });
 
   it("hides Google button when Google auth is not configured", () => {
-    render(<SignupPageClient googleEnabled={false} />);
+    render(<SignupPageClient googleEnabled={false} githubEnabled={false} />);
 
     expect(screen.queryByRole("button", { name: "Continue with Google" })).not.toBeInTheDocument();
   });
 
   it("shows Google button when Google auth is configured", () => {
-    render(<SignupPageClient googleEnabled={true} />);
+    render(<SignupPageClient googleEnabled={true} githubEnabled={false} />);
 
     const button = screen.getByRole("button", { name: "Continue with Google" });
     expect(button).toBeInTheDocument();
     expect(button.querySelector("svg[aria-hidden='true']")).toBeInTheDocument();
   });
 
+  it("hides GitHub button when GitHub auth is not configured", () => {
+    render(<SignupPageClient googleEnabled={false} githubEnabled={false} />);
+
+    expect(screen.queryByRole("button", { name: "Continue with GitHub" })).not.toBeInTheDocument();
+  });
+
+  it("shows GitHub button when GitHub auth is configured", () => {
+    render(<SignupPageClient googleEnabled={false} githubEnabled={true} />);
+
+    const button = screen.getByRole("button", { name: "Continue with GitHub" });
+    expect(button).toBeInTheDocument();
+    expect(button).toHaveClass("cursor-pointer");
+    expect(button.querySelector("svg[aria-hidden='true']")).toBeInTheDocument();
+  });
+
   it("toggles password visibility for password and confirm fields", () => {
-    render(<SignupPageClient googleEnabled={false} />);
+    render(<SignupPageClient googleEnabled={false} githubEnabled={false} />);
 
     const password = screen.getByLabelText("Password");
     const confirmPassword = screen.getByLabelText("Confirm password");
@@ -95,7 +110,7 @@ describe("Signup page", () => {
   it("redirects to next path after signup when provided", async () => {
     useSearchParams.mockReturnValue(new URLSearchParams("next=/invite/invite-1"));
 
-    render(<SignupPageClient googleEnabled={false} />);
+    render(<SignupPageClient googleEnabled={false} githubEnabled={false} />);
 
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Ada" } });
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ada@example.com" } });
@@ -111,7 +126,7 @@ describe("Signup page", () => {
   it("links to login with the same next path", () => {
     useSearchParams.mockReturnValue(new URLSearchParams("next=/invite/invite-1"));
 
-    render(<SignupPageClient googleEnabled={false} />);
+    render(<SignupPageClient googleEnabled={false} githubEnabled={false} />);
 
     expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute(
       "href",
