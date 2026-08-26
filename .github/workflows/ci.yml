@@ -24,13 +24,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck web
-        run: pnpm --filter @quire/web typecheck
+        run: pnpm --filter @paplyn/web typecheck
 
       - name: Test collab
-        run: pnpm --filter @quire/collab test
+        run: pnpm --filter @paplyn/collab test
 
       - name: Test web
-        run: pnpm --filter @quire/web test
+        run: pnpm --filter @paplyn/web test
 
       - name: Test compiler
-        run: pnpm --filter @quire/compiler test
+        run: pnpm --filter @paplyn/compiler test

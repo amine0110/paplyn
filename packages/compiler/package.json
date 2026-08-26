@@ -1,5 +1,5 @@
 {
-  "name": "@quire/compiler",
+  "name": "@paplyn/compiler",
   "version": "0.1.0",
   "private": true,
   "type": "module",

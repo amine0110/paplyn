@@ -5,7 +5,7 @@ WORKDIR /app
 FROM base AS deps
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
 COPY packages/web/package.json ./packages/web/
-RUN pnpm install --filter @quire/web --frozen-lockfile || pnpm install --filter @quire/web
+RUN pnpm install --filter @paplyn/web --frozen-lockfile || pnpm install --filter @paplyn/web
 
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules

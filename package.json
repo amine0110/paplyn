@@ -1,15 +1,15 @@
 {
-  "name": "quire",
+  "name": "paplyn",
   "private": true,
   "scripts": {
     "dev": "pnpm --parallel -r dev",
     "build": "pnpm -r build",
-    "test": "pnpm --filter @quire/collab test && pnpm --filter @quire/web test && pnpm --filter @quire/compiler test",
+    "test": "pnpm --filter @paplyn/collab test && pnpm --filter @paplyn/web test && pnpm --filter @paplyn/compiler test",
     "lint": "pnpm -r lint",
-    "db:generate": "pnpm --filter @quire/web db:generate",
-    "db:migrate": "pnpm --filter @quire/web db:migrate",
-    "db:push": "pnpm --filter @quire/web db:push",
-    "db:init": "pnpm --filter @quire/web db:init"
+    "db:generate": "pnpm --filter @paplyn/web db:generate",
+    "db:migrate": "pnpm --filter @paplyn/web db:migrate",
+    "db:push": "pnpm --filter @paplyn/web db:push",
+    "db:init": "pnpm --filter @paplyn/web db:init"
   },
   "engines": {
     "node": ">=22"
