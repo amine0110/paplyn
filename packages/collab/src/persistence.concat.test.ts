@@ -153,4 +153,18 @@ describe("concatenated document persist guard (llm-similarity incident)", () => 
       )
     ).toThrow(PersistConcatenationError);
   });
+
+  it("identity persist succeeds when room matches already-bloated HTTP (llm-similarity live room)", async () => {
+    const doc = new Y.Doc();
+    doc.getText("main.tex").insert(0, BLOATED);
+
+    const { sql, written } = createMockSql({
+      textFiles: [{ path: "main.tex", content: BLOATED }],
+    });
+
+    await persistRoomState(sql, "0b1003fa-2847-467f-af92-34ade241b1cc", doc);
+
+    expect(written.get("main.tex")).toBe(BLOATED);
+    expect(doc.getMap(PERSIST_META_MAP).get(PERSIST_ACK_FIELD)).toEqual(expect.any(Number));
+  });
 });

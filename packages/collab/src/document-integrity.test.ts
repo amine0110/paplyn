@@ -33,6 +33,17 @@ describe("document-integrity", () => {
     expect(looksLikeConcatenatedFileContent(grown, CLEAN)).toBe(false);
   });
 
+  it("allows identity persist when HTTP is already concatenated (no deadlock)", () => {
+    const bloated = CLEAN.repeat(220);
+    expect(looksLikeConcatenatedFileContent(bloated, bloated)).toBe(false);
+    expect(() =>
+      assertNoConcatenatedDocumentUpserts(
+        [{ path: "main.tex", content: bloated }],
+        new Map([["main.tex", bloated]])
+      )
+    ).not.toThrow();
+  });
+
   it("collapseConcatenatedSeedContent returns first LaTeX copy", () => {
     const bloated = CLEAN.repeat(220);
     expect(collapseConcatenatedSeedContent("main.tex", bloated)).toBe(

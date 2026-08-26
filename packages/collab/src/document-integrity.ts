@@ -156,6 +156,9 @@ export function looksLikeConcatenatedFileContent(
   proposed: string,
   existingHttp: string | undefined
 ): boolean {
+  // Identity persist must succeed — e.g. live room already storing 220 copies in HTTP.
+  if (existingHttp !== undefined && proposed === existingHttp) return false;
+
   const documentClassCount = countDocumentClassLines(proposed);
   if (documentClassCount > 1) return true;
 
@@ -206,6 +209,7 @@ export function assertNoConcatenatedDocumentUpserts(
 ): void {
   for (const file of files) {
     const existing = existingByPath.get(file.path) ?? "";
+    if (file.content === existing) continue;
     if (!looksLikeConcatenatedFileContent(file.content, existing)) continue;
 
     throw new PersistConcatenationError(
