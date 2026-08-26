@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FixWithAiButton } from "@/components/fix-with-ai-button";
+import { ReportIssueLink } from "@/components/report-issue-link";
 import { downloadPdfBase64 } from "@/lib/project-files";
 import {
   buildPdfClickDomContext,
@@ -162,6 +163,7 @@ export function PdfPreview({
                 className="mt-2"
               />
             )}
+            <ReportIssueLink className="mt-2" />
           </>
         ) : (
           <>

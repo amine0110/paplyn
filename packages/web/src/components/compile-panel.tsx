@@ -2,6 +2,7 @@
 
 import { AlertCircle, AlertTriangle } from "lucide-react";
 import { FixWithAiButton } from "@/components/fix-with-ai-button";
+import { ReportIssueLink } from "@/components/report-issue-link";
 import { CHROME_LINK, CHROME_MENU_ITEM } from "@/lib/chrome-interactive";
 
 interface CompileError {
@@ -43,6 +44,7 @@ export function CompilePanel({ log, errors, onJumpToLine, showLog, onToggleLog, 
           {onFixWithAi && (
             <FixWithAiButton errorCount={errorList.length} onClick={onFixWithAi} />
           )}
+          {hasErrors && <ReportIssueLink className="text-xs" />}
           {warnList.length > 0 && (
             <span className="flex items-center gap-1 text-accent">
               <AlertTriangle className="h-3.5 w-3.5" />

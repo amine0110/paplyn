@@ -26,6 +26,7 @@ import {
   resolveMainFileAfterRename,
 } from "@/lib/project-files";
 import { CompilePanel } from "@/components/compile-panel";
+import { ReportIssueLink } from "@/components/report-issue-link";
 import { ProjectSettingsDialog } from "@/components/project-settings-dialog";
 import { ShareDialog } from "@/components/share-dialog";
 import { HistoryDialog } from "@/components/history-dialog";
@@ -167,6 +168,7 @@ export default function ProjectPage() {
   const [showShare, setShowShare] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [citeReportPrompt, setCiteReportPrompt] = useState(false);
 
   const editorViewRef = useRef<EditorView | null>(null);
   const [editorView, setEditorView] = useState<EditorView | null>(null);
@@ -698,8 +700,11 @@ export default function ProjectPage() {
         message: typeof err.error === "string" ? err.error : "Could not resolve DOI",
         variant: "error",
       });
+      setCiteReportPrompt(true);
       return;
     }
+
+    setCiteReportPrompt(false);
 
     const data = await res.json();
     await applyDoiCitation(data);
@@ -1111,6 +1116,9 @@ export default function ProjectPage() {
           <Link href="/docs" className={cn("hidden sm:inline text-sm", CHROME_LINK)}>
             Docs
           </Link>
+          <Link href="/report" className={cn("hidden sm:inline text-sm", CHROME_LINK)}>
+            Report
+          </Link>
           <Button variant="default" size="sm" onClick={compile} disabled={compiling}>
             <Play className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">{compiling ? "Typesetting…" : "Compile"}</span>
@@ -1213,6 +1221,14 @@ export default function ProjectPage() {
                   >
                     Docs
                   </Link>
+                  <Link
+                    href="/report"
+                    role="menuitem"
+                    className={cn(CHROME_MENU_ITEM, "block w-full px-3 py-2.5 text-sm")}
+                    onClick={() => setShowMobileMenu(false)}
+                  >
+                    Report
+                  </Link>
                 </div>
               </>
             )}
@@ -1290,6 +1306,12 @@ export default function ProjectPage() {
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden overflow-x-hidden">
             {renderWorkspace()}
           </div>
+          {citeReportPrompt && (
+            <div className="flex items-center justify-between gap-3 px-3 py-2 border-t border-border bg-error/5 text-sm shrink-0">
+              <span className="text-ink-muted">Could not cite from DOI.</span>
+              <ReportIssueLink />
+            </div>
+          )}
           <CompilePanel
             log={compileLog}
             errors={compileErrors}

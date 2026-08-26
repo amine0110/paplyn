@@ -478,6 +478,21 @@ export default function SettingsPage() {
               </Link>
             </section>
           )}
+
+          <section className="border border-border rounded-lg p-6 bg-surface">
+            <h2 className="font-medium mb-2">Report an issue</h2>
+            <p className="text-sm text-ink-muted mb-4">
+              Found a bug or something confusing? Tell us what happened so we can fix it.
+            </p>
+            <Link href="/report">
+              <Button variant="outline">Open report form</Button>
+            </Link>
+            <p className="mt-3 text-xs text-ink-muted">
+              <Link href="/docs/report" className="text-accent hover:underline cursor-pointer">
+                How reporting works
+              </Link>
+            </p>
+          </section>
         </div>
       </main>
     </div>
