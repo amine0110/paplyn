@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useUiFeedback } from "@/components/ui-feedback";
-import { USER_REPORT_CSRF_HEADER } from "@/lib/user-reports-csrf";
+import { USER_REPORT_CSRF_HEADER } from "@/lib/user-reports-csrf-constants";
 import {
   REPORT_EMAIL_MAX,
   REPORT_STEPS_MAX,

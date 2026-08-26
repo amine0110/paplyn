@@ -101,6 +101,24 @@ describe("PAP-30 user reports deploy gate", () => {
     expect(reportForm).toContain("Reports are not configured");
   });
 
+  it("keeps user-report CSRF crypto off the client bundle", () => {
+    const clientFiles = [
+      "app/report/report-form.tsx",
+      "components/report-issue-link.tsx",
+      "app/error.tsx",
+    ];
+
+    for (const file of clientFiles) {
+      const src = readSrc(file);
+      expect(src).not.toContain("node:crypto");
+      expect(src).not.toMatch(/from\s+["']@\/lib\/user-reports-csrf["']/);
+    }
+
+    const reportForm = readSrc("app/report/report-form.tsx");
+    expect(reportForm).toContain("user-reports-csrf-constants");
+    expect(reportForm).toContain("USER_REPORT_CSRF_HEADER");
+  });
+
   it("documents reporting without secrets", () => {
     const reportDoc = readFileSync(join(ROOT, "../content/docs/report.md"), "utf8");
     expect(reportDoc).toContain("/report");
