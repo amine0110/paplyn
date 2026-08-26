@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
 import * as Y from "yjs";
 import {
+  getCollabEditorAuthoritativeContent,
   getCollabEditorInitialDoc,
   getOfflineEditorInitialDoc,
   seedYTextIfEmpty,
   shouldClientSeedYText,
+  shouldDeferCollabBinding,
   simulateBuggyCollabBuffer,
   simulateFixedCollabBuffer,
 } from "./collab-seed";
@@ -31,11 +33,21 @@ describe("collab-seed", () => {
     expect(ytext.toString()).toBe("existing");
   });
 
-  it("collab editor initial doc never falls back to HTTP initialContent", () => {
-    expect(getCollabEditorInitialDoc("")).toBe("");
-    expect(getCollabEditorInitialDoc("live")).toBe("live");
-    // Would have been SAMPLE with the old `|| initialContent` fallback.
-    expect(getCollabEditorInitialDoc("")).not.toBe(SAMPLE);
+  it("shows HTTP initialContent read-only before collab sync, Y.Text after sync", () => {
+    expect(shouldDeferCollabBinding(true, false, 0, SAMPLE.length)).toBe(true);
+    expect(getCollabEditorInitialDoc("", SAMPLE, false)).toBe(SAMPLE);
+    expect(getCollabEditorAuthoritativeContent("", SAMPLE, false)).toBe(SAMPLE);
+
+    expect(shouldDeferCollabBinding(true, true, SAMPLE.length, SAMPLE.length)).toBe(false);
+    expect(getCollabEditorInitialDoc(SAMPLE, SAMPLE, true)).toBe(SAMPLE);
+    expect(getCollabEditorInitialDoc("", SAMPLE, true)).toBe("");
+  });
+
+  it("does not show blank buffer when unsynced empty Y.Text has HTTP manuscript", () => {
+    const manuscript = SAMPLE.repeat(200);
+    const visible = getCollabEditorInitialDoc("", manuscript, false);
+    expect(visible).toBe(manuscript);
+    expect(visible.length).toBe(manuscript.length);
   });
 
   it("offline editor still uses initialContent when Y.Text is empty", () => {

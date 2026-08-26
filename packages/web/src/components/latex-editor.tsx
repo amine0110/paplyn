@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
-import { Compartment, EditorState } from "@codemirror/state";
+import { Compartment, EditorState, type StateEffect } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection } from "@codemirror/view";
 import { defaultKeymap, indentWithTab } from "@codemirror/commands";
 import { syntaxHighlighting, bracketMatching, StreamLanguage } from "@codemirror/language";
@@ -11,7 +11,6 @@ import { tags as t } from "@lezer/highlight";
 import { HighlightStyle } from "@codemirror/language";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
-import { yCollab } from "y-codemirror.next";
 import { useTheme } from "@/components/theme-provider";
 import { latexCompletionSource } from "@/lib/latex-completion";
 import { countDocumentStats, type DocumentStats } from "@/lib/document-stats";
@@ -19,9 +18,11 @@ import { colorForUserId, parseCollabToken } from "@/lib/project-sharing";
 import { readStoredSpellcheckEnabled } from "@/lib/editor-preferences";
 import { spellcheckCompartment, spellcheckExtensions } from "@/lib/latex-spellcheck";
 import {
+  getCollabEditorAuthoritativeContent,
   getCollabEditorInitialDoc,
   getOfflineEditorInitialDoc,
   seedYTextIfEmpty,
+  shouldDeferCollabBinding,
 } from "@/lib/collab-seed";
 import { buildCollabEditorSyncExtensions } from "@/lib/latex-editor-extensions";
 import { createDoiPasteExtension } from "@/lib/doi-paste-extension";
@@ -143,16 +144,54 @@ export function LatexEditor({
       : null;
 
     const editableCompartment = new Compartment();
+    const collabSyncCompartment = new Compartment();
     let collabSynced = !collabEnabled;
+    let collabUndoManager: Y.UndoManager | null = null;
+
+    const deferCollabBinding = () =>
+      shouldDeferCollabBinding(
+        collabEnabled,
+        collabSynced,
+        ytext.length,
+        initialContent.length
+      );
+
+    const authoritativeContent = () =>
+      collabEnabled
+        ? getCollabEditorAuthoritativeContent(
+            ytext.toString(),
+            initialContent,
+            collabSynced
+          )
+        : getOfflineEditorInitialDoc(ytext.toString(), initialContent);
 
     const enableEditingAfterSync = (view: EditorView) => {
-      if (!collabSynced) {
-        collabSynced = true;
-        saveStatusTracker?.onSynced();
-        view.dispatch({
-          effects: editableCompartment.reconfigure(EditorView.editable.of(canEdit)),
-        });
+      if (collabSynced) return;
+      collabSynced = true;
+      saveStatusTracker?.onSynced();
+
+      const liveDoc = ytext.toString();
+      const effects: StateEffect<unknown>[] = [
+        editableCompartment.reconfigure(EditorView.editable.of(canEdit)),
+      ];
+
+      if (collabEnabled && provider?.awareness) {
+        const syncBundle = buildCollabEditorSyncExtensions(true, ytext, provider.awareness);
+        collabUndoManager = syncBundle.undoManager;
+        effects.push(collabSyncCompartment.reconfigure(syncBundle.extensions));
       }
+
+      const needsDocReplace = view.state.doc.toString() !== liveDoc;
+      view.dispatch({
+        changes: needsDocReplace
+          ? { from: 0, to: view.state.doc.length, insert: liveDoc }
+          : undefined,
+        effects,
+      });
+
+      const content = authoritativeContent();
+      latestContentRef.current = content;
+      reportStats(content);
     };
 
     if (collabToken) {
@@ -217,19 +256,24 @@ export function LatexEditor({
     }
 
     const highlightStyle = isDark ? latexHighlightDark : latexHighlightLight;
+    const providerSynced = provider?.synced ?? false;
     const initialDoc = collabEnabled
-      ? getCollabEditorInitialDoc(ytext.toString())
+      ? getCollabEditorInitialDoc(ytext.toString(), initialContent, providerSynced)
       : getOfflineEditorInitialDoc(ytext.toString(), initialContent);
     latestContentRef.current = initialDoc;
 
-    const { extensions: syncExtensions, keymapExtensions, undoManager } =
-      buildCollabEditorSyncExtensions(collabEnabled, ytext, provider?.awareness ?? null);
+    const initialSyncBundle = deferCollabBinding()
+      ? { extensions: [], keymapExtensions: [], undoManager: null }
+      : buildCollabEditorSyncExtensions(collabEnabled, ytext, provider?.awareness ?? null);
+    collabUndoManager = initialSyncBundle.undoManager;
+
+    const { keymapExtensions } = initialSyncBundle;
 
     const extensions = [
       lineNumbers(),
       highlightActiveLine(),
       drawSelection(),
-      ...syncExtensions,
+      collabSyncCompartment.of(initialSyncBundle.extensions),
       bracketMatching(),
       latexLang,
       syntaxHighlighting(highlightStyle),
@@ -245,6 +289,12 @@ export function LatexEditor({
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
           const content = update.state.doc.toString();
+          if (deferCollabBinding()) {
+            const preview = authoritativeContent();
+            latestContentRef.current = preview;
+            reportStats(preview);
+            return;
+          }
           latestContentRef.current = content;
           saveContent(content);
           reportStats(content);
@@ -329,7 +379,7 @@ export function LatexEditor({
         metaMap.unobserve(metaObserver);
       }
       saveStatusTracker?.destroy();
-      undoManager?.destroy();
+      collabUndoManager?.destroy();
       view.destroy();
       provider?.destroy();
       ydoc.destroy();

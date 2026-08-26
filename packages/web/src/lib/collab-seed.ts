@@ -1,12 +1,45 @@
 import type * as Y from "yjs";
 
 /**
- * Initial CodeMirror document when live collab is enabled.
- * Never fall back to HTTP `initialContent` here — that caused CM + Y.Text double-seed
- * (yCollab would append Y.Text inserts onto an editor already filled from HTTP).
+ * Whether collab yCollab binding should wait until the websocket provider has synced.
+ * While waiting, the editor shows HTTP `initialContent` read-only (no yCollab) so users
+ * never see a blank buffer when Postgres already has the manuscript.
  */
-export function getCollabEditorInitialDoc(ytextContent: string): string {
+export function shouldDeferCollabBinding(
+  collabEnabled: boolean,
+  synced: boolean,
+  ytextLength: number,
+  initialContentLength: number
+): boolean {
+  return collabEnabled && !synced && ytextLength === 0 && initialContentLength > 0;
+}
+
+/**
+ * Authoritative editor buffer for display, stats, and save fallbacks while collab sync
+ * is in flight. After sync, Y.Text is the sole source of truth.
+ */
+export function getCollabEditorAuthoritativeContent(
+  ytextContent: string,
+  initialContent: string,
+  synced: boolean
+): string {
+  if (shouldDeferCollabBinding(true, synced, ytextContent.length, initialContent.length)) {
+    return initialContent;
+  }
   return ytextContent;
+}
+
+/**
+ * Initial CodeMirror document when live collab is enabled.
+ * Before websocket sync, show HTTP `initialContent` read-only (yCollab is deferred).
+ * After sync, seed from Y.Text only — attaching yCollab then avoids CM + Y.Text double-seed.
+ */
+export function getCollabEditorInitialDoc(
+  ytextContent: string,
+  initialContent: string,
+  synced: boolean
+): string {
+  return getCollabEditorAuthoritativeContent(ytextContent, initialContent, synced);
 }
 
 /** Initial CodeMirror document when collab is disabled (local-only editing). */
