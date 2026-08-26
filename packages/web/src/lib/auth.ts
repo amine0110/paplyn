@@ -4,6 +4,7 @@ import { db } from "./db";
 import * as schema from "./schema";
 import { config } from "./config";
 import { getGithubAuthConfig, getGoogleAuthConfig } from "./auth-providers";
+import { buildGithubSocialProviderOptions } from "./github-auth-provider";
 import {
   getBrandTrustedOrigins,
   getSelfHostedTrustedOrigins,
@@ -28,10 +29,7 @@ const socialProviders = {
     : {}),
   ...(githubAuth
     ? {
-        github: {
-          clientId: githubAuth.clientId,
-          clientSecret: githubAuth.clientSecret,
-        },
+        github: buildGithubSocialProviderOptions(githubAuth),
       }
     : {}),
 };

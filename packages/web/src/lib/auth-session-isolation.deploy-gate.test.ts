@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it, expect } from "vitest";
+import { pickGithubPrimaryEmail } from "./github-primary-email";
 
 const ROOT = join(import.meta.dirname, "..");
 const REPO_ROOT = join(ROOT, "../../..");
@@ -17,6 +18,34 @@ describe("OAuth session isolation deploy gate", () => {
     expect(src).toMatch(/allowDifferentEmails:\s*false/);
     expect(src).not.toMatch(/allowDifferentEmails:\s*true/);
     expect(src).not.toMatch(/accountLinking:\s*\{[^}]*enabled:\s*false/s);
+  });
+
+  it("GitHub social login uses primary email only via pickGithubPrimaryEmail", () => {
+    const auth = readSrc("lib/auth.ts");
+    const helper = readSrc("lib/github-primary-email.ts");
+    const provider = readSrc("lib/github-auth-provider.ts");
+
+    expect(auth).toContain("buildGithubSocialProviderOptions");
+    expect(provider).toContain("pickGithubPrimaryEmail");
+    expect(provider).toContain("getUserInfo");
+    expect(provider).toContain("user/emails");
+    expect(provider).not.toMatch(/emails\[0\]/);
+    expect(provider).not.toMatch(/find\(\(e\)\s*=>\s*e\.verified\)/);
+    expect(helper).toContain("entry.primary");
+    expect(helper).not.toMatch(/emails\[0\]/);
+    expect(helper).not.toMatch(/!primary\.verified/);
+  });
+
+  it("pickGithubPrimaryEmail ignores mohammed@pycad.co when primary is amine1996", () => {
+    expect(
+      pickGithubPrimaryEmail([
+        { email: "mohammed@pycad.co", primary: false, verified: true },
+        { email: "mokhtari.amine1996@gmail.com", primary: true, verified: true },
+      ]),
+    ).toEqual({
+      email: "mokhtari.amine1996@gmail.com",
+      verified: true,
+    });
   });
 
   it("social sign-in helper signs out before signIn.social", () => {
