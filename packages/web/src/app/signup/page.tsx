@@ -1,4 +1,5 @@
 import { isGithubAuthEnabled, isGoogleAuthEnabled } from "@/lib/auth-providers";
+import { resolveInternalNextPath } from "@/lib/internal-path";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { SignupPageClient } from "./signup-form";
@@ -14,8 +15,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
   const session = await getSession();
   if (session?.user) {
     const { next } = await searchParams;
-    const destination = next?.startsWith("/") ? next : "/dashboard";
-    redirect(destination);
+    redirect(resolveInternalNextPath(next));
   }
 
   return (

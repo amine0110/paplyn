@@ -13,6 +13,7 @@ import { PRODUCT } from "@/lib/product";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { GitHubSignInButton } from "@/components/auth/github-sign-in-button";
 import { buildSocialOAuthErrorCallbackURL, OAUTH_ERROR_MESSAGE } from "@/lib/auth-social";
+import { resolveInternalNextPath } from "@/lib/internal-path";
 
 type LoginFormProps = {
   googleEnabled: boolean;
@@ -41,7 +42,7 @@ function LoginForm({ googleEnabled, githubEnabled }: LoginFormProps) {
       if (result.error) {
         setError(result.error.message || "Invalid credentials");
       } else {
-        router.push(nextPath.startsWith("/") ? nextPath : "/dashboard");
+        router.push(resolveInternalNextPath(nextPath));
       }
     } catch {
       setError("Something went wrong");
@@ -50,7 +51,7 @@ function LoginForm({ googleEnabled, githubEnabled }: LoginFormProps) {
     }
   }
 
-  const callbackURL = nextPath.startsWith("/") ? nextPath : "/dashboard";
+  const callbackURL = resolveInternalNextPath(nextPath);
   const errorCallbackURL = buildSocialOAuthErrorCallbackURL("login", callbackURL);
 
   return (

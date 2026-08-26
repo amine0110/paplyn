@@ -13,6 +13,7 @@ import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { GitHubSignInButton } from "@/components/auth/github-sign-in-button";
 import { validatePasswordPair } from "@/lib/password-validation";
 import { buildSocialOAuthErrorCallbackURL, OAUTH_ERROR_MESSAGE } from "@/lib/auth-social";
+import { resolveInternalNextPath } from "@/lib/internal-path";
 
 type SignupFormProps = {
   googleEnabled: boolean;
@@ -32,7 +33,7 @@ function SignupForm({ googleEnabled, githubEnabled }: SignupFormProps) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const callbackURL = nextPath.startsWith("/") ? nextPath : "/dashboard";
+  const callbackURL = resolveInternalNextPath(nextPath);
   const errorCallbackURL = buildSocialOAuthErrorCallbackURL("signup", callbackURL);
   const loginHref =
     callbackURL !== "/dashboard"

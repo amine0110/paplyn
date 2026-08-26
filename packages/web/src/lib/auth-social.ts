@@ -1,4 +1,5 @@
 import { signIn, signOut } from "@/lib/auth-client";
+import { isInternalAppPath } from "@/lib/internal-path";
 
 export type SocialAuthProvider = "google" | "github";
 
@@ -11,7 +12,7 @@ export function buildSocialOAuthErrorCallbackURL(
   nextPath?: string,
 ): string {
   const params = new URLSearchParams({ error: "oauth" });
-  const safeNext = nextPath?.startsWith("/") ? nextPath : undefined;
+  const safeNext = isInternalAppPath(nextPath) ? nextPath : undefined;
   if (safeNext && safeNext !== "/dashboard") {
     params.set("next", safeNext);
   }
@@ -27,7 +28,11 @@ export async function signOutAndStartSocialSignIn(options: {
   callbackURL: string;
   errorCallbackURL: string;
 }): Promise<void> {
-  await signOut();
+  try {
+    await signOut();
+  } catch {
+    // Already signed out or transient network error — still start OAuth.
+  }
   await signIn.social({
     provider: options.provider,
     callbackURL: options.callbackURL,

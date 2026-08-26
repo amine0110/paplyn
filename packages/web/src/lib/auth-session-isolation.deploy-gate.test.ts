@@ -20,9 +20,20 @@ describe("OAuth session isolation deploy gate", () => {
   it("social sign-in helper signs out before signIn.social", () => {
     const helper = readSrc("lib/auth-social.ts");
     expect(helper).toContain("signOutAndStartSocialSignIn");
-    expect(helper).toContain("await signOut()");
+    expect(helper).toContain("signOut()");
     expect(helper).toContain("signIn.social");
     expect(helper).toContain("errorCallbackURL");
+    expect(helper).toMatch(/catch\s*\{/);
+  });
+
+  it("login and signup pages reject protocol-relative next redirects", () => {
+    const loginPage = readSrc("app/login/page.tsx");
+    const signupPage = readSrc("app/signup/page.tsx");
+    const internalPath = readSrc("lib/internal-path.ts");
+
+    expect(loginPage).toContain("resolveInternalNextPath");
+    expect(signupPage).toContain("resolveInternalNextPath");
+    expect(internalPath).toContain("!path.startsWith(\"//\")");
   });
 
   it("GitHub and Google buttons use the fresh social sign-in helper", () => {

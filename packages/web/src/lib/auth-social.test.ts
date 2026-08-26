@@ -33,6 +33,11 @@ describe("auth-social", () => {
     );
   });
 
+  it("buildSocialOAuthErrorCallbackURL rejects protocol-relative next paths", async () => {
+    const { buildSocialOAuthErrorCallbackURL } = await import("@/lib/auth-social");
+    expect(buildSocialOAuthErrorCallbackURL("login", "//evil.example")).toBe("/login?error=oauth");
+  });
+
   it("signOutAndStartSocialSignIn clears session before social sign-in", async () => {
     const { signOutAndStartSocialSignIn } = await import("@/lib/auth-social");
 
@@ -47,6 +52,25 @@ describe("auth-social", () => {
     expect(signOut.mock.invocationCallOrder[0]).toBeLessThan(signInSocial.mock.invocationCallOrder[0]);
     expect(signInSocial).toHaveBeenCalledWith({
       provider: "github",
+      callbackURL: "/dashboard",
+      errorCallbackURL: "/login?error=oauth",
+    });
+  });
+
+  it("signOutAndStartSocialSignIn still starts OAuth when signOut throws", async () => {
+    signOut.mockRejectedValueOnce(new Error("network"));
+    const { signOutAndStartSocialSignIn } = await import("@/lib/auth-social");
+
+    await signOutAndStartSocialSignIn({
+      provider: "google",
+      callbackURL: "/dashboard",
+      errorCallbackURL: "/login?error=oauth",
+    });
+
+    expect(signOut).toHaveBeenCalledOnce();
+    expect(signInSocial).toHaveBeenCalledOnce();
+    expect(signInSocial).toHaveBeenCalledWith({
+      provider: "google",
       callbackURL: "/dashboard",
       errorCallbackURL: "/login?error=oauth",
     });
