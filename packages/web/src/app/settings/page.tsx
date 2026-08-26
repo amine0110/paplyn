@@ -17,6 +17,7 @@ import {
   validatePasswordChange,
   validateProfileName,
 } from "@/lib/profile-validation";
+import { labelConnectedProviders } from "@/lib/connected-providers";
 
 export default function SettingsPage() {
   const { session, isPending, isAuthenticated } = useRequireSession({ loginNext: "/settings" });
@@ -32,6 +33,8 @@ export default function SettingsPage() {
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
+  const [connectedProviders, setConnectedProviders] = useState<string[]>([]);
+  const [providersError, setProvidersError] = useState("");
 
 
   useEffect(() => {
@@ -39,6 +42,41 @@ export default function SettingsPage() {
       setName(session.user.name);
     }
   }, [session?.user?.name]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setConnectedProviders([]);
+      setProvidersError("");
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadConnectedProviders() {
+      try {
+        const response = await fetch("/api/auth/connected-providers");
+        if (!response.ok) {
+          throw new Error("Failed to load sign-in methods");
+        }
+        const data = (await response.json()) as { providers?: string[] };
+        if (!cancelled) {
+          setConnectedProviders(data.providers ?? []);
+          setProvidersError("");
+        }
+      } catch {
+        if (!cancelled) {
+          setConnectedProviders([]);
+          setProvidersError("Could not load connected sign-in methods.");
+        }
+      }
+    }
+
+    void loadConnectedProviders();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
 
   async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
@@ -133,6 +171,20 @@ export default function SettingsPage() {
                     onChange={(e) => setName(e.target.value)}
                     autoComplete="name"
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label>Connected sign-in methods</Label>
+                  {providersError ? (
+                    <p className="text-sm text-error">{providersError}</p>
+                  ) : connectedProviders.length > 0 ? (
+                    <ul className="text-sm text-ink list-disc pl-5 space-y-1">
+                      {labelConnectedProviders(connectedProviders).map((label) => (
+                        <li key={label}>{label}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-ink-muted">No sign-in methods found.</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>

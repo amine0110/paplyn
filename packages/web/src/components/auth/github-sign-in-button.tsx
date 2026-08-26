@@ -1,18 +1,24 @@
 "use client";
 
-import { signIn } from "@/lib/auth-client";
+import { signOutAndStartSocialSignIn } from "@/lib/auth-social";
 import { Button } from "@/components/ui/button";
 
 type GitHubSignInButtonProps = {
   callbackURL?: string;
+  errorCallbackURL: string;
   className?: string;
 };
 
-export function GitHubSignInButton({ callbackURL = "/dashboard", className }: GitHubSignInButtonProps) {
+export function GitHubSignInButton({
+  callbackURL = "/dashboard",
+  errorCallbackURL,
+  className,
+}: GitHubSignInButtonProps) {
   async function handleGitHub() {
-    await signIn.social({
+    await signOutAndStartSocialSignIn({
       provider: "github",
       callbackURL,
+      errorCallbackURL,
     });
   }
 
@@ -21,7 +27,7 @@ export function GitHubSignInButton({ callbackURL = "/dashboard", className }: Gi
       type="button"
       variant="outline"
       className={className ?? "w-full cursor-pointer"}
-      onClick={handleGitHub}
+      onClick={() => void handleGitHub()}
     >
       <svg aria-hidden="true" className="h-[18px] w-[18px]" viewBox="0 0 24 24">
         <path

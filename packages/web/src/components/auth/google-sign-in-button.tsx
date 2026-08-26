@@ -1,23 +1,29 @@
 "use client";
 
-import { signIn } from "@/lib/auth-client";
+import { signOutAndStartSocialSignIn } from "@/lib/auth-social";
 import { Button } from "@/components/ui/button";
 
 type GoogleSignInButtonProps = {
   callbackURL?: string;
+  errorCallbackURL: string;
   className?: string;
 };
 
-export function GoogleSignInButton({ callbackURL = "/dashboard", className }: GoogleSignInButtonProps) {
+export function GoogleSignInButton({
+  callbackURL = "/dashboard",
+  errorCallbackURL,
+  className,
+}: GoogleSignInButtonProps) {
   async function handleGoogle() {
-    await signIn.social({
+    await signOutAndStartSocialSignIn({
       provider: "google",
       callbackURL,
+      errorCallbackURL,
     });
   }
 
   return (
-    <Button type="button" variant="outline" className={className ?? "w-full"} onClick={handleGoogle}>
+    <Button type="button" variant="outline" className={className ?? "w-full"} onClick={() => void handleGoogle()}>
       <svg aria-hidden="true" className="h-[18px] w-[18px]" viewBox="0 0 24 24">
         <path
           fill="#4285F4"

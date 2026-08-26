@@ -12,6 +12,8 @@ import { Nav } from "@/components/nav";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { GitHubSignInButton } from "@/components/auth/github-sign-in-button";
 import { validatePasswordPair } from "@/lib/password-validation";
+import { buildSocialOAuthErrorCallbackURL, OAUTH_ERROR_MESSAGE } from "@/lib/auth-social";
+import { resolveInternalNextPath } from "@/lib/internal-path";
 
 type SignupFormProps = {
   googleEnabled: boolean;
@@ -22,6 +24,7 @@ function SignupForm({ googleEnabled, githubEnabled }: SignupFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next") || "/dashboard";
+  const oauthError = searchParams.get("error") === "oauth";
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -30,7 +33,8 @@ function SignupForm({ googleEnabled, githubEnabled }: SignupFormProps) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const callbackURL = nextPath.startsWith("/") ? nextPath : "/dashboard";
+  const callbackURL = resolveInternalNextPath(nextPath);
+  const errorCallbackURL = buildSocialOAuthErrorCallbackURL("signup", callbackURL);
   const loginHref =
     callbackURL !== "/dashboard"
       ? `/login?next=${encodeURIComponent(callbackURL)}`
@@ -68,10 +72,20 @@ function SignupForm({ googleEnabled, githubEnabled }: SignupFormProps) {
       <div className="max-w-sm mx-auto px-4 py-20">
         <h1 className="font-serif text-2xl font-semibold text-center mb-8">Create your account</h1>
 
+        {oauthError && (
+          <p className="text-sm text-error text-center mb-4" role="alert">
+            {OAUTH_ERROR_MESSAGE}
+          </p>
+        )}
+
         {(googleEnabled || githubEnabled) && (
           <div className="space-y-4 mb-6">
-            {googleEnabled && <GoogleSignInButton callbackURL={callbackURL} />}
-            {githubEnabled && <GitHubSignInButton callbackURL={callbackURL} />}
+            {googleEnabled && (
+              <GoogleSignInButton callbackURL={callbackURL} errorCallbackURL={errorCallbackURL} />
+            )}
+            {githubEnabled && (
+              <GitHubSignInButton callbackURL={callbackURL} errorCallbackURL={errorCallbackURL} />
+            )}
             <p className="text-xs text-center text-ink-muted">or sign up with email</p>
           </div>
         )}

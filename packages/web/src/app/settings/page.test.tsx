@@ -1,6 +1,6 @@
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import SettingsPage from "@/app/settings/page";
 
 const useRequireSession = vi.fn();
@@ -24,6 +24,13 @@ vi.mock("@/lib/config", () => ({
 describe("SettingsPage session guard", () => {
   beforeEach(() => {
     useRequireSession.mockReset();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ providers: ["google"] }),
+      }),
+    );
   });
 
   it("does not render private profile fields when unauthenticated", () => {
@@ -52,5 +59,20 @@ describe("SettingsPage session guard", () => {
 
     expect(screen.getByLabelText("Display name")).toBeInTheDocument();
     expect(screen.getByLabelText("Email")).toHaveValue("user@example.com");
+  });
+
+  it("renders connected sign-in methods from account data", async () => {
+    useRequireSession.mockReturnValue({
+      session: { user: { id: "u1", email: "user@example.com", name: "User" } },
+      isPending: false,
+      isAuthenticated: true,
+    });
+
+    render(<SettingsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Google")).toBeInTheDocument();
+    });
+    expect(fetch).toHaveBeenCalledWith("/api/auth/connected-providers");
   });
 });
