@@ -2,10 +2,7 @@ import { cookies } from "next/headers";
 import { ReportForm } from "@/app/report/report-form";
 import { getSession } from "@/lib/session";
 import { isInternalAppPath } from "@/lib/internal-path";
-import {
-  createUserReportCsrfToken,
-  USER_REPORT_CSRF_COOKIE,
-} from "@/lib/user-reports-csrf";
+import { USER_REPORT_CSRF_COOKIE } from "@/lib/user-reports-csrf-constants";
 import {
   getTurnstileSiteKey,
   isUserReportsEnabled,
@@ -37,14 +34,8 @@ function parsePage(value: string | undefined): string {
 
 export default async function ReportPage({ searchParams }: ReportPageProps) {
   const params = await searchParams;
-  const csrfToken = createUserReportCsrfToken();
   const cookieStore = await cookies();
-  cookieStore.set(USER_REPORT_CSRF_COOKIE, csrfToken, {
-    httpOnly: true,
-    sameSite: "strict",
-    secure: process.env.NODE_ENV === "production",
-    path: "/api/user-reports",
-  });
+  const csrfToken = cookieStore.get(USER_REPORT_CSRF_COOKIE)?.value ?? "";
 
   const session = await getSession();
   const signedIn = Boolean(session?.user);

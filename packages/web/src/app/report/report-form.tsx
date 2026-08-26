@@ -36,7 +36,7 @@ declare global {
 }
 
 type ReportFormProps = {
-  csrfToken: string;
+  csrfToken?: string;
   reportsEnabled: boolean;
   turnstileSiteKey: string | null;
   signedIn: boolean;
@@ -49,7 +49,7 @@ type ReportFormProps = {
 };
 
 export function ReportForm({
-  csrfToken,
+  csrfToken: initialCsrfToken = "",
   reportsEnabled,
   turnstileSiteKey,
   signedIn,
@@ -68,9 +68,33 @@ export function ReportForm({
   const [honeypot, setHoneypot] = useState("");
   const [turnstileToken, setTurnstileToken] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [csrfToken, setCsrfToken] = useState(initialCsrfToken);
   const turnstileRef = useRef<HTMLDivElement>(null);
   const turnstileWidgetIdRef = useRef<string | null>(null);
   const turnstileScriptLoadedRef = useRef(false);
+  const csrfFetchRef = useRef<Promise<string | null> | null>(null);
+
+  const ensureCsrfToken = useCallback(async (): Promise<string | null> => {
+    if (csrfToken) return csrfToken;
+    if (csrfFetchRef.current) return csrfFetchRef.current;
+
+    csrfFetchRef.current = (async () => {
+      try {
+        const response = await fetch("/api/user-reports/csrf", { credentials: "same-origin" });
+        if (!response.ok) return null;
+        const data = (await response.json()) as { csrfToken?: string };
+        const token = typeof data.csrfToken === "string" ? data.csrfToken : null;
+        if (token) setCsrfToken(token);
+        return token;
+      } catch {
+        return null;
+      } finally {
+        csrfFetchRef.current = null;
+      }
+    })();
+
+    return csrfFetchRef.current;
+  }, [csrfToken]);
 
   const resetTurnstile = useCallback(() => {
     if (window.turnstile && turnstileWidgetIdRef.current) {
@@ -78,6 +102,12 @@ export function ReportForm({
     }
     setTurnstileToken("");
   }, []);
+
+  useEffect(() => {
+    if (!initialCsrfToken && reportsEnabled) {
+      void ensureCsrfToken();
+    }
+  }, [initialCsrfToken, reportsEnabled, ensureCsrfToken]);
 
   useEffect(() => {
     if (!turnstileSiteKey || !turnstileRef.current) return;
@@ -124,13 +154,22 @@ export function ReportForm({
       return;
     }
 
+    const token = await ensureCsrfToken();
+    if (!token) {
+      notice({
+        message: "Could not start a secure session. Please refresh and try again.",
+        variant: "error",
+      });
+      return;
+    }
+
     setSubmitting(true);
     try {
       const response = await fetch("/api/user-reports", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          [USER_REPORT_CSRF_HEADER]: csrfToken,
+          [USER_REPORT_CSRF_HEADER]: token,
         },
         body: JSON.stringify({
           title,
@@ -140,7 +179,7 @@ export function ReportForm({
           page: initialPage,
           source: initialSource,
           honeypot,
-          csrfToken,
+          csrfToken: token,
           turnstileToken: turnstileSiteKey ? turnstileToken : undefined,
         }),
       });
