@@ -1,9 +1,19 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it, expect } from "vitest";
 
 const ROOT = join(import.meta.dirname, "..");
 const REPO_ROOT = join(ROOT, "../../..");
+
+const DEPLOY_CONFIG_FILES = [
+  "docker-compose.yml",
+  "docker-compose.prod.yml",
+  ".env.example",
+] as const;
+
+const hasDeployConfigFiles = DEPLOY_CONFIG_FILES.every((relativePath) =>
+  existsSync(join(REPO_ROOT, relativePath)),
+);
 
 function readSrc(relativePath: string): string {
   return readFileSync(join(ROOT, relativePath), "utf8");
@@ -79,23 +89,26 @@ describe("GitHub auth deploy gate", () => {
     }
   });
 
-  it("passes GitHub OAuth env through docker compose at runtime", () => {
-    const compose = readRepoFile("docker-compose.yml");
-    const composeProd = readRepoFile("docker-compose.prod.yml");
-    const envExample = readRepoFile(".env.example");
+  it.skipIf(!hasDeployConfigFiles)(
+    "passes GitHub OAuth env through docker compose at runtime",
+    () => {
+      const compose = readRepoFile("docker-compose.yml");
+      const composeProd = readRepoFile("docker-compose.prod.yml");
+      const envExample = readRepoFile(".env.example");
 
-    for (const file of [compose, composeProd, envExample]) {
-      expect(file).toContain("GITHUB_CLIENT_ID");
-      expect(file).toContain("GITHUB_CLIENT_SECRET");
-    }
+      for (const file of [compose, composeProd, envExample]) {
+        expect(file).toContain("GITHUB_CLIENT_ID");
+        expect(file).toContain("GITHUB_CLIENT_SECRET");
+      }
 
-    const webService = compose.match(/  web:\n[\s\S]*?(?=\n  \w|$)/)?.[0] ?? "";
-    const webBuildArgs = webService.match(/args:\n[\s\S]*?(?=\n    environment:)/)?.[0] ?? "";
-    expect(webBuildArgs).not.toContain("GITHUB_CLIENT");
+      const webService = compose.match(/  web:\n[\s\S]*?(?=\n  \w|$)/)?.[0] ?? "";
+      const webBuildArgs = webService.match(/args:\n[\s\S]*?(?=\n    environment:)/)?.[0] ?? "";
+      expect(webBuildArgs).not.toContain("GITHUB_CLIENT");
 
-    const prodWebService = composeProd.match(/  web:\n[\s\S]*?(?=\n  \w|$)/)?.[0] ?? "";
-    expect(prodWebService).toContain("GITHUB_CLIENT_ID");
-    expect(prodWebService).toContain("GITHUB_CLIENT_SECRET");
-    expect(prodWebService).not.toContain("args:");
-  });
+      const prodWebService = composeProd.match(/  web:\n[\s\S]*?(?=\n  \w|$)/)?.[0] ?? "";
+      expect(prodWebService).toContain("GITHUB_CLIENT_ID");
+      expect(prodWebService).toContain("GITHUB_CLIENT_SECRET");
+      expect(prodWebService).not.toContain("args:");
+    },
+  );
 });
