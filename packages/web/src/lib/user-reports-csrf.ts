@@ -1,7 +1,10 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import {
+  USER_REPORT_CSRF_COOKIE,
+  USER_REPORT_CSRF_HEADER,
+} from "@/lib/user-reports-csrf-constants";
 
-export const USER_REPORT_CSRF_COOKIE = "paplyn_user_report_csrf";
-export const USER_REPORT_CSRF_HEADER = "x-user-report-csrf";
+export { USER_REPORT_CSRF_COOKIE, USER_REPORT_CSRF_HEADER };
 
 export function createUserReportCsrfToken(): string {
   return randomBytes(32).toString("hex");
