@@ -1,65 +1,88 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+import * as Y from "yjs";
 import {
-  checkPersistConcatenationGuard,
-  countBibEntryKeys,
+  assertNoConcatenatedDocumentUpserts,
+  collapseConcatenatedSeedContent,
   countDocumentClassLines,
-  countDuplicateBibKeys,
   extractFirstLaTeXCopy,
-  hasMultipleDocumentCopies,
-  isSuspiciousSizeJump,
+  looksLikeConcatenatedFileContent,
+  PersistConcatenationError,
+  repairConcatenatedRoomText,
 } from "./document-integrity.js";
 
-const SAMPLE =
-  "\\documentclass{article}\n\\begin{document}\nHello world\n\\end{document}\n";
+const CLEAN =
+  "\\documentclass{article}\n\\begin{document}\nHello\\end{document}\n";
 
 describe("document-integrity", () => {
-  it("detects multiple documentclass lines in concatenated LaTeX", () => {
-    const bloated = SAMPLE.repeat(220);
-    expect(countDocumentClassLines(SAMPLE)).toBe(1);
+  it("counts multiple \\documentclass lines in concatenated manuscripts", () => {
+    const bloated = CLEAN.repeat(220);
+    expect(countDocumentClassLines(CLEAN)).toBe(1);
     expect(countDocumentClassLines(bloated)).toBe(220);
-    expect(hasMultipleDocumentCopies(bloated)).toBe(true);
   });
 
-  it("extractFirstLaTeXCopy returns a single preamble/body", () => {
-    const bloated = SAMPLE.repeat(3);
-    const firstCopy = extractFirstLaTeXCopy(bloated);
-    expect(firstCopy).toContain("\\documentclass{article}");
-    expect(firstCopy).toContain("\\end{document}");
-    expect(countDocumentClassLines(firstCopy)).toBe(1);
+  it("detects 220-copy concatenation and exact doubles", () => {
+    const bloated = CLEAN.repeat(220);
+    expect(looksLikeConcatenatedFileContent(bloated, CLEAN)).toBe(true);
+
+    const bib = "@article{key, title={A}}";
+    expect(looksLikeConcatenatedFileContent(bib + bib, bib)).toBe(true);
   });
 
-  it("isSuspiciousSizeJump flags llm-similarity-scale growth", () => {
-    const cleanLength = 1209;
-    const bloatedLength = 312_573;
-    expect(isSuspiciousSizeJump(cleanLength, bloatedLength)).toBe(true);
-    expect(isSuspiciousSizeJump(cleanLength, cleanLength + 10)).toBe(false);
+  it("allows normal growth without false positives", () => {
+    const grown = CLEAN + "\n% appendix\nMore text.\n";
+    expect(looksLikeConcatenatedFileContent(grown, CLEAN)).toBe(false);
   });
 
-  it("checkPersistConcatenationGuard blocks 220-copy upsert over clean HTTP", () => {
-    const clean = SAMPLE;
-    const bloated = SAMPLE.repeat(220);
-    const result = checkPersistConcatenationGuard("main.tex", clean, bloated);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.documentClassCount).toBe(220);
-      expect(result.existingDocumentClassCount).toBe(1);
-    }
+  it("collapseConcatenatedSeedContent returns first LaTeX copy", () => {
+    const bloated = CLEAN.repeat(220);
+    expect(collapseConcatenatedSeedContent("main.tex", bloated)).toBe(
+      extractFirstLaTeXCopy(bloated)
+    );
   });
 
-  it("checkPersistConcatenationGuard allows legitimate single-copy edits", () => {
-    const existing = SAMPLE;
-    const edited = SAMPLE.replace("Hello world", "Hello universe");
-    expect(checkPersistConcatenationGuard("main.tex", existing, edited).ok).toBe(true);
+  it("assertNoConcatenatedDocumentUpserts throws for 220 concatenated copies", () => {
+    const bloated = CLEAN.repeat(220);
+    expect(() =>
+      assertNoConcatenatedDocumentUpserts(
+        [{ path: "main.tex", content: bloated }],
+        new Map([["main.tex", CLEAN]])
+      )
+    ).toThrow(PersistConcatenationError);
   });
 
-  it("checkPersistConcatenationGuard blocks doubled .bib with duplicate keys", () => {
-    const single = "@article{smith2024,\n  title={One}\n}\n";
-    const doubled = single + single;
-    expect(countBibEntryKeys(single)).toBe(1);
-    expect(countBibEntryKeys(doubled)).toBe(2);
-    expect(countDuplicateBibKeys(doubled)).toBe(1);
+  it("repairConcatenatedRoomText restores authoritative HTTP after stale client replay", () => {
+    const doc = new Y.Doc();
+    doc.getText("main.tex").insert(0, CLEAN.repeat(220));
 
-    const result = checkPersistConcatenationGuard("references.bib", single, doubled);
-    expect(result.ok).toBe(false);
+    const authoritative = new Map([["main.tex", CLEAN]]);
+    expect(repairConcatenatedRoomText(doc, authoritative, "websocket-client")).toBe(true);
+    expect(doc.getText("main.tex").toString()).toBe(CLEAN);
+  });
+
+  it("repairConcatenatedRoomText is a no-op for legitimate edits", () => {
+    const doc = new Y.Doc();
+    const grown = CLEAN + "\n% more\nExtra paragraph.\n";
+    doc.getText("main.tex").insert(0, grown);
+
+    const authoritative = new Map([["main.tex", CLEAN]]);
+    expect(repairConcatenatedRoomText(doc, authoritative, "websocket-client")).toBe(false);
+    expect(doc.getText("main.tex").toString()).toBe(grown);
+  });
+});
+
+describe("stale client replay after room re-seed", () => {
+  it("merging a bloated client doc onto a seeded room is repaired to HTTP", () => {
+    const server = new Y.Doc();
+    server.getText("main.tex").insert(0, CLEAN);
+
+    const staleClient = new Y.Doc();
+    staleClient.getText("main.tex").insert(0, CLEAN.repeat(220));
+
+    Y.applyUpdate(server, Y.encodeStateAsUpdate(staleClient));
+
+    const authoritative = new Map([["main.tex", CLEAN]]);
+    expect(server.getText("main.tex").toString().length).toBeGreaterThan(CLEAN.length * 10);
+    expect(repairConcatenatedRoomText(server, authoritative, "websocket-client")).toBe(true);
+    expect(server.getText("main.tex").toString()).toBe(CLEAN);
   });
 });

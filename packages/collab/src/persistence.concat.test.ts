@@ -1,23 +1,25 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import Y from "./yjs.js";
 import type postgres from "postgres";
 import {
   PERSIST_ACK_FIELD,
   PERSIST_META_MAP,
-  PersistConcatenationError,
-  assertNoConcatenatedDocumentUpserts,
   persistRoomState,
-  repairConcatenatedTextInDoc,
   syncProjectFilesFromDoc,
 } from "./persistence.js";
+import {
+  PersistConcatenationError,
+  assertNoConcatenatedDocumentUpserts,
+  repairConcatenatedRoomText,
+} from "./document-integrity.js";
 import { seedDocFromProjectFiles, type ProjectFileRow } from "./room-seed.js";
 
-const SAMPLE =
+const CLEAN =
   "\\documentclass{article}\n\\begin{document}\nHello world\n\\end{document}\n";
 
 function createMockSql(options: {
   textFiles?: Array<{ path: string; content: string }>;
-} = {}): { sql: postgres.Sql; written: Map<string, string> } {
+} = {}): { sql: postgres.Sql; written: Map<string, string>; textFiles: Map<string, string> } {
   const textFiles = new Map((options.textFiles ?? []).map((f) => [f.path, f.content]));
   const written = new Map<string, string>();
 
@@ -36,17 +38,15 @@ function createMockSql(options: {
       textFiles.set(path, content);
     }
     if (query.includes("INSERT INTO collab_room")) {
-      // room blob write — no-op for these tests
+      // tracked separately when needed
     }
     return [];
   }) as postgres.Sql;
 
-  return { sql, written };
+  return { sql, written, textFiles };
 }
 
-function makeFiles(
-  entries: Array<{ path: string; content: string }>
-): ProjectFileRow[] {
+function makeFiles(entries: Array<{ path: string; content: string }>): ProjectFileRow[] {
   return entries.map((e) => ({
     path: e.path,
     content: e.content,
@@ -56,72 +56,101 @@ function makeFiles(
 }
 
 describe("concatenated document persist guard (llm-similarity incident)", () => {
-  it("assertNoConcatenatedDocumentUpserts throws when 220 copies would overwrite 1-copy HTTP", () => {
-    const clean = SAMPLE;
-    const bloated = SAMPLE.repeat(220);
-    const existingByPath = new Map([["main.tex", clean]]);
+  const BLOATED = CLEAN.repeat(220);
 
-    expect(() =>
-      assertNoConcatenatedDocumentUpserts([{ path: "main.tex", content: bloated }], existingByPath)
-    ).toThrow(PersistConcatenationError);
+  it("deploy gate: 1-copy HTTP + 220-copy extract throws and leaves HTTP unchanged", async () => {
+    const doc = new Y.Doc();
+    doc.getText("main.tex").insert(0, BLOATED);
+
+    const { sql, written, textFiles } = createMockSql({
+      textFiles: [{ path: "main.tex", content: CLEAN }],
+    });
+
+    const repairSpy = vi.spyOn(
+      await import("./document-integrity.js"),
+      "repairConcatenatedRoomText"
+    );
+    repairSpy.mockReturnValue(false);
+
+    await expect(
+      syncProjectFilesFromDoc(sql, "project-1", doc)
+    ).rejects.toThrow(PersistConcatenationError);
+
+    expect(written.has("main.tex")).toBe(false);
+    expect(textFiles.get("main.tex")).toBe(CLEAN);
+    repairSpy.mockRestore();
   });
 
-  it("repairConcatenatedTextInDoc adopts clean HTTP over stale client replay", () => {
+  it("repairConcatenatedRoomText adopts clean HTTP over stale client replay", () => {
     const doc = new Y.Doc();
-    doc.getText("main.tex").insert(0, SAMPLE.repeat(220));
+    doc.getText("main.tex").insert(0, BLOATED);
 
-    const repaired = repairConcatenatedTextInDoc(
-      doc,
-      new Map([["main.tex", SAMPLE]])
-    );
-
-    expect(repaired).toBe(1);
-    expect(doc.getText("main.tex").toString()).toBe(SAMPLE);
-    expect(doc.getText("main.tex").toString().split("\\documentclass").length - 1).toBe(1);
+    expect(repairConcatenatedRoomText(doc, new Map([["main.tex", CLEAN]]), "client")).toBe(true);
+    expect(doc.getText("main.tex").toString()).toBe(CLEAN);
   });
 
   it("seedDocFromProjectFiles replaces concatenated Y.Text with clean HTTP (no append)", () => {
     const doc = new Y.Doc();
-    doc.getText("main.tex").insert(0, SAMPLE.repeat(220));
+    doc.getText("main.tex").insert(0, BLOATED);
 
-    const seeded = seedDocFromProjectFiles(
-      doc,
-      makeFiles([{ path: "main.tex", content: SAMPLE }])
-    );
-
-    expect(seeded).toBe(1);
-    expect(doc.getText("main.tex").toString()).toBe(SAMPLE);
+    expect(seedDocFromProjectFiles(doc, makeFiles([{ path: "main.tex", content: CLEAN }]))).toBe(1);
+    expect(doc.getText("main.tex").toString()).toBe(CLEAN);
   });
 
-  it("persistRoomState writes single-copy HTTP, not 220 concatenated copies", async () => {
+  it("seedDocFromProjectFiles collapses concatenated HTTP into empty Y.Text (never inserts raw stack)", () => {
     const doc = new Y.Doc();
-    doc.getText("main.tex").insert(0, SAMPLE.repeat(220));
-    doc.getText("references.bib").insert(0, "@article{key}\n".repeat(2));
+    const bloated = CLEAN.repeat(220);
+
+    expect(seedDocFromProjectFiles(doc, makeFiles([{ path: "main.tex", content: bloated }]))).toBe(1);
+    const seeded = doc.getText("main.tex").toString();
+    expect(seeded.split("\\documentclass").length - 1).toBe(1);
+    expect(seeded).toContain("\\end{document}");
+    expect(seeded.length).toBeLessThan(bloated.length);
+  });
+
+  it("persistRoomState repairs then writes single-copy HTTP, not 220 concatenated copies", async () => {
+    const doc = new Y.Doc();
+    doc.getText("main.tex").insert(0, BLOATED);
 
     const { sql, written } = createMockSql({
-      textFiles: [
-        { path: "main.tex", content: SAMPLE },
-        { path: "references.bib", content: "@article{key}\n" },
-      ],
+      textFiles: [{ path: "main.tex", content: CLEAN }],
     });
 
     await persistRoomState(sql, "0b1003fa-2847-467f-af92-34ade241b1cc", doc);
 
-    expect(written.get("main.tex")).toBe(SAMPLE);
-    expect(written.get("main.tex")?.split("\\documentclass").length).toBe(2);
+    expect(written.get("main.tex")).toBe(CLEAN);
+    expect(doc.getText("main.tex").toString()).toBe(CLEAN);
     expect(doc.getMap(PERSIST_META_MAP).get(PERSIST_ACK_FIELD)).toEqual(expect.any(Number));
   });
 
-  it("syncProjectFilesFromDoc refuses bloated upsert when repair is skipped (deploy gate)", async () => {
+  it("does not signal persist ack when guard blocks and HTTP stays clean", async () => {
     const doc = new Y.Doc();
-    doc.getText("main.tex").insert(0, SAMPLE.repeat(220));
+    doc.getText("main.tex").insert(0, BLOATED);
 
-    const { sql } = createMockSql({
-      textFiles: [{ path: "main.tex", content: SAMPLE }],
+    const { sql, textFiles } = createMockSql({
+      textFiles: [{ path: "main.tex", content: CLEAN }],
     });
 
+    const repairSpy = vi.spyOn(
+      await import("./document-integrity.js"),
+      "repairConcatenatedRoomText"
+    );
+    repairSpy.mockReturnValue(false);
+
     await expect(
-      syncProjectFilesFromDoc(sql, "project-1", doc, { skipRepair: true })
+      persistRoomState(sql, "room-blocked", doc)
     ).rejects.toThrow(PersistConcatenationError);
+    expect(textFiles.get("main.tex")).toBe(CLEAN);
+    expect(doc.getMap(PERSIST_META_MAP).get(PERSIST_ACK_FIELD)).toBeUndefined();
+    repairSpy.mockRestore();
+  });
+
+  it("assertNoConcatenatedDocumentUpserts blocks 220-copy main.tex over clean HTTP", () => {
+    expect(() =>
+      assertNoConcatenatedDocumentUpserts(
+        [{ path: "main.tex", content: BLOATED }],
+        new Map([["main.tex", CLEAN]])
+      )
+    ).toThrow(PersistConcatenationError);
   });
 });
