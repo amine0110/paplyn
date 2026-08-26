@@ -5,6 +5,7 @@ import { cn } from "@/components/ui/cn";
 import { useTheme } from "@/components/theme-provider";
 import type { ThemePreference } from "@/lib/theme";
 import {
+  CHROME_ICON_BTN,
   CHROME_SEGMENT,
   CHROME_SEGMENT_ACTIVE,
   CHROME_SEGMENT_INACTIVE,
@@ -70,7 +71,8 @@ function ThemeCycleButton({ className }: { className?: string }) {
       type="button"
       onClick={cycleTheme}
       className={cn(
-        "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border border-border bg-paper text-ink-muted transition-colors hover:bg-accent/15 hover:text-ink dark:hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper",
+        CHROME_ICON_BTN,
+        "h-9 w-9 shrink-0 rounded-sm border border-border bg-paper",
         className
       )}
       aria-label={`Theme: ${current.label}. Tap to switch.`}

@@ -65,4 +65,16 @@ describe("AI sidebar chat UX", () => {
     expect(meta).toContain("search_arxiv");
     expect(meta).toContain("parse_github_repo");
   });
+
+  it("shows arXiv Open paper and Cite actions instead of TeX import", () => {
+    const src = readSource("components/ai-sidebar.tsx");
+    expect(src).toContain("Open paper");
+    expect(src).toContain("onCiteArxivPaper");
+    expect(src).toContain("openArxivPaper");
+    expect(src).toContain('window.open(paper.sourceUrl, "_blank", "noopener,noreferrer")');
+    expect(src).not.toContain("onImportArxiv");
+    expect(src).not.toContain("Import from arXiv");
+    expect(src).not.toContain("importSource");
+    expect(src).not.toMatch(/>\s*TeX\s*</);
+  });
 });

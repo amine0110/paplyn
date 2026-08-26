@@ -79,59 +79,59 @@
   }
 
   .chrome-hover {
-    @apply transition-colors hover:bg-accent/15 dark:hover:bg-accent/20;
+    @apply cursor-pointer transition-colors hover:bg-accent/15 dark:hover:bg-accent/20;
   }
 
   .chrome-icon-btn {
-    @apply inline-flex items-center justify-center rounded-md transition-colors text-ink-faint hover:text-ink hover:bg-accent/15 dark:hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
+    @apply inline-flex cursor-pointer items-center justify-center rounded-md transition-colors text-ink-faint hover:text-ink hover:bg-accent/15 dark:hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
   }
 
   .chrome-icon-btn-sm {
-    @apply inline-flex items-center justify-center rounded-md p-0.5 transition-colors text-ink-faint hover:text-ink hover:bg-accent/15 dark:hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
+    @apply inline-flex cursor-pointer items-center justify-center rounded-md p-0.5 transition-colors text-ink-faint hover:text-ink hover:bg-accent/15 dark:hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
   }
 
   .chrome-icon-btn-md {
-    @apply inline-flex items-center justify-center rounded-md p-1.5 transition-colors text-ink-faint hover:text-ink hover:bg-accent/15 dark:hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
+    @apply inline-flex cursor-pointer items-center justify-center rounded-md p-1.5 transition-colors text-ink-faint hover:text-ink hover:bg-accent/15 dark:hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
   }
 
   .chrome-chip {
-    @apply rounded-full font-medium text-ink transition-colors hover:bg-accent/15 dark:hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
+    @apply cursor-pointer rounded-full font-medium text-ink transition-colors hover:bg-accent/15 dark:hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
   }
 
   .chrome-toolbar-btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-ink-muted transition-colors hover:bg-accent/15 hover:text-ink dark:hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-ink-muted transition-colors hover:bg-accent/15 hover:text-ink dark:hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50;
   }
 
   .chrome-send-btn {
-    @apply inline-flex items-center justify-center rounded-md bg-accent text-white transition-colors hover:bg-accent-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex cursor-pointer items-center justify-center rounded-md bg-accent text-white transition-colors hover:bg-accent-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50;
   }
 
   .chrome-menu-item {
-    @apply w-full text-left transition-colors hover:bg-accent/15 dark:hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-inset;
+    @apply w-full cursor-pointer text-left transition-colors hover:bg-accent/15 dark:hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-inset;
   }
 
   .chrome-segment {
-    @apply inline-flex items-center justify-center gap-1 rounded-sm px-2 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
+    @apply inline-flex cursor-pointer items-center justify-center gap-1 rounded-sm px-2 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
   }
 
   .chrome-segment-inactive {
-    @apply text-ink-muted transition-colors hover:bg-accent/15 dark:hover:bg-accent/20 hover:text-ink;
+    @apply cursor-pointer text-ink-muted transition-colors hover:bg-accent/15 dark:hover:bg-accent/20 hover:text-ink;
   }
 
   .chrome-segment-active {
-    @apply bg-accent text-white;
+    @apply cursor-pointer bg-accent text-white;
   }
 
   .chrome-tab-inactive {
-    @apply text-ink-muted transition-colors hover:bg-accent/15 dark:hover:bg-accent/20 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
+    @apply cursor-pointer text-ink-muted transition-colors hover:bg-accent/15 dark:hover:bg-accent/20 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
   }
 
   .chrome-destructive-icon {
-    @apply inline-flex items-center justify-center rounded-md p-0.5 transition-colors text-ink-faint hover:bg-error/10 hover:text-error dark:hover:bg-error/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
+    @apply inline-flex cursor-pointer items-center justify-center rounded-md p-0.5 transition-colors text-ink-faint hover:bg-error/10 hover:text-error dark:hover:bg-error/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
   }
 
   .chrome-link {
-    @apply transition-colors text-ink-muted hover:text-ink hover:bg-accent/15 dark:hover:bg-accent/20 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
+    @apply cursor-pointer transition-colors text-ink-muted hover:text-ink hover:bg-accent/15 dark:hover:bg-accent/20 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
   }
 
   /* AI chat sidebar — message enter + typing indicator */

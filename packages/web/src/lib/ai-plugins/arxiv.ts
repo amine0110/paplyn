@@ -12,14 +12,14 @@ const SYSTEM_PROMPT = `When the user asks to find arXiv papers, preprints, or me
 export const arxivPlugin: AiPlugin = {
   id: "arxiv",
   name: "arXiv",
-  description: "Search arXiv preprints via the official Atom API and import PDFs or TeX sources.",
+  description: "Search arXiv preprints via the official Atom API; open papers or cite BibTeX entries.",
   toolName: "search_arxiv",
   enabled: true,
   landing: {
     href: "https://arxiv.org/",
     wordmark: "arXiv",
     wordmarkClassName: "font-serif font-semibold tracking-tight",
-    caption: "Preprint search & import",
+    caption: "Preprint search & cite",
   },
   systemPrompt: SYSTEM_PROMPT,
   actionPrompts: {

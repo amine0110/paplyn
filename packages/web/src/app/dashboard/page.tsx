@@ -12,7 +12,7 @@ import { Plus, Archive, ArchiveRestore, FileText, Copy, Settings, Trash2, Upload
 import type { Project } from "@/lib/schema";
 import { useUiFeedback } from "@/components/ui-feedback";
 import { cn } from "@/components/ui/cn";
-import { CHROME_MENU_ITEM } from "@/lib/chrome-interactive";
+import { CHROME_ICON_BTN_MD, CHROME_ICON_BTN_SM, CHROME_LINK, CHROME_MENU_ITEM } from "@/lib/chrome-interactive";
 import { leaveForLogin } from "@/lib/auth-redirect";
 import { useRequireSession } from "@/lib/use-require-session";
 
@@ -339,7 +339,10 @@ export default function DashboardPage() {
                         <Link
                           key={p.id}
                           href={`/project/${p.id}`}
-                          className="flex items-center justify-between p-3 rounded-lg border border-border bg-surface hover:bg-canvas-dark transition-colors"
+                          className={cn(
+                            "flex items-center justify-between p-3 rounded-lg border border-border bg-surface hover:bg-canvas-dark transition-colors",
+                            CHROME_LINK
+                          )}
                         >
                           <div>
                             <span className="font-medium">{p.name}</span>
@@ -362,7 +365,7 @@ export default function DashboardPage() {
             {owned.some((p) => p.archived) && (
               <button
                 onClick={() => setShowArchived(!showArchived)}
-                className="text-sm text-ink-muted hover:text-ink mt-6 flex items-center gap-1"
+                className={cn("text-sm mt-6 flex items-center gap-1", CHROME_LINK)}
               >
                 <Archive className="h-3 w-3" />
                 {showArchived ? "Hide archived" : "Show archived"}
@@ -535,7 +538,7 @@ function ProjectRow({
 
   return (
     <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-surface hover:bg-canvas-dark transition-colors group">
-      <Link href={`/project/${project.id}`} className="flex-1 min-w-0">
+      <Link href={`/project/${project.id}`} className={cn("flex-1 min-w-0", CHROME_LINK)}>
         <div className="font-medium truncate">{project.name}</div>
         <div className="text-xs text-ink-faint mt-0.5 truncate">
           {project.archived && <span className="mr-2">Archived</span>}
@@ -549,21 +552,30 @@ function ProjectRow({
         </span>
         <button
           onClick={() => onSettings(project)}
-          className="opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto text-ink-faint hover:text-ink p-1"
+          className={cn(
+            CHROME_ICON_BTN_SM,
+            "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto text-ink-faint hover:text-ink"
+          )}
           title="Settings"
         >
           <Settings className="h-4 w-4" />
         </button>
         <button
           onClick={() => onDuplicate(project.id)}
-          className="opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto text-ink-faint hover:text-ink p-1"
+          className={cn(
+            CHROME_ICON_BTN_SM,
+            "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto text-ink-faint hover:text-ink"
+          )}
           title="Duplicate"
         >
           <Copy className="h-4 w-4" />
         </button>
         <button
           onClick={() => onArchive(project.id, !project.archived)}
-          className="opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto text-ink-faint hover:text-ink p-1"
+          className={cn(
+            CHROME_ICON_BTN_SM,
+            "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto text-ink-faint hover:text-ink"
+          )}
           title={archiveLabel}
           aria-label={archiveLabel}
         >
@@ -575,7 +587,10 @@ function ProjectRow({
         </button>
         <button
           onClick={() => onDelete(project.id, project.name)}
-          className="opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto text-ink-faint hover:text-error p-1"
+          className={cn(
+            CHROME_ICON_BTN_SM,
+            "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto text-ink-faint hover:text-error"
+          )}
           title="Delete permanently"
         >
           <Trash2 className="h-4 w-4" />
@@ -589,7 +604,10 @@ function ProjectRow({
             e.stopPropagation();
             setMenuOpen((open) => !open);
           }}
-          className="flex h-11 w-11 items-center justify-center text-ink-faint hover:text-ink"
+          className={cn(
+            CHROME_ICON_BTN_MD,
+            "flex h-11 w-11 items-center justify-center text-ink-faint hover:text-ink"
+          )}
           aria-expanded={menuOpen}
           aria-haspopup="menu"
           aria-label="Project actions"
