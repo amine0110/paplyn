@@ -23,3 +23,15 @@ export function getGithubAuthConfig(): OAuthProviderConfig | null {
 export function isGithubAuthEnabled(): boolean {
   return getGithubAuthConfig() !== null;
 }
+
+/** Server-side ORCID OAuth configuration for Better Auth genericOAuth. */
+export function getOrcidAuthConfig(): OAuthProviderConfig | null {
+  const clientId = process.env.ORCID_CLIENT_ID?.trim();
+  const clientSecret = process.env.ORCID_CLIENT_SECRET?.trim();
+  if (!clientId || !clientSecret) return null;
+  return { clientId, clientSecret };
+}
+
+export function isOrcidAuthEnabled(): boolean {
+  return getOrcidAuthConfig() !== null;
+}

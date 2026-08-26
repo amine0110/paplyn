@@ -33,7 +33,7 @@ describe("Login page", () => {
   });
 
   it("renders forgot password link", () => {
-    render(<LoginPageClient googleEnabled={false} githubEnabled={false} />);
+    render(<LoginPageClient googleEnabled={false} githubEnabled={false} orcidEnabled={false} />);
 
     expect(screen.getByRole("link", { name: "Forgot password?" })).toHaveAttribute(
       "href",
@@ -42,13 +42,13 @@ describe("Login page", () => {
   });
 
   it("hides Google button when Google auth is not configured", () => {
-    render(<LoginPageClient googleEnabled={false} githubEnabled={false} />);
+    render(<LoginPageClient googleEnabled={false} githubEnabled={false} orcidEnabled={false} />);
 
     expect(screen.queryByRole("button", { name: "Continue with Google" })).not.toBeInTheDocument();
   });
 
   it("shows Google button when Google auth is configured", () => {
-    render(<LoginPageClient googleEnabled={true} githubEnabled={false} />);
+    render(<LoginPageClient googleEnabled={true} githubEnabled={false} orcidEnabled={false} />);
 
     const button = screen.getByRole("button", { name: "Continue with Google" });
     expect(button).toBeInTheDocument();
@@ -56,13 +56,13 @@ describe("Login page", () => {
   });
 
   it("hides GitHub button when GitHub auth is not configured", () => {
-    render(<LoginPageClient googleEnabled={false} githubEnabled={false} />);
+    render(<LoginPageClient googleEnabled={false} githubEnabled={false} orcidEnabled={false} />);
 
     expect(screen.queryByRole("button", { name: "Continue with GitHub" })).not.toBeInTheDocument();
   });
 
   it("shows GitHub button when GitHub auth is configured", () => {
-    render(<LoginPageClient googleEnabled={false} githubEnabled={true} />);
+    render(<LoginPageClient googleEnabled={false} githubEnabled={true} orcidEnabled={false} />);
 
     const button = screen.getByRole("button", { name: "Continue with GitHub" });
     expect(button).toBeInTheDocument();
@@ -71,7 +71,7 @@ describe("Login page", () => {
   });
 
   it("toggles password visibility", () => {
-    render(<LoginPageClient googleEnabled={false} githubEnabled={false} />);
+    render(<LoginPageClient googleEnabled={false} githubEnabled={false} orcidEnabled={false} />);
 
     const password = screen.getByLabelText("Password");
     expect(password).toHaveAttribute("type", "password");
@@ -85,10 +85,24 @@ describe("Login page", () => {
     expect(password).toHaveAttribute("type", "password");
   });
 
+  it("hides ORCID button when ORCID auth is not configured", () => {
+    render(<LoginPageClient googleEnabled={false} githubEnabled={false} orcidEnabled={false} />);
+
+    expect(screen.queryByRole("button", { name: "Continue with ORCID" })).not.toBeInTheDocument();
+  });
+
+  it("shows ORCID button when ORCID auth is configured", () => {
+    render(<LoginPageClient googleEnabled={false} githubEnabled={false} orcidEnabled={true} />);
+
+    const button = screen.getByRole("button", { name: "Continue with ORCID" });
+    expect(button).toBeInTheDocument();
+    expect(button.querySelector("svg[aria-hidden='true'] path[fill='#A6CE39']")).toBeInTheDocument();
+  });
+
   it("shows OAuth error message when error=oauth is present", () => {
     useSearchParams.mockReturnValue(new URLSearchParams("error=oauth"));
 
-    render(<LoginPageClient googleEnabled={false} githubEnabled={false} />);
+    render(<LoginPageClient googleEnabled={false} githubEnabled={false} orcidEnabled={false} />);
 
     expect(screen.getByText(OAUTH_ERROR_MESSAGE)).toBeInTheDocument();
   });
@@ -96,7 +110,7 @@ describe("Login page", () => {
   it("links to signup with the same next path", () => {
     useSearchParams.mockReturnValue(new URLSearchParams("next=/invite/invite-1"));
 
-    render(<LoginPageClient googleEnabled={false} githubEnabled={false} />);
+    render(<LoginPageClient googleEnabled={false} githubEnabled={false} orcidEnabled={false} />);
 
     expect(screen.getByRole("link", { name: "Create one" })).toHaveAttribute(
       "href",

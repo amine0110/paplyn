@@ -1,10 +1,12 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { db } from "./db";
 import * as schema from "./schema";
 import { config } from "./config";
-import { getGithubAuthConfig, getGoogleAuthConfig } from "./auth-providers";
+import { getGithubAuthConfig, getGoogleAuthConfig, getOrcidAuthConfig } from "./auth-providers";
 import { buildGithubSocialProviderOptions } from "./github-auth-provider";
+import { buildOrcidGenericOAuthConfig } from "./orcid-auth-provider";
 import {
   getBrandTrustedOrigins,
   getSelfHostedTrustedOrigins,
@@ -17,6 +19,7 @@ import { eq, count } from "drizzle-orm";
 
 const googleAuth = getGoogleAuthConfig();
 const githubAuth = getGithubAuthConfig();
+const orcidAuth = getOrcidAuthConfig();
 
 const socialProviders = {
   ...(googleAuth
@@ -35,6 +38,13 @@ const socialProviders = {
 };
 
 export const auth = betterAuth({
+  plugins: orcidAuth
+    ? [
+        genericOAuth({
+          config: [buildOrcidGenericOAuthConfig(orcidAuth)],
+        }),
+      ]
+    : undefined,
   database: drizzleAdapter(db, {
     provider: "pg",
     schema: {

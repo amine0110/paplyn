@@ -2,8 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   getGithubAuthConfig,
   getGoogleAuthConfig,
+  getOrcidAuthConfig,
   isGithubAuthEnabled,
   isGoogleAuthEnabled,
+  isOrcidAuthEnabled,
 } from "@/lib/auth-providers";
 
 describe("auth-providers", () => {
@@ -69,5 +71,32 @@ describe("auth-providers", () => {
       clientSecret: "github-client-secret",
     });
     expect(isGithubAuthEnabled()).toBe(true);
+  });
+
+  it("returns null when ORCID env vars are missing", () => {
+    delete process.env.ORCID_CLIENT_ID;
+    delete process.env.ORCID_CLIENT_SECRET;
+
+    expect(getOrcidAuthConfig()).toBeNull();
+    expect(isOrcidAuthEnabled()).toBe(false);
+  });
+
+  it("returns null when only ORCID client id is set", () => {
+    process.env.ORCID_CLIENT_ID = "orcid-client-id";
+    delete process.env.ORCID_CLIENT_SECRET;
+
+    expect(getOrcidAuthConfig()).toBeNull();
+    expect(isOrcidAuthEnabled()).toBe(false);
+  });
+
+  it("returns config when both ORCID env vars are set", () => {
+    process.env.ORCID_CLIENT_ID = "orcid-client-id";
+    process.env.ORCID_CLIENT_SECRET = "orcid-client-secret";
+
+    expect(getOrcidAuthConfig()).toEqual({
+      clientId: "orcid-client-id",
+      clientSecret: "orcid-client-secret",
+    });
+    expect(isOrcidAuthEnabled()).toBe(true);
   });
 });

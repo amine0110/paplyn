@@ -1,10 +1,13 @@
 import { signIn, signOut } from "@/lib/auth-client";
 import { isInternalAppPath } from "@/lib/internal-path";
 
-export type SocialAuthProvider = "google" | "github";
+export type SocialAuthProvider = "google" | "github" | "orcid";
 
 export const OAUTH_ERROR_MESSAGE =
   "We could not complete sign-in with that provider. Try again, or sign in with your email and password.";
+
+export const ORCID_NO_EMAIL_ERROR_MESSAGE =
+  "ORCID did not provide a public primary email. Make your primary email public at orcid.org (Account settings → Email), or sign in with Google or GitHub instead.";
 
 /** Build an in-app OAuth failure URL for login or signup. */
 export function buildSocialOAuthErrorCallbackURL(

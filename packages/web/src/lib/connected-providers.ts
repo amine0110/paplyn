@@ -1,6 +1,7 @@
 export const CONNECTED_PROVIDER_LABELS: Record<string, string> = {
   google: "Google",
   github: "GitHub",
+  orcid: "ORCID",
   credential: "Email and password",
 };
 
