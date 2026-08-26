@@ -1,5 +1,11 @@
 import type postgres from "postgres";
-import type { Doc, Text } from "./yjs.js";
+import type { Doc } from "./yjs.js";
+import {
+  collapseConcatenatedSeedContent,
+  countDuplicateBibKeys,
+  hasMultipleDocumentCopies,
+  looksLikeConcatenatedFileContent,
+} from "./document-integrity.js";
 import { replaceYTextContent } from "./y-text.js";
 
 export type ProjectFileRow = {
@@ -33,13 +39,27 @@ function isHttpNewerThanCollabRoom(file: ProjectFileRow, collabRoomUpdatedAt?: D
   return file.updated_at > collabRoomUpdatedAt;
 }
 
+function resolveSeedContent(path: string, content: string): string | null {
+  if (!looksLikeConcatenatedFileContent(content, "") && !hasMultipleDocumentCopies(content)) {
+    return content;
+  }
+  const collapsed = collapseConcatenatedSeedContent(path, content);
+  if (collapsed) return collapsed;
+  console.error(
+    `[collab] refuse seed for ${path}: HTTP content looks concatenated and could not be collapsed`
+  );
+  return null;
+}
+
 /**
- * Seed empty Y.Text entries from HTTP-persisted project files.
+ * Seed Y.Text from HTTP-persisted project files.
  * Runs once per room bind on the collab server so tabs cannot race to insert
  * the same `initialContent` into Y.Text (concurrent Yjs inserts concatenate).
  *
- * When HTTP `project_file` is newer than the stored collab room blob, adopt HTTP
- * content if it differs — avoids ignoring a newer HTTP save forever (#66).
+ * Rules:
+ * - Never insert when Y.Text already has content (replace/no-op only).
+ * - Never insert concatenated HTTP without collapsing to a single copy first.
+ * - Replace concatenated room text with clean HTTP on re-bind.
  */
 export function seedDocFromProjectFiles(
   doc: Doc,
@@ -49,16 +69,47 @@ export function seedDocFromProjectFiles(
   let seeded = 0;
   for (const file of files) {
     if (file.is_binary || !file.content) continue;
+
     const ytext = doc.getText(file.path);
+    const ytextContent = ytext.toString();
+    const ext = file.path.includes(".") ? file.path.slice(file.path.lastIndexOf(".") + 1).toLowerCase() : "";
+
     if (ytext.length === 0) {
-      ytext.insert(0, file.content);
+      const seedContent = resolveSeedContent(file.path, file.content);
+      if (!seedContent) continue;
+      ytext.insert(0, seedContent);
       seeded += 1;
       continue;
     }
 
     if (
+      ext === "bib" &&
+      countDuplicateBibKeys(ytextContent) > 0 &&
+      countDuplicateBibKeys(file.content) === 0 &&
+      file.content.length > 0
+    ) {
+      if (ytextContent !== file.content) {
+        replaceYTextContent(ytext, file.content);
+        seeded += 1;
+      }
+      continue;
+    }
+
+    if (
+      hasMultipleDocumentCopies(ytextContent) &&
+      !hasMultipleDocumentCopies(file.content) &&
+      file.content.length > 0
+    ) {
+      if (ytextContent !== file.content) {
+        replaceYTextContent(ytext, file.content);
+        seeded += 1;
+      }
+      continue;
+    }
+
+    if (
       isHttpNewerThanCollabRoom(file, options.collabRoomUpdatedAt) &&
-      ytext.toString() !== file.content
+      ytextContent !== file.content
     ) {
       replaceYTextContent(ytext, file.content);
       seeded += 1;

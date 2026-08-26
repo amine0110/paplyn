@@ -43,18 +43,30 @@ describe("seedDocFromProjectFiles", () => {
     expect(doc.getText("figure.png").toString()).toBe("");
   });
 
-  it("does not worsen already-bloated HTTP content on re-bind", () => {
+  it("collapses concatenated HTTP when seeding empty Y.Text", () => {
     const bloated = SAMPLE.repeat(220);
     const doc = new Y.Doc();
     const files = makeFiles([{ path: "main.tex", content: bloated }]);
 
     expect(seedDocFromProjectFiles(doc, files)).toBe(1);
-    expect(doc.getText("main.tex").toString()).toBe(bloated);
+    const seeded = doc.getText("main.tex").toString();
+    expect(seeded.split("\\documentclass").length - 1).toBe(1);
+    expect(seeded).toContain("\\end{document}");
+    expect(seeded.length).toBeLessThan(bloated.length);
 
-    // Simulates another tab / server re-bind with the same HTTP payload.
+    // Second bind: Y.Text already has content — never insert again.
     expect(seedDocFromProjectFiles(doc, files)).toBe(0);
-    expect(doc.getText("main.tex").toString()).toBe(bloated);
-    expect(doc.getText("main.tex").length).toBe(bloated.length);
+    expect(doc.getText("main.tex").toString()).toBe(seeded);
+  });
+
+  it("replaces concatenated Y.Text with clean HTTP on re-bind (stale client replay)", () => {
+    const doc = new Y.Doc();
+    doc.getText("main.tex").insert(0, SAMPLE.repeat(220));
+
+    const files = makeFiles([{ path: "main.tex", content: SAMPLE }]);
+    expect(seedDocFromProjectFiles(doc, files)).toBe(1);
+    expect(doc.getText("main.tex").toString()).toBe(SAMPLE);
+    expect(doc.getText("main.tex").toString().split("\\documentclass").length - 1).toBe(1);
   });
 
   it("adopts newer HTTP project_file when collab room blob is older", () => {
