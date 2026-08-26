@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Internal npm workspace scope renamed from `@quire` to `@paplyn` (root package `paplyn`, `@paplyn/web`, `@paplyn/collab`, `@paplyn/compiler`). Postgres credentials and production compiler image name unchanged.
+
 ### Added
 
 - Mobile project editor layout (viewports under 640px): bottom tabs switch between Files, Editor, and Proof instead of cramped side-by-side columns. Compile stays in the header; PDF and source download remain reachable. Desktop layout modes are unchanged.
