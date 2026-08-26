@@ -68,7 +68,8 @@ export function sanitizeUserReportInput(
   const title = sanitizePlainText(data.title.trim()).slice(0, REPORT_TITLE_MAX);
   const whatHappened = sanitizePlainText(data.whatHappened.trim()).slice(0, REPORT_WHAT_HAPPENED_MAX);
   const steps = sanitizePlainText((data.steps ?? "").trim()).slice(0, REPORT_STEPS_MAX);
-  const page = sanitizePlainText((data.page ?? "").trim()).slice(0, REPORT_PAGE_MAX);
+  const rawPage = (data.page ?? "").trim();
+  const page = sanitizePlainText(rawPage || "/report").slice(0, REPORT_PAGE_MAX);
 
   let email: string | null = null;
   if (options.signedIn && options.sessionEmail?.trim()) {

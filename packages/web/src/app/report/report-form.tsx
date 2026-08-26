@@ -165,8 +165,13 @@ export function ReportForm({
 
     setSubmitting(true);
     try {
+      const page =
+        initialPage.trim() ||
+        (typeof window !== "undefined" ? window.location.pathname : "/report");
+
       const response = await fetch("/api/user-reports", {
         method: "POST",
+        credentials: "same-origin",
         headers: {
           "Content-Type": "application/json",
           [USER_REPORT_CSRF_HEADER]: token,
@@ -176,7 +181,7 @@ export function ReportForm({
           whatHappened,
           steps,
           email: signedIn ? undefined : email,
-          page: initialPage,
+          page,
           source: initialSource,
           honeypot,
           csrfToken: token,

@@ -42,6 +42,10 @@ describe("PAP-30 user reports deploy gate", () => {
     expect(notion).not.toContain(`database_id: ${INTERNAL_TRACKER_ID}`);
     expect(notion).toContain("https://api.notion.com/v1/pages");
     expect(notion).toContain("Notion-Version");
+    expect(notion).toContain('"What happened"');
+    expect(notion).toContain("Steps");
+    expect(notion).toContain("report.whatHappened");
+    expect(notion).toContain("report.steps");
   });
 
   it("does not hardcode Notion tokens in source", () => {
