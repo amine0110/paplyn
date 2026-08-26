@@ -60,10 +60,12 @@ describe("GitHub auth deploy gate", () => {
     expect(signupForm).toContain("GitHubSignInButton");
   });
 
-  it("GitHub sign-in button uses Better Auth github provider and callbackURL", () => {
+  it("GitHub sign-in button uses Better Auth github provider, callbackURL, and errorCallbackURL", () => {
     const src = readSrc("components/auth/github-sign-in-button.tsx");
     expect(src).toContain('provider: "github"');
     expect(src).toContain("callbackURL");
+    expect(src).toContain("errorCallbackURL");
+    expect(src).toContain("signOutAndStartSocialSignIn");
     expect(src).toContain("cursor-pointer");
     expect(src).toContain('fill="currentColor"');
     expect(src).toContain("Continue with GitHub");

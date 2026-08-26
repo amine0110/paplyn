@@ -84,6 +84,16 @@ describe("Login page", () => {
     expect(password).toHaveAttribute("type", "password");
   });
 
+  it("shows OAuth error message when error=oauth is present", () => {
+    useSearchParams.mockReturnValue(new URLSearchParams("error=oauth"));
+
+    render(<LoginPageClient googleEnabled={false} githubEnabled={false} />);
+
+    expect(
+      screen.getByText("We could not complete sign-in with that provider. Try again or use email."),
+    ).toBeInTheDocument();
+  });
+
   it("links to signup with the same next path", () => {
     useSearchParams.mockReturnValue(new URLSearchParams("next=/invite/invite-1"));
 

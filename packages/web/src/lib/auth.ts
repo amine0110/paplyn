@@ -48,7 +48,7 @@ export const auth = betterAuth({
   }),
   account: {
     accountLinking: {
-      enabled: true,
+      enabled: false,
     },
   },
   socialProviders: Object.keys(socialProviders).length > 0 ? socialProviders : undefined,
