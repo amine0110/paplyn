@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { FileTree, type FileNode } from "@/components/file-tree";
@@ -51,6 +52,7 @@ import { Button } from "@/components/ui/button";
 import {
   CHROME_ICON_BTN_MD,
   CHROME_ICON_BTN_SM,
+  CHROME_LINK,
   CHROME_MENU_ITEM,
   CHROME_TOOLBAR_BTN,
 } from "@/lib/chrome-interactive";
@@ -1106,6 +1108,9 @@ export default function ProjectPage() {
         <div className="flex items-center gap-1.5 shrink-0">
           <LayoutModeSwitcher mode={layoutMode} onChange={updateLayoutMode} className="hidden sm:inline-flex" />
           <ThemeToggle compact />
+          <Link href="/docs" className={cn("hidden sm:inline text-sm", CHROME_LINK)}>
+            Docs
+          </Link>
           <Button variant="default" size="sm" onClick={compile} disabled={compiling}>
             <Play className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">{compiling ? "Typesetting…" : "Compile"}</span>
@@ -1200,6 +1205,14 @@ export default function ProjectPage() {
                       Settings
                     </button>
                   )}
+                  <Link
+                    href="/docs"
+                    role="menuitem"
+                    className={cn(CHROME_MENU_ITEM, "block w-full px-3 py-2.5 text-sm")}
+                    onClick={() => setShowMobileMenu(false)}
+                  >
+                    Docs
+                  </Link>
                 </div>
               </>
             )}

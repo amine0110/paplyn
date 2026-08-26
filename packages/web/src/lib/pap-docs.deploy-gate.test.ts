@@ -31,6 +31,21 @@ describe("Paplyn docs deploy gate", () => {
     expect(landing).toContain('href="/docs"');
   });
 
+  it("exposes Docs in shared Nav chrome for signed-in and signed-out users", () => {
+    const nav = readSrc("components/nav.tsx");
+    expect(nav).toContain('href="/docs"');
+    expect(nav).toContain("Docs");
+    expect(nav).toContain("CHROME_LINK");
+    expect(nav).toMatch(/ThemeToggle[\s\S]*href="\/docs"/);
+  });
+
+  it("exposes Docs in the project editor header and mobile overflow menu", () => {
+    const projectPage = readSrc("app/project/[id]/page.tsx");
+    expect(projectPage).toContain('href="/docs"');
+    expect(projectPage).toMatch(/Docs[\s\S]*CHROME_LINK|CHROME_LINK[\s\S]*Docs/);
+    expect(projectPage).toMatch(/showMobileMenu[\s\S]*href="\/docs"/);
+  });
+
   it("keeps docs content inside packages/web for Docker builds", () => {
     const dockerfile = readFileSync(join(ROOT, "../Dockerfile"), "utf8");
     expect(dockerfile).toContain("COPY packages/web ./packages/web");
