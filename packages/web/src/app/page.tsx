@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Nav } from "@/components/nav";
 import { LandingHero } from "@/components/landing-hero";
 import { IntegrationsStrip } from "@/components/integrations-strip";
@@ -98,7 +99,12 @@ export default function LandingPage() {
       </main>
 
       <footer className="border-t border-border py-8 text-center text-sm text-ink-faint">
-        {PRODUCT.footerLine}
+        <p>{PRODUCT.footerLine}</p>
+        <p className="mt-2">
+          <Link href="/docs" className="text-accent hover:underline cursor-pointer">
+            Documentation
+          </Link>
+        </p>
       </footer>
     </div>
   );
