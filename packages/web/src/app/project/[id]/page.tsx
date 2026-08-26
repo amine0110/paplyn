@@ -77,7 +77,7 @@ import { countDocumentStats } from "@/lib/document-stats";
 import type { SaveStatus } from "@/lib/save-status";
 import { saveProjectFile } from "@/lib/save-file";
 import { runCollabSaveFallback } from "@/lib/collab-save-fallback";
-import type { AiPaper, DoiCitationPayload } from "@/lib/ai-types";
+import type { AiPaper, ArxivPaperResult, DoiCitationPayload } from "@/lib/ai-types";
 import {
   appendBibEntry,
   formatBibtexEntry,
@@ -86,6 +86,7 @@ import {
   resolveProjectBibPath,
   suggestCitationKey,
 } from "@/lib/bibtex";
+import { formatArxivBibtexEntry } from "@/lib/arxiv";
 import { canManageSharing, type ProjectRole } from "@/lib/project-sharing";
 import {
   countCompileErrors,
@@ -700,30 +701,52 @@ export default function ProjectPage() {
     await applyDoiCitation(citation);
   }
 
-  async function handleImportArxiv(
-    arxivId: string,
-    options?: { attachPdf?: boolean; importSource?: boolean }
-  ) {
-    if (!canEdit) return;
+  async function handleCiteArxivPaper(paper: ArxivPaperResult) {
+    if (!canEdit || !project) return;
 
-    const res = await fetch(`/api/projects/${projectId}/integrations/arxiv/import`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        arxivId,
-        attachPdf: options?.attachPdf ?? true,
-        importSource: options?.importSource ?? false,
-      }),
+    const filePaths = files.map((file) => file.path);
+    const fileContents = Object.fromEntries(files.map((file) => [file.path, file.content]));
+    const bibPath = resolveProjectBibPath({
+      mainFile: project.mainFile,
+      filePaths,
+      fileContents,
     });
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      notice(typeof err.error === "string" ? err.error : "Failed to import from arXiv");
-      return;
+    const existingBib = fileContents[bibPath] ?? "";
+    const existingKeys = parseBibKeys(existingBib);
+    const citationKey = suggestCitationKey(
+      {
+        title: paper.title,
+        year: paper.year,
+        authors: paper.authors,
+        venue: "arXiv preprint",
+        doi: null,
+        url: paper.sourceUrl,
+        source: "openalex",
+      },
+      existingKeys
+    );
+    const entry = formatArxivBibtexEntry(
+      {
+        id: paper.id,
+        title: paper.title,
+        authors: paper.authors,
+        year: paper.year,
+        abstract: paper.abstract,
+        pdfUrl: paper.pdfUrl,
+        sourceUrl: paper.sourceUrl,
+        publishedAt: null,
+      },
+      citationKey
+    );
+    const updatedBib = appendBibEntry(existingBib, entry, citationKey);
+
+    if (updatedBib !== existingBib) {
+      await saveFile(bibPath, updatedBib, false);
     }
 
-    await loadProject();
-    notice(`Imported arXiv:${arxivId}`);
+    handleInsertAtCursor(`\\cite{${citationKey}}`);
+    notice(`Cited “${paper.title}” (arXiv)`);
   }
 
   async function handleCitePaper(paper: AiPaper) {
@@ -996,9 +1019,14 @@ export default function ProjectPage() {
 
   return (
     <div className="h-[100dvh] flex flex-col bg-canvas overflow-hidden">
-      <header className="h-11 shrink-0 flex items-center justify-between gap-2 px-3 sm:px-4 border-b border-border bg-paper/90 backdrop-blur-sm pt-[env(safe-area-inset-top,0px)]">
+      <header className="relative z-30 h-11 shrink-0 flex items-center justify-between gap-2 px-3 sm:px-4 border-b border-border bg-paper/90 backdrop-blur-sm pt-[env(safe-area-inset-top,0px)]">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <Link href="/dashboard" className={CHROME_ICON_BTN_MD} title="Back to manuscripts">
+          <Link
+            href="/dashboard"
+            aria-label="Back to manuscripts"
+            title="Back to manuscripts"
+            className={CHROME_ICON_BTN_MD}
+          >
             <ChevronLeft className="h-4 w-4" />
           </Link>
           <button
@@ -1219,7 +1247,7 @@ export default function ProjectPage() {
                   onReplace={handleReplaceSelection}
                   onCitePaper={canEdit ? handleCitePaper : undefined}
                   onApplyDoiCitation={canEdit ? handleApplyDoiCitation : undefined}
-                  onImportArxiv={canEdit ? handleImportArxiv : undefined}
+                  onCiteArxivPaper={canEdit ? handleCiteArxivPaper : undefined}
                   applyActionsContext={canEdit ? aiApplyActionsContext : undefined}
                   onClose={() => setShowAi(false)}
                   variant="sheet"
@@ -1241,7 +1269,7 @@ export default function ProjectPage() {
                   onReplace={handleReplaceSelection}
                   onCitePaper={canEdit ? handleCitePaper : undefined}
                   onApplyDoiCitation={canEdit ? handleApplyDoiCitation : undefined}
-                  onImportArxiv={canEdit ? handleImportArxiv : undefined}
+                  onCiteArxivPaper={canEdit ? handleCiteArxivPaper : undefined}
                   applyActionsContext={canEdit ? aiApplyActionsContext : undefined}
                   onClose={() => setShowAi(false)}
                   variant="sidebar"

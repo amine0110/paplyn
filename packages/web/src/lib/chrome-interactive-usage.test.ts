@@ -131,6 +131,54 @@ describe("workspace chrome class usage", () => {
     expect(css).toContain(".chrome-icon-btn-md");
     expect(css).toContain(".chrome-icon-btn-sm");
   });
+
+  it("globals.css applies cursor-pointer to chrome interactive classes", () => {
+    const css = readSource("app/globals.css");
+    for (const selector of [
+      ".chrome-hover",
+      ".chrome-icon-btn",
+      ".chrome-icon-btn-sm",
+      ".chrome-icon-btn-md",
+      ".chrome-chip",
+      ".chrome-toolbar-btn",
+      ".chrome-send-btn",
+      ".chrome-menu-item",
+      ".chrome-segment",
+      ".chrome-segment-inactive",
+      ".chrome-segment-active",
+      ".chrome-tab-inactive",
+      ".chrome-destructive-icon",
+      ".chrome-link",
+    ]) {
+      const block = css.slice(css.indexOf(selector));
+      expect(block).toMatch(new RegExp(`${selector.replace(".", "\\.")}[\\s\\S]*?cursor-pointer`));
+    }
+    expect(css).toContain("disabled:cursor-not-allowed");
+  });
+
+  it("project editor back control links to the dashboard manuscripts list", () => {
+    const src = readSource("app/project/[id]/page.tsx");
+    expect(src).toMatch(
+      /<Link[\s\S]*href="\/dashboard"[\s\S]*aria-label="Back to manuscripts"[\s\S]*CHROME_ICON_BTN_MD/
+    );
+    expect(src).not.toMatch(/title="Back to manuscripts"[\s\S]*onClick=\{\(\) => \{\}\}/);
+  });
+
+  it("Button base styles use pointer cursor with disabled not-allowed", () => {
+    const src = readSource("components/ui/button.tsx");
+    expect(src).toContain("cursor-pointer");
+    expect(src).toContain("disabled:cursor-not-allowed");
+  });
+
+  it("nav links and dashboard chrome controls use shared interactive classes", () => {
+    const navSrc = readSource("components/nav.tsx");
+    expect(navSrc).toContain("CHROME_LINK");
+
+    const dashboardSrc = readSource("app/dashboard/page.tsx");
+    expect(dashboardSrc).toContain("CHROME_ICON_BTN_SM");
+    expect(dashboardSrc).toContain("CHROME_ICON_BTN_MD");
+    expect(dashboardSrc).toContain("CHROME_LINK");
+  });
 });
 
 describe("chrome-interactive class constants", () => {

@@ -48,10 +48,7 @@ interface AiSidebarProps {
   onReplace?: (text: string) => void;
   onCitePaper?: (paper: AiPaper) => void | Promise<void>;
   onApplyDoiCitation?: (citation: DoiCitationPayload) => void | Promise<void>;
-  onImportArxiv?: (
-    arxivId: string,
-    options?: { attachPdf?: boolean; importSource?: boolean }
-  ) => void | Promise<void>;
+  onCiteArxivPaper?: (paper: ArxivPaperResult) => void | Promise<void>;
   onClose: () => void;
   /** Context for applying agentic editor actions (collab-safe). */
   applyActionsContext?: Omit<ApplyAiActionsContext, "hasSelection">;
@@ -120,7 +117,7 @@ export function AiSidebar({
   onReplace,
   onCitePaper,
   onApplyDoiCitation,
-  onImportArxiv,
+  onCiteArxivPaper,
   onClose,
   applyActionsContext,
   variant = "sidebar",
@@ -137,7 +134,7 @@ export function AiSidebar({
   const [hasStreamProgress, setHasStreamProgress] = useState(false);
   const [available, setAvailable] = useState(true);
   const [citingKey, setCitingKey] = useState<string | null>(null);
-  const [importingArxivId, setImportingArxivId] = useState<string | null>(null);
+  const [citingArxivId, setCitingArxivId] = useState<string | null>(null);
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
   const [toolInputPlaceholder, setToolInputPlaceholder] = useState<string | null>(null);
   const [voiceNote, setVoiceNote] = useState<string | null>(null);
@@ -385,17 +382,18 @@ export function AiSidebar({
     }
   }
 
-  async function handleImportArxiv(
-    arxivId: string,
-    options?: { attachPdf?: boolean; importSource?: boolean }
-  ) {
-    if (!onImportArxiv) return;
-    setImportingArxivId(arxivId);
+  async function handleCiteArxiv(paper: ArxivPaperResult) {
+    if (!onCiteArxivPaper) return;
+    setCitingArxivId(paper.id);
     try {
-      await onImportArxiv(arxivId, options);
+      await onCiteArxivPaper(paper);
     } finally {
-      setImportingArxivId(null);
+      setCitingArxivId(null);
     }
+  }
+
+  function openArxivPaper(paper: ArxivPaperResult) {
+    window.open(paper.sourceUrl, "_blank", "noopener,noreferrer");
   }
 
   async function handleCite(paper: AiPaper) {
@@ -624,13 +622,13 @@ export function AiSidebar({
                   })}
                 </div>
               )}
-              {msg.role === "assistant" && msg.arxivPapers && msg.arxivPapers.length > 0 && onImportArxiv && (
+              {msg.role === "assistant" && msg.arxivPapers && msg.arxivPapers.length > 0 && (
                 <div className="mt-2.5 space-y-1.5 border-t border-border/70 pt-2">
                   <p className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">
-                    Import from arXiv
+                    From arXiv
                   </p>
                   {msg.arxivPapers.map((paper) => {
-                    const isImporting = importingArxivId === paper.id;
+                    const isCiting = citingArxivId === paper.id;
                     return (
                       <div
                         key={paper.id}
@@ -650,25 +648,22 @@ export function AiSidebar({
                             variant="outline"
                             size="sm"
                             className="h-7 px-2 text-[11px]"
-                            disabled={loading || isImporting}
-                            onClick={() => void handleImportArxiv(paper.id, { attachPdf: true })}
+                            disabled={loading}
+                            onClick={() => openArxivPaper(paper)}
                           >
-                            {isImporting ? "Importing…" : "PDF"}
+                            Open paper
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 px-2 text-[11px]"
-                            disabled={loading || isImporting}
-                            onClick={() =>
-                              void handleImportArxiv(paper.id, {
-                                attachPdf: false,
-                                importSource: true,
-                              })
-                            }
-                          >
-                            TeX
-                          </Button>
+                          {onCiteArxivPaper && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-[11px]"
+                              disabled={loading || isCiting}
+                              onClick={() => void handleCiteArxiv(paper)}
+                            >
+                              {isCiting ? "Citing…" : "Cite"}
+                            </Button>
+                          )}
                         </div>
                       </div>
                     );
