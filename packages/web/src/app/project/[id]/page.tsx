@@ -516,7 +516,7 @@ export default function ProjectPage() {
     );
     if (!res.ok) {
       const err = await res.json();
-      notice(err.error || "Failed to delete folder");
+      notice({ message: err.error || "Failed to delete folder", variant: "error" });
       return;
     }
     const result = await res.json();
@@ -536,7 +536,7 @@ export default function ProjectPage() {
     });
     if (!res.ok) {
       const err = await res.json();
-      notice(err.error || "Failed to rename");
+      notice({ message: err.error || "Failed to rename", variant: "error" });
       return;
     }
 
@@ -675,7 +675,7 @@ export default function ProjectPage() {
 
     handleInsertAtCursor(`\\cite{${result.citationKey}}`);
     const sourceLabel = result.source === "openalex" ? "OpenAlex" : "Crossref";
-    notice(`Cited “${result.title}” (${sourceLabel})`);
+    notice({ message: `Cited “${result.title}” (${sourceLabel})`, variant: "success" });
   }
 
   async function handleDoiPaste(doi: string) {
@@ -689,7 +689,10 @@ export default function ProjectPage() {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      notice(typeof err.error === "string" ? err.error : "Could not resolve DOI");
+      notice({
+        message: typeof err.error === "string" ? err.error : "Could not resolve DOI",
+        variant: "error",
+      });
       return;
     }
 
@@ -746,7 +749,7 @@ export default function ProjectPage() {
     }
 
     handleInsertAtCursor(`\\cite{${citationKey}}`);
-    notice(`Cited “${paper.title}” (arXiv)`);
+    notice({ message: `Cited “${paper.title}” (arXiv)`, variant: "success" });
   }
 
   async function handleCitePaper(paper: AiPaper) {

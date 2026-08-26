@@ -69,7 +69,7 @@ export function UiFeedbackProvider({ children }: { children: ReactNode }) {
 
   const notice = useCallback(
     (options: NoticeOptions | string) => {
-      const next = typeof options === "string" ? { message: options, variant: "error" as const } : options;
+      const next = typeof options === "string" ? { message: options, variant: "info" as const } : options;
       clearToastTimer();
       setToast(next);
       toastTimerRef.current = window.setTimeout(() => {

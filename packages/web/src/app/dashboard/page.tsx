@@ -87,7 +87,7 @@ export default function DashboardPage() {
       router.push(`/project/${project.id}`);
     } else {
       const err = await res.json();
-      notice(err.error || "Failed to create project");
+      notice({ message: err.error || "Failed to create project", variant: "error" });
     }
     setCreating(false);
   }
@@ -114,7 +114,7 @@ export default function DashboardPage() {
       router.push(`/project/${project.id}`);
     } else {
       const err = await res.json();
-      notice(err.error || "Failed to import project");
+      notice({ message: err.error || "Failed to import project", variant: "error" });
     }
     setImporting(false);
   }
@@ -150,7 +150,7 @@ export default function DashboardPage() {
       router.push(`/project/${project.id}`);
     } else {
       const err = await res.json();
-      notice(err.error || "Failed to import GitHub repository");
+      notice({ message: err.error || "Failed to import GitHub repository", variant: "error" });
     }
     setImportingGitHub(false);
   }
@@ -189,7 +189,7 @@ export default function DashboardPage() {
     });
     if (!res.ok) {
       const err = await res.json();
-      notice(err.error || `Failed to ${label} project`);
+      notice({ message: err.error || `Failed to ${label} project`, variant: "error" });
       return;
     }
     loadProjects();
@@ -203,7 +203,7 @@ export default function DashboardPage() {
       return;
     }
     const err = await res.json();
-    notice(err.error || "Failed to duplicate project");
+    notice({ message: err.error || "Failed to duplicate project", variant: "error" });
   }
 
   async function deleteProject(id: string, projectName: string) {
@@ -217,7 +217,7 @@ export default function DashboardPage() {
     const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
     if (!res.ok) {
       const err = await res.json();
-      notice(err.error || "Failed to delete project");
+      notice({ message: err.error || "Failed to delete project", variant: "error" });
       return;
     }
     loadProjects();
