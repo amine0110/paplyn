@@ -14,18 +14,24 @@ describe("Paplyn docs deploy gate", () => {
     expect(existsSync(join(ROOT, "app/docs/page.tsx"))).toBe(true);
     expect(existsSync(join(ROOT, "app/docs/[slug]/page.tsx"))).toBe(true);
     expect(existsSync(join(ROOT, "../content/docs/zotero.md"))).toBe(true);
+    expect(existsSync(join(ROOT, "../content/docs/orcid.md"))).toBe(true);
 
     const slugs = getAllDocSlugs();
     expect(slugs).toContain("zotero");
+    expect(slugs).toContain("orcid");
 
     const zotero = getDocBySlug("zotero");
     expect(zotero?.content).toContain("https://www.zotero.org/settings/keys");
+
+    const orcid = getDocBySlug("orcid");
+    expect(orcid?.content).toContain("/api/auth/callback/orcid");
   });
 
   it("links Settings Zotero and landing footer to docs", () => {
     const settings = readSrc("app/settings/page.tsx");
     expect(settings).toContain('href="/docs/zotero"');
     expect(settings).toContain("How to get your Zotero key");
+    expect(settings).toContain('href="/docs/orcid"');
 
     const landing = readSrc("app/page.tsx");
     expect(landing).toContain('href="/docs"');

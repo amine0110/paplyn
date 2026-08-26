@@ -1,4 +1,10 @@
-# ORCID sign-in
+---
+title: ORCID sign-in
+description: Register an ORCID Public API client and configure Paplyn redirect URIs for researcher sign-in.
+section: Get started
+order: 2
+slug: orcid
+---
 
 Paplyn supports **ORCID Public API** sign-in (not Member API). Researchers can use their ORCID iD on `/login` and `/signup` when `ORCID_CLIENT_ID` and `ORCID_CLIENT_SECRET` are configured.
 
