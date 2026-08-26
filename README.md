@@ -4,7 +4,7 @@ Collaborative LaTeX for researchers and students. Write, compile, and share docu
 
 **Live:** [paplyn.com](https://paplyn.com) (formerly Plicum / plicum.com — legacy domain redirects to paplyn.com)
 
-The public product name is **Paplyn**. This repository remains [amine0110/plicum](https://github.com/amine0110/plicum) on GitHub; internal npm and Docker identifiers use the `@quire` scope.
+The public product name is **Paplyn**. This repository is [amine0110/paplyn](https://github.com/amine0110/paplyn) on GitHub; internal npm and Docker identifiers use the `@paplyn` scope.
 
 Product name, tagline, and UI copy are defined in [`packages/web/src/lib/product.ts`](packages/web/src/lib/product.ts). Override the public name with `PRODUCT_NAME` or `NEXT_PUBLIC_PRODUCT_NAME` if needed.
 
@@ -35,8 +35,8 @@ Both modes share the same codebase and feature set. Self-hosting is the supporte
 ## Self-host quickstart (Docker)
 
 ```bash
-git clone https://github.com/amine0110/plicum.git
-cd plicum
+git clone https://github.com/amine0110/paplyn.git
+cd paplyn
 cp .env.example .env
 # Set BETTER_AUTH_SECRET and COLLAB_SECRET to random strings (32+ chars)
 
@@ -100,13 +100,13 @@ pnpm install
 pnpm db:push
 
 # Terminal 1 — compiler (requires TeX Live locally, or use Docker)
-pnpm --filter @quire/compiler dev
+pnpm --filter @paplyn/compiler dev
 
 # Terminal 2 — collab server
-pnpm --filter @quire/collab dev
+pnpm --filter @paplyn/collab dev
 
 # Terminal 3 — web app
-pnpm --filter @quire/web dev
+pnpm --filter @paplyn/web dev
 ```
 
 Visit [http://localhost:3000](http://localhost:3000).

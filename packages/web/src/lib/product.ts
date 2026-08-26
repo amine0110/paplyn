@@ -31,7 +31,7 @@ export const BRAND_TRUSTED_ORIGINS = [
 ] as const;
 
 /** Internal npm / Docker scope. Not shown in the UI. */
-export const PACKAGE_SCOPE = "quire";
+export const PACKAGE_SCOPE = "paplyn";
 
 const TAGLINE = "Collaborative LaTeX";
 

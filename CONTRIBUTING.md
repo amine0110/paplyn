@@ -7,8 +7,8 @@ Thanks for helping improve Paplyn.
 1. **Prerequisites:** Node.js 22+, pnpm 9+, PostgreSQL 16+ (or Docker for Postgres only).
 2. **Clone and install:**
    ```bash
-   git clone https://github.com/amine0110/plicum.git
-   cd plicum
+   git clone https://github.com/amine0110/paplyn.git
+   cd paplyn
    cp .env.example .env
    pnpm install
    ```
@@ -37,7 +37,7 @@ Describe what changed, why, and how you verified it. Link related issues if appl
 
 - Match existing patterns in the package you are editing.
 - Product-facing strings belong in [`packages/web/src/lib/product.ts`](packages/web/src/lib/product.ts).
-- Internal npm scope remains `@quire`; public name is Paplyn.
+- Internal npm scope is `@paplyn`; public name is Paplyn.
 
 ## Questions
 

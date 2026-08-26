@@ -5,14 +5,14 @@ WORKDIR /app
 FROM base AS deps
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
 COPY packages/compiler/package.json ./packages/compiler/
-RUN pnpm install --filter @quire/compiler --frozen-lockfile || pnpm install --filter @quire/compiler
+RUN pnpm install --filter @paplyn/compiler --frozen-lockfile || pnpm install --filter @paplyn/compiler
 
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/packages/compiler/node_modules ./packages/compiler/node_modules
 COPY packages/compiler ./packages/compiler
 COPY package.json pnpm-workspace.yaml ./
-RUN pnpm --filter @quire/compiler build
+RUN pnpm --filter @paplyn/compiler build
 
 FROM node:20-bookworm-slim AS runner
 RUN apt-get update && apt-get install -y --no-install-recommends \

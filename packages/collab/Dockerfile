@@ -5,14 +5,14 @@ WORKDIR /app
 FROM base AS deps
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
 COPY packages/collab/package.json ./packages/collab/
-RUN pnpm install --filter @quire/collab --frozen-lockfile || pnpm install --filter @quire/collab
+RUN pnpm install --filter @paplyn/collab --frozen-lockfile || pnpm install --filter @paplyn/collab
 
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/packages/collab/node_modules ./packages/collab/node_modules
 COPY packages/collab ./packages/collab
 COPY package.json pnpm-workspace.yaml ./
-RUN pnpm --filter @quire/collab build
+RUN pnpm --filter @paplyn/collab build
 
 FROM node:20-bookworm-slim AS runner
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
