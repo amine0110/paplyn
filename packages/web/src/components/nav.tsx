@@ -21,6 +21,9 @@ export function Nav() {
 
         <nav className="flex items-center gap-2 sm:gap-3 shrink min-w-0">
           <ThemeToggle compact />
+          <Link href="/docs" className={cn("text-sm", CHROME_LINK)}>
+            Docs
+          </Link>
           {session?.user ? (
             <>
               <Link href="/dashboard" className={cn("text-sm", CHROME_LINK)}>

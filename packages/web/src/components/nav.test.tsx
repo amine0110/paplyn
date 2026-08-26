@@ -52,6 +52,33 @@ describe("Nav", () => {
     expect(screen.getByRole("button", { name: /Theme: /i })).toBeInTheDocument();
   });
 
+  it("exposes a Docs link to /docs when signed out", () => {
+    render(
+      <ThemeProvider>
+        <Nav />
+      </ThemeProvider>
+    );
+
+    const docs = screen.getByRole("link", { name: "Docs" });
+    expect(docs).toHaveAttribute("href", "/docs");
+  });
+
+  it("exposes a Docs link to /docs when signed in", () => {
+    useSession.mockReturnValue({
+      data: { user: { id: "u1", email: "a@b.com", name: "A" } },
+      isPending: false,
+    });
+
+    render(
+      <ThemeProvider>
+        <Nav />
+      </ThemeProvider>
+    );
+
+    const docs = screen.getByRole("link", { name: "Docs" });
+    expect(docs).toHaveAttribute("href", "/docs");
+  });
+
   it("sign out leaves the app via a hard redirect helper", () => {
     useSession.mockReturnValue({
       data: { user: { id: "u1", email: "a@b.com", name: "A" } },
