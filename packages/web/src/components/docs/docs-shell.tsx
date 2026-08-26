@@ -8,7 +8,12 @@ import { PlicumWordmark } from "@/components/plicum-wordmark";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { DocsSidebar } from "@/components/docs/docs-sidebar";
 import { cn } from "@/components/ui/cn";
-import { CHROME_ICON_BTN, CHROME_LINK } from "@/lib/chrome-interactive";
+import {
+  CHROME_ICON_BTN,
+  CHROME_LINK,
+  CHROME_NAV_CLUSTER_SHRINK_0,
+  CHROME_NAV_THEME_SEP,
+} from "@/lib/chrome-interactive";
 import type { DocSection } from "@/lib/docs/types";
 
 interface DocsShellProps {
@@ -50,8 +55,8 @@ export function DocsShell({ sections, children }: DocsShellProps) {
             </Link>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <ThemeToggle compact />
+          <div className={CHROME_NAV_CLUSTER_SHRINK_0}>
+            <ThemeToggle compact className={CHROME_NAV_THEME_SEP} />
             <ChromeSessionActions variant="docs" />
           </div>
         </div>

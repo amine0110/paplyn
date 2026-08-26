@@ -55,6 +55,8 @@ import {
   CHROME_ICON_BTN_SM,
   CHROME_LINK,
   CHROME_MENU_ITEM,
+  CHROME_NAV_LINK_PAD,
+  CHROME_NAV_THEME_SEP,
   CHROME_TOOLBAR_BTN,
 } from "@/lib/chrome-interactive";
 import { cn } from "@/components/ui/cn";
@@ -1129,10 +1131,13 @@ export default function ProjectPage() {
           />
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 min-w-0">
           <LayoutModeSwitcher mode={layoutMode} onChange={updateLayoutMode} className="hidden sm:inline-flex" />
-          <ThemeToggle compact />
-          <Link href="/docs" className={cn("hidden sm:inline text-sm", CHROME_LINK)}>
+          <ThemeToggle compact className={CHROME_NAV_THEME_SEP} />
+          <Link
+            href="/docs"
+            className={cn("hidden sm:inline text-sm", CHROME_NAV_LINK_PAD, CHROME_LINK)}
+          >
             Docs
           </Link>
           <Link href="/report" className={cn("hidden sm:inline text-sm", CHROME_LINK)}>

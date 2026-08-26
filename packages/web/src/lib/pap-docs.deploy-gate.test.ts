@@ -42,7 +42,16 @@ describe("Paplyn docs deploy gate", () => {
     expect(nav).toContain('href="/docs"');
     expect(nav).toContain("Docs");
     expect(nav).toContain("CHROME_LINK");
+    expect(nav).toContain("CHROME_NAV_CLUSTER_MIN");
     expect(nav).toMatch(/ThemeToggle[\s\S]*href="\/docs"/);
+  });
+
+  it("spaces desktop nav chrome links with at least md:gap-5", () => {
+    const chromeInteractive = readSrc("lib/chrome-interactive.ts");
+    expect(chromeInteractive).toMatch(/md:gap-[5-9]|md:gap-10|md:gap-11|md:gap-12/);
+
+    const nav = readSrc("components/nav.tsx");
+    expect(nav).toContain("CHROME_NAV_CLUSTER_MIN");
   });
 
   it("uses session-aware chrome actions in docs shell header", () => {
