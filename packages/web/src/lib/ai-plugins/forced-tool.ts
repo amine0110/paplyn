@@ -4,12 +4,14 @@ import { citeDoiPlugin } from "./cite-doi";
 import { getClientPluginMetaByToolName } from "./client-meta";
 import { githubImportPlugin } from "./github-import";
 import { semanticScholarPlugin } from "./semantic-scholar";
+import { zoteroPlugin } from "./zotero";
 import type { AiPlugin } from "./types";
 
 const REGISTERED_PLUGINS: AiPlugin[] = [
   semanticScholarPlugin,
   citeDoiPlugin,
   arxivPlugin,
+  zoteroPlugin,
   githubImportPlugin,
 ];
 
@@ -22,6 +24,7 @@ export const PLUGIN_TOOL_NAMES = [
   "search_literature",
   "cite_from_doi",
   "search_arxiv",
+  "search_zotero",
   "parse_github_repo",
 ] as const;
 

@@ -12,6 +12,12 @@ export function parseBibKeys(bibContent: string): Set<string> {
   return keys;
 }
 
+/** Extract the cite key from a BibTeX entry string. */
+export function extractBibtexCitationKey(bibtex: string): string | null {
+  const match = bibtex.match(/@\w+\s*\{\s*([^,\s]+)/);
+  return match?.[1]?.trim() ?? null;
+}
+
 function normalizeBibRefName(ref: string): string {
   const trimmed = ref.trim();
   if (!trimmed) return trimmed;

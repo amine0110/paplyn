@@ -8,6 +8,8 @@ import type {
   ArxivSearchPayload,
   DoiCitationPayload,
   LiteratureToolPayload,
+  ZoteroItemResult,
+  ZoteroSearchPayload,
 } from "@/lib/ai-types";
 import {
   isClientActionPayload,
@@ -74,6 +76,14 @@ function isArxivSearchPayload(result: unknown): result is ArxivSearchPayload {
   );
 }
 
+function isZoteroSearchPayload(result: unknown): result is ZoteroSearchPayload {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    (result as ZoteroSearchPayload).kind === "zotero-search"
+  );
+}
+
 function isClientActionRejected(
   result: unknown
 ): result is { kind: "client-action-rejected"; reason: string } {
@@ -115,6 +125,11 @@ export function summarizeToolResult(toolName: string, result: unknown): string |
   }
 
   if (isArxivSearchPayload(result)) {
+    const trimmed = result.summary.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  if (isZoteroSearchPayload(result)) {
     const trimmed = result.summary.trim();
     return trimmed.length > 0 ? trimmed : null;
   }
@@ -176,6 +191,10 @@ function stringifyToolResult(result: unknown): string | null {
     return trimmed.length > 0 ? trimmed : null;
   }
   if (isArxivSearchPayload(result)) {
+    const trimmed = result.summary.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (isZoteroSearchPayload(result)) {
     const trimmed = result.summary.trim();
     return trimmed.length > 0 ? trimmed : null;
   }
@@ -511,6 +530,48 @@ export function collectArxivPapersFromToolResults<TOOLS extends ToolSet>(
   }
 
   return papers;
+}
+
+function collectZoteroSearchPayloads(result: LooseGenerateTextResult): ZoteroSearchPayload[] {
+  const payloads: ZoteroSearchPayload[] = [];
+
+  for (const toolResult of result.toolResults) {
+    if (isZoteroSearchPayload(toolResult.result)) {
+      payloads.push(toolResult.result);
+    }
+  }
+
+  for (const step of result.steps) {
+    for (const toolResult of step.toolResults) {
+      if (isZoteroSearchPayload(toolResult.result)) {
+        payloads.push(toolResult.result);
+      }
+    }
+  }
+
+  return payloads;
+}
+
+function zoteroItemKey(item: ZoteroItemResult): string {
+  return `zotero:${item.itemKey.toLowerCase()}`;
+}
+
+export function collectZoteroItemsFromToolResults<TOOLS extends ToolSet>(
+  result: GenerateTextResult<TOOLS, unknown>
+): ZoteroItemResult[] {
+  const seen = new Set<string>();
+  const items: ZoteroItemResult[] = [];
+
+  for (const payload of collectZoteroSearchPayloads(asLooseGenerateTextResult(result))) {
+    for (const item of payload.items) {
+      const key = zoteroItemKey(item);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push(item);
+    }
+  }
+
+  return items;
 }
 
 function collectClientActionPayloads(result: LooseGenerateTextResult): ClientActionToolPayload[] {

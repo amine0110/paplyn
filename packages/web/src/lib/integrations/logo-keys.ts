@@ -7,6 +7,7 @@ export type IntegrationLogoKey =
   | "semantic-scholar"
   | "crossref"
   | "arxiv"
+  | "zotero"
   | "github"
   | "ollama";
 

@@ -128,6 +128,19 @@ function CrossrefLogo({ className }: { className?: string }) {
   );
 }
 
+function ZoteroLogo({ className }: { className?: string }) {
+  return (
+    <Image
+      src="/integrations/zotero.svg"
+      alt=""
+      width={108}
+      height={32}
+      aria-hidden="true"
+      className={cn("h-7 w-auto max-w-[6.5rem] object-contain object-center", className)}
+    />
+  );
+}
+
 export function IntegrationLogo({ logoKey, className }: IntegrationLogoProps) {
   switch (logoKey) {
     case "latex":
@@ -144,6 +157,8 @@ export function IntegrationLogo({ logoKey, className }: IntegrationLogoProps) {
       return <CrossrefLogo className={className} />;
     case "arxiv":
       return <ArxivLogo className={cn("h-7 w-7 text-ink", className)} />;
+    case "zotero":
+      return <ZoteroLogo className={className} />;
     case "github":
       return <GitHubLogo className={cn("h-7 w-7 text-ink", className)} />;
     case "ollama":

@@ -39,6 +39,14 @@ export const AI_PLUGIN_CLIENT_META: AiPluginClientMeta[] = [
     inputPlaceholder: "arXiv query or ID…",
   },
   {
+    id: "zotero",
+    name: "Zotero",
+    menuLabel: "Zotero",
+    toolName: "search_zotero",
+    loadingLabel: "Searching Zotero…",
+    inputPlaceholder: "Search your Zotero library…",
+  },
+  {
     id: "github-import",
     name: "GitHub",
     menuLabel: "GitHub",
@@ -67,6 +75,10 @@ export function loadingLabelForLiteratureAction(action?: string, userMessage?: s
 
   if (lower.includes("arxiv")) {
     return getClientPluginMetaByToolName("search_arxiv")?.loadingLabel ?? null;
+  }
+
+  if (lower.includes("zotero")) {
+    return getClientPluginMetaByToolName("search_zotero")?.loadingLabel ?? null;
   }
 
   if (lower.includes("github") && (lower.includes("import") || lower.includes("repo"))) {

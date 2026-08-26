@@ -45,6 +45,18 @@ export function AiPluginLogo({ pluginId, className }: AiPluginLogoProps) {
           X
         </span>
       );
+    case "zotero":
+      return (
+        <span
+          className={cn(
+            "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[#DB2C3A] font-semibold text-[10px] leading-none text-white",
+            className
+          )}
+          aria-hidden
+        >
+          Z
+        </span>
+      );
     case "github-import":
       return (
         <Github
