@@ -3,6 +3,11 @@ import postgres from "postgres";
 import Y, { type Doc } from "./yjs.js";
 import { seedRoomFromProjectFiles } from "./room-seed.js";
 import { COLLAB_INTERNAL_PATHS, isYTextLike } from "./y-text.js";
+import {
+  assertNoConcatenatedDocumentUpserts,
+  repairConcatenatedRoomText,
+  PersistConcatenationError,
+} from "./document-integrity.js";
 
 const SAVE_DEBOUNCE_MS = parseInt(process.env.COLLAB_SAVE_DEBOUNCE_MS || "2000", 10);
 const SAVE_MAX_WAIT_MS = parseInt(process.env.COLLAB_SAVE_MAX_WAIT_MS || "10000", 10);
@@ -256,6 +261,7 @@ export async function syncProjectFilesFromDoc(
 
   const existingByPath = await loadTextProjectFileContents(sql, projectId);
   assertNoEmptyWipeUpserts(doc, files, existingByPath);
+  assertNoConcatenatedDocumentUpserts(files, existingByPath);
 
   for (const file of files) {
     const id = randomUUID();
@@ -321,6 +327,11 @@ export async function persistRoomState(sql: postgres.Sql, roomId: string, doc: D
     } else if (err instanceof PersistEmptyWipeError) {
       console.error(
         `[collab] persist empty-wipe blocked for room ${roomId}:`,
+        err.message
+      );
+    } else if (err instanceof PersistConcatenationError) {
+      console.error(
+        `[collab] persist concatenation blocked for room ${roomId}:`,
         err.message
       );
     } else {
@@ -410,9 +421,16 @@ export type CollabPersistence = {
 
 export function createPostgresPersistence(sql: postgres.Sql): CollabPersistence {
   const debouncedByRoom = new Map<string, DebouncedSave>();
+  const authoritativeByRoom = new Map<string, Map<string, string>>();
 
   const persistRoom = async (roomId: string, doc: Doc) => {
     await persistRoomState(sql, roomId, doc);
+    const authoritative = authoritativeByRoom.get(roomId);
+    if (authoritative) {
+      for (const file of getTextFilesFromDoc(doc)) {
+        authoritative.set(file.path, file.content);
+      }
+    }
   };
 
   return {
@@ -426,6 +444,9 @@ export function createPostgresPersistence(sql: postgres.Sql): CollabPersistence 
           throw err;
         }
       }
+
+      const authoritativeByPath = await loadTextProjectFileContents(sql, roomId);
+      authoritativeByRoom.set(roomId, authoritativeByPath);
 
       // Authoritative seed from HTTP source of truth before clients sync.
       const collabRoomUpdatedAt = await loadRoomUpdatedAt(sql, roomId);
@@ -441,6 +462,12 @@ export function createPostgresPersistence(sql: postgres.Sql): CollabPersistence 
       debouncedByRoom.set(roomId, debounced);
 
       doc.on("update", (_update, origin) => {
+        if (repairConcatenatedRoomText(doc, authoritativeByPath, origin)) {
+          console.warn(
+            `[collab] repaired concatenated Y.Text from stale client replay roomId=${roomId}`
+          );
+        }
+
         if (!shouldSchedulePersistFromUpdate(origin)) {
           if (!loggedPersistAckPersistSkip) {
             console.log(
@@ -462,6 +489,7 @@ export function createPostgresPersistence(sql: postgres.Sql): CollabPersistence 
         debouncedByRoom.delete(roomId);
       }
       await persistRoom(roomId, doc);
+      authoritativeByRoom.delete(roomId);
     },
   };
 }

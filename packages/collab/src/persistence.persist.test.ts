@@ -15,6 +15,13 @@ import {
   persistRoomState,
   syncProjectFilesFromDoc,
 } from "./persistence.js";
+import {
+  PersistConcatenationError,
+  assertNoConcatenatedDocumentUpserts,
+} from "./document-integrity.js";
+
+const CLEAN_TEX =
+  "\\documentclass{article}\n\\begin{document}\nHello\\end{document}\n";
 
 const require = createRequire(import.meta.url);
 const Ycjs = require(YJS_CJS_PATH) as typeof import("yjs");
@@ -212,5 +219,70 @@ describe("empty HTTP wipe guard", () => {
     expect(err.roomTextLength).toBe(311_498);
     expect(err.existingHttpLength).toBe(42);
     expect(err.message).toContain("refuse empty HTTP upsert");
+  });
+});
+
+describe("concatenated document guard (deploy gate)", () => {
+  const BLOATED_TEX = CLEAN_TEX.repeat(220);
+
+  it("assertNoConcatenatedDocumentUpserts blocks 220-copy main.tex over clean HTTP", () => {
+    expect(() =>
+      assertNoConcatenatedDocumentUpserts(
+        [{ path: "main.tex", content: BLOATED_TEX }],
+        new Map([["main.tex", CLEAN_TEX]])
+      )
+    ).toThrow(PersistConcatenationError);
+  });
+
+  it("does not signal persist ack when poisoned room would overwrite clean project_file", async () => {
+    const doc = new Y.Doc();
+    doc.getText("main.tex").insert(0, BLOATED_TEX);
+    doc.getText("references.bib").insert(0, "@article{key}\n".repeat(734));
+
+    await expect(
+      persistRoomState(
+        createMockSql({
+          textFiles: [
+            { path: "main.tex", content: CLEAN_TEX },
+            { path: "references.bib", content: "@article{key}\n" },
+          ],
+        }),
+        "0b1003fa-2847-467f-af92-34ade241b1cc",
+        doc
+      )
+    ).rejects.toThrow(PersistConcatenationError);
+    expect(doc.getMap(PERSIST_META_MAP).get(PERSIST_ACK_FIELD)).toBeUndefined();
+  });
+
+  it("PersistConcatenationError captures lengths and documentclass count", () => {
+    const err = new PersistConcatenationError("main.tex", BLOATED_TEX.length, CLEAN_TEX.length, 220);
+    expect(err.path).toBe("main.tex");
+    expect(err.documentClassCount).toBe(220);
+    expect(err.message).toContain("refuse concatenated HTTP upsert");
+  });
+
+  it("allows persist when room matches clean HTTP", async () => {
+    const doc = new Y.Doc();
+    doc.getText("main.tex").insert(0, CLEAN_TEX);
+
+    await persistRoomState(
+      createMockSql({ textFiles: [{ path: "main.tex", content: CLEAN_TEX }] }),
+      "room-clean",
+      doc
+    );
+    expect(doc.getMap(PERSIST_META_MAP).get(PERSIST_ACK_FIELD)).toEqual(expect.any(Number));
+  });
+
+  it("allows identity persist when project_file is already bloated", async () => {
+    const bloated = CLEAN_TEX.repeat(220);
+    const doc = new Y.Doc();
+    doc.getText("main.tex").insert(0, bloated);
+
+    await persistRoomState(
+      createMockSql({ textFiles: [{ path: "main.tex", content: bloated }] }),
+      "room-bloated-identity",
+      doc
+    );
+    expect(doc.getMap(PERSIST_META_MAP).get(PERSIST_ACK_FIELD)).toEqual(expect.any(Number));
   });
 });
