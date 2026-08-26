@@ -1,5 +1,5 @@
 /** True for same-origin app paths like `/dashboard`, not protocol-relative `//evil`. */
-export function isInternalAppPath(path: string | undefined | null): boolean {
+export function isInternalAppPath(path: string | undefined | null): path is string {
   return typeof path === "string" && path.startsWith("/") && !path.startsWith("//");
 }
 
