@@ -56,6 +56,21 @@ describe("sanitizeUserReportInput", () => {
     expect(sanitized.receivedDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
+  it("defaults page to /report when empty", () => {
+    const parsed = userReportBodySchema.parse({
+      title: "Bug",
+      whatHappened: "Something broke",
+      page: "",
+    });
+
+    const sanitized = sanitizeUserReportInput(parsed, {
+      signedIn: false,
+      sessionEmail: null,
+    });
+
+    expect(sanitized.page).toBe("/report");
+  });
+
   it("builds plain-text page body without markdown", () => {
     const body = buildReportPageBody({
       title: "Broken compile",

@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { POST } from "@/app/api/user-reports/route";
+import { getSession } from "@/lib/session";
+import { createNotionUserReport } from "@/lib/notion-user-reports";
 import {
   createUserReportCsrfToken,
   USER_REPORT_CSRF_COOKIE,
@@ -84,6 +86,48 @@ describe("POST /api/user-reports", () => {
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.ok).toBe(true);
+  });
+
+  it("passes signed-in session email and defaults page to /report", async () => {
+    process.env.NOTION_USER_REPORTS_TOKEN = "secret";
+    vi.mocked(getSession).mockResolvedValueOnce({
+      user: {
+        id: "user-1",
+        email: "signed@example.com",
+        name: "Amine",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        image: null,
+        role: "user",
+      },
+      session: {
+        id: "session-1",
+        userId: "user-1",
+        expiresAt: new Date(Date.now() + 60_000),
+        token: "token",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    } as Awaited<ReturnType<typeof getSession>>);
+
+    const response = await POST(
+      makeRequest({
+        title: "AI model not working",
+        whatHappened: "I tried using the AI box but it didn't work",
+        source: "report",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(createNotionUserReport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "signed@example.com",
+        signedIn: true,
+        page: "/report",
+        whatHappened: "I tried using the AI box but it didn't work",
+      }),
+    );
   });
 
   it("returns 503 when reports are not configured", async () => {

@@ -50,11 +50,44 @@ describe("createNotionUserReport", () => {
     const payload = JSON.parse(String(options.body));
     expect(payload.parent.database_id).toBe(USER_REPORTS_DATABASE_ID);
     expect(payload.parent.database_id).not.toBe(PAP_INTERNAL_TRACKER_COLLECTION);
+    expect(payload.properties.Name.title[0].text.content).toBe("Compile failed");
+    expect(payload.properties["What happened"].rich_text[0].text.content).toBe("No PDF output");
+    expect(payload.properties.Steps.rich_text[0].text.content).toBe("Click compile");
+    expect(payload.properties.Email.email).toBe("user@example.com");
+    expect(payload.properties.Page.rich_text[0].text.content).toBe("/project/abc");
     expect(payload.properties.Status.select.name).toBe("New");
     expect(payload.properties.Source.select.name).toBe("Error");
     expect(payload.properties["Signed in"].checkbox).toBe(true);
     expect(payload.properties.Received.date.start).toBe("2026-08-26");
     expect(payload.children.every((block: { type: string }) => block.type === "paragraph")).toBe(true);
+  });
+
+  it("writes empty Steps rich_text when steps are omitted", async () => {
+    process.env.NOTION_USER_REPORTS_TOKEN = "secret-token";
+    process.env.NOTION_USER_REPORTS_DATABASE_ID = USER_REPORTS_DATABASE_ID;
+
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ id: "page-456" }),
+    }));
+
+    await createNotionUserReport(
+      {
+        title: "Broken UI",
+        whatHappened: "Button did nothing",
+        steps: "",
+        email: null,
+        page: "/report",
+        source: "Report page",
+        signedIn: false,
+        receivedDate: "2026-08-26",
+      },
+      fetchMock as typeof fetch,
+    );
+
+    const payload = JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body));
+    expect(payload.properties["What happened"].rich_text[0].text.content).toBe("Button did nothing");
+    expect(payload.properties.Steps.rich_text[0].text.content).toBe("");
   });
 
   it("never uses the internal PAP tracker database id", async () => {

@@ -67,6 +67,12 @@ export async function createNotionUserReport(
       Name: {
         title: chunkRichText(report.title),
       },
+      "What happened": {
+        rich_text: chunkRichText(report.whatHappened),
+      },
+      Steps: {
+        rich_text: chunkRichText(report.steps),
+      },
       Status: {
         select: { name: "New" },
       },
