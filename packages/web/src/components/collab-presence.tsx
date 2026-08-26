@@ -9,6 +9,7 @@ import {
   parseCollabToken,
   type PresenceUser,
 } from "@/lib/project-sharing";
+import { collabWebsocketProviderOptions } from "@/lib/collab-websocket-config";
 
 interface CollabPresenceProps {
   projectId: string;
@@ -39,9 +40,12 @@ export function CollabPresence({
     if (!payload) return;
 
     const ydoc = new Y.Doc();
-    const provider = new WebsocketProvider(collabBaseUrl, projectId, ydoc, {
-      params: { token: collabToken },
-    });
+    const provider = new WebsocketProvider(
+      collabBaseUrl,
+      projectId,
+      ydoc,
+      collabWebsocketProviderOptions(collabToken)
+    );
 
     const localUser = {
       userId: payload.userId,
