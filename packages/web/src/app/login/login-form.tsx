@@ -12,20 +12,23 @@ import { Nav } from "@/components/nav";
 import { PRODUCT } from "@/lib/product";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { GitHubSignInButton } from "@/components/auth/github-sign-in-button";
-import { buildSocialOAuthErrorCallbackURL, OAUTH_ERROR_MESSAGE } from "@/lib/auth-social";
+import { OrcidSignInButton } from "@/components/auth/orcid-sign-in-button";
+import { buildSocialOAuthErrorCallbackURL, OAUTH_ERROR_MESSAGE, ORCID_NO_EMAIL_ERROR_MESSAGE } from "@/lib/auth-social";
 import { resolveInternalNextPath } from "@/lib/internal-path";
 
 type LoginFormProps = {
   googleEnabled: boolean;
   githubEnabled: boolean;
+  orcidEnabled: boolean;
 };
 
-function LoginForm({ googleEnabled, githubEnabled }: LoginFormProps) {
+function LoginForm({ googleEnabled, githubEnabled, orcidEnabled }: LoginFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next") || "/dashboard";
   const resetSuccess = searchParams.get("reset") === "success";
   const oauthError = searchParams.get("error") === "oauth";
+  const orcidNoEmailError = searchParams.get("error") === "email_not_found";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -66,19 +69,28 @@ function LoginForm({ googleEnabled, githubEnabled }: LoginFormProps) {
           </p>
         )}
 
+        {orcidNoEmailError && (
+          <p className="text-sm text-error text-center mb-4" role="alert">
+            {ORCID_NO_EMAIL_ERROR_MESSAGE}
+          </p>
+        )}
+
         {oauthError && (
           <p className="text-sm text-error text-center mb-4" role="alert">
             {OAUTH_ERROR_MESSAGE}
           </p>
         )}
 
-        {(googleEnabled || githubEnabled) && (
+        {(googleEnabled || githubEnabled || orcidEnabled) && (
           <div className="space-y-4 mb-6">
             {googleEnabled && (
               <GoogleSignInButton callbackURL={callbackURL} errorCallbackURL={errorCallbackURL} />
             )}
             {githubEnabled && (
               <GitHubSignInButton callbackURL={callbackURL} errorCallbackURL={errorCallbackURL} />
+            )}
+            {orcidEnabled && (
+              <OrcidSignInButton callbackURL={callbackURL} errorCallbackURL={errorCallbackURL} />
             )}
             <p className="text-xs text-center text-ink-muted">or sign in with email</p>
           </div>
@@ -121,10 +133,10 @@ function LoginForm({ googleEnabled, githubEnabled }: LoginFormProps) {
   );
 }
 
-export function LoginPageClient({ googleEnabled, githubEnabled }: LoginFormProps) {
+export function LoginPageClient({ googleEnabled, githubEnabled, orcidEnabled }: LoginFormProps) {
   return (
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-ink-muted">Loading…</div>}>
-      <LoginForm googleEnabled={googleEnabled} githubEnabled={githubEnabled} />
+      <LoginForm googleEnabled={googleEnabled} githubEnabled={githubEnabled} orcidEnabled={orcidEnabled} />
     </Suspense>
   );
 }

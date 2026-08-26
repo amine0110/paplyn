@@ -1,4 +1,4 @@
-import { isGithubAuthEnabled, isGoogleAuthEnabled } from "@/lib/auth-providers";
+import { isGithubAuthEnabled, isGoogleAuthEnabled, isOrcidAuthEnabled } from "@/lib/auth-providers";
 import { resolveInternalNextPath } from "@/lib/internal-path";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
@@ -22,6 +22,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     <LoginPageClient
       googleEnabled={isGoogleAuthEnabled()}
       githubEnabled={isGithubAuthEnabled()}
+      orcidEnabled={isOrcidAuthEnabled()}
     />
   );
 }

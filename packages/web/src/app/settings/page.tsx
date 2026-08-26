@@ -317,6 +317,11 @@ export default function SettingsPage() {
                   ) : (
                     <p className="text-sm text-ink-muted">No sign-in methods found.</p>
                   )}
+                  <p className="text-xs text-ink-muted">
+                    <Link href="/docs/orcid" className="text-navy hover:underline">
+                      Configure ORCID sign-in
+                    </Link>
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
