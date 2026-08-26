@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { LoginPageClient } from "@/app/login/login-form";
 import * as LoginPageModule from "@/app/login/page";
+import { OAUTH_ERROR_MESSAGE } from "@/lib/auth-social";
 
 vi.mock("@/components/nav", () => ({
   Nav: () => <nav data-testid="nav" />,
@@ -89,9 +90,7 @@ describe("Login page", () => {
 
     render(<LoginPageClient googleEnabled={false} githubEnabled={false} />);
 
-    expect(
-      screen.getByText("We could not complete sign-in with that provider. Try again or use email."),
-    ).toBeInTheDocument();
+    expect(screen.getByText(OAUTH_ERROR_MESSAGE)).toBeInTheDocument();
   });
 
   it("links to signup with the same next path", () => {

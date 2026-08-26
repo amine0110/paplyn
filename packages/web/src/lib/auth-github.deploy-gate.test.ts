@@ -35,9 +35,8 @@ describe("GitHub auth deploy gate", () => {
   it("auth.ts wires github into Better Auth socialProviders when configured", () => {
     const src = readSrc("lib/auth.ts");
     expect(src).toContain("getGithubAuthConfig");
+    expect(src).toContain("buildGithubSocialProviderOptions");
     expect(src).toContain("github:");
-    expect(src).toContain("clientId: githubAuth.clientId");
-    expect(src).toContain("clientSecret: githubAuth.clientSecret");
   });
 
   it("login and signup pages evaluate GitHub auth at request time", () => {
