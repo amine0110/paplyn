@@ -100,9 +100,12 @@ export default function LandingPage() {
 
       <footer className="border-t border-border py-8 text-center text-sm text-ink-faint">
         <p>{PRODUCT.footerLine}</p>
-        <p className="mt-2">
+        <p className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
           <Link href="/docs" className="text-accent hover:underline cursor-pointer">
             Documentation
+          </Link>
+          <Link href="/report" className="text-accent hover:underline cursor-pointer">
+            Report an issue
           </Link>
         </p>
       </footer>

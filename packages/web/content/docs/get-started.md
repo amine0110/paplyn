@@ -7,3 +7,5 @@ slug: get-started
 ---
 
 Sign in to Paplyn, then open [**Settings**](/settings) to update your profile, theme, and integration credentials such as Zotero.
+
+To report a bug or confusing behavior, use [**Report an issue**](/report) or see [how reporting works](/docs/report).

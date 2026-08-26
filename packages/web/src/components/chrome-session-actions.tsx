@@ -21,6 +21,9 @@ export function ChromeSessionActions({ variant = "nav" }: { variant?: ChromeSess
         <Link href="/settings" className={cn("text-sm", CHROME_LINK)}>
           Settings
         </Link>
+        <Link href="/report" className={cn("text-sm", CHROME_LINK)}>
+          Report
+        </Link>
         {(session.user as { role?: string }).role === "admin" && (
           <Link href="/admin" className={cn("text-sm", CHROME_LINK)}>
             Admin
