@@ -1,26 +1,17 @@
+import type { GithubOptions, GithubProfile } from "better-auth/social-providers";
+import type { OAuth2Tokens } from "better-auth/oauth2";
 import { pickGithubPrimaryEmail, type GithubEmailEntry } from "./github-primary-email";
 
 type OAuthProviderConfig = { clientId: string; clientSecret: string };
 
-type GithubProfile = {
-  login: string;
-  name?: string | null;
-  avatar_url?: string | null;
-  email?: string | null;
-};
-
-type GithubOAuthTokens = {
-  accessToken?: string;
-};
-
 const GITHUB_USER_AGENT = "paplyn-auth";
 
 /** Better Auth GitHub provider options: identity uses primary email only. */
-export function buildGithubSocialProviderOptions(config: OAuthProviderConfig) {
+export function buildGithubSocialProviderOptions(config: OAuthProviderConfig): GithubOptions {
   return {
     clientId: config.clientId,
     clientSecret: config.clientSecret,
-    getUserInfo: async (token: GithubOAuthTokens) => {
+    getUserInfo: async (token: OAuth2Tokens) => {
       const accessToken = token.accessToken;
       if (!accessToken) return null;
 
@@ -40,6 +31,11 @@ export function buildGithubSocialProviderOptions(config: OAuthProviderConfig) {
       const primary = pickGithubPrimaryEmail(emails);
       if (!primary) return null;
 
+      const data: GithubProfile = {
+        ...profile,
+        email: primary.email,
+      };
+
       return {
         user: {
           name: profile.name || profile.login || "",
@@ -47,10 +43,7 @@ export function buildGithubSocialProviderOptions(config: OAuthProviderConfig) {
           image: profile.avatar_url ?? undefined,
           emailVerified: primary.verified,
         },
-        data: {
-          ...profile,
-          email: primary.email,
-        },
+        data,
       };
     },
   };
