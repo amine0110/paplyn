@@ -22,5 +22,8 @@ describe("ai route forced-tool wiring", () => {
     expect(routeSrc).toContain("resolveForcedToolChoice");
     expect(routeSrc).toContain('toolChoice: { type: "tool", toolName: forcedToolName }');
     expect(routeSrc).toContain("getForcedToolPrompt(data.forcedTool)");
+    expect(routeSrc).toMatch(
+      /data\.action && !\(data\.forcedTool && isRegisteredPluginToolName\(data\.forcedTool\)\)/
+    );
   });
 });

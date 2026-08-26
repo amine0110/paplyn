@@ -86,4 +86,19 @@ describe("forced-tool helpers", () => {
     expect(choice in tools).toBe(true);
     expect(choice satisfies keyof typeof tools).toBe("search_literature");
   });
+
+  it("forces arXiv after a literature search turn when the picker selects search_arxiv", () => {
+    const pluginTools = stubPluginTools();
+
+    expect(
+      resolveForcedToolChoice({
+        forcedTool: "search_arxiv",
+        userMessage: "find more papers on protein folding",
+        pluginTools,
+      })
+    ).toBe("search_arxiv");
+
+    expect(getForcedToolPrompt("search_arxiv")).toContain("search_arxiv");
+    expect(getForcedToolPrompt("search_arxiv")).not.toContain("search_literature");
+  });
 });

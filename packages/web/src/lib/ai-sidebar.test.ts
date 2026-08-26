@@ -51,6 +51,8 @@ describe("AI sidebar chat UX", () => {
     const src = readSource("components/ai-sidebar.tsx");
     expect(src).toContain("AiComposerToolPicker");
     expect(src).toContain("selectedTool");
+    expect(src).toContain("selectedToolRef");
+    expect(src).toContain("resolveComposerForcedTool");
     expect(src).toContain("forcedTool");
     expect(src).toContain("AiComposerToolChip");
 

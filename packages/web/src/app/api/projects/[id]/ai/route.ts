@@ -248,7 +248,7 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
     systemPrompt += `\n\n${compileFixMultiErrorHint}`;
   }
 
-  if (data.action) {
+  if (data.action && !(data.forcedTool && isRegisteredPluginToolName(data.forcedTool))) {
     const actionPrompt =
       getPluginActionPrompt(data.action) ?? WRITING_ACTION_PROMPTS[data.action];
     if (actionPrompt) {
