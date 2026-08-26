@@ -4,7 +4,7 @@ import { isInternalAppPath } from "@/lib/internal-path";
 export type SocialAuthProvider = "google" | "github";
 
 export const OAUTH_ERROR_MESSAGE =
-  "We could not complete sign-in with that provider. Try again or use email.";
+  "We could not complete sign-in with that provider. Try again, or sign in with your email and password.";
 
 /** Build an in-app OAuth failure URL for login or signup. */
 export function buildSocialOAuthErrorCallbackURL(

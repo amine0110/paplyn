@@ -10,11 +10,13 @@ function readSrc(relativePath: string): string {
 }
 
 describe("OAuth session isolation deploy gate", () => {
-  it("disables Better Auth automatic account linking", () => {
+  it("enables same-email account linking but blocks different-email linking", () => {
     const src = readSrc("lib/auth.ts");
     expect(src).toContain("accountLinking");
-    expect(src).toMatch(/enabled:\s*false/);
-    expect(src).not.toMatch(/accountLinking:\s*\{[^}]*enabled:\s*true/s);
+    expect(src).toMatch(/enabled:\s*true/);
+    expect(src).toMatch(/allowDifferentEmails:\s*false/);
+    expect(src).not.toMatch(/allowDifferentEmails:\s*true/);
+    expect(src).not.toMatch(/accountLinking:\s*\{[^}]*enabled:\s*false/s);
   });
 
   it("social sign-in helper signs out before signIn.social", () => {
