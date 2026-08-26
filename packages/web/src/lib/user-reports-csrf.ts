@@ -6,6 +6,15 @@ import {
 
 export { USER_REPORT_CSRF_COOKIE, USER_REPORT_CSRF_HEADER };
 
+export function getUserReportCsrfCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: "strict" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/api/user-reports",
+  };
+}
+
 export function createUserReportCsrfToken(): string {
   return randomBytes(32).toString("hex");
 }

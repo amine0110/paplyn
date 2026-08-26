@@ -101,6 +101,16 @@ describe("PAP-30 user reports deploy gate", () => {
     expect(reportForm).toContain("Reports are not configured");
   });
 
+  it("does not set cookies in the report page RSC", () => {
+    const reportPage = readSrc("app/report/page.tsx");
+    expect(reportPage).not.toMatch(/cookies\(\)[\s\S]*?\.set\(/);
+    expect(reportPage).not.toContain("cookieStore.set");
+    expect(reportPage).toContain("cookieStore.get");
+
+    const reportForm = readSrc("app/report/report-form.tsx");
+    expect(reportForm).toContain("/api/user-reports/csrf");
+  });
+
   it("keeps user-report CSRF crypto off the client bundle", () => {
     const clientFiles = [
       "app/report/report-form.tsx",
@@ -117,6 +127,7 @@ describe("PAP-30 user reports deploy gate", () => {
     const reportForm = readSrc("app/report/report-form.tsx");
     expect(reportForm).toContain("user-reports-csrf-constants");
     expect(reportForm).toContain("USER_REPORT_CSRF_HEADER");
+    expect(reportForm).toContain("/api/user-reports/csrf");
   });
 
   it("documents reporting without secrets", () => {
