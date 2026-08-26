@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import { Compartment, EditorState, type StateEffect } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection } from "@codemirror/view";
 import { defaultKeymap, indentWithTab } from "@codemirror/commands";
@@ -35,6 +35,7 @@ import {
   type SaveStatus,
 } from "@/lib/save-status";
 import { runCollabSaveFallback } from "@/lib/collab-save-fallback";
+import { collabWebsocketProviderOptions } from "@/lib/collab-websocket-config";
 
 const latexHighlightLight = HighlightStyle.define([
   { tag: t.keyword, color: "#2d6a6a" },
@@ -94,15 +95,16 @@ export function LatexEditor({
   const viewRef = useRef<EditorView | null>(null);
   const { isDark } = useTheme();
 
-  const saveContent = useCallback(
-    (content: string) => onChange(content),
-    [onChange]
-  );
-
-  const reportStats = useCallback(
-    (content: string) => onStatsChange?.(countDocumentStats(content)),
-    [onStatsChange]
-  );
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const onStatsChangeRef = useRef(onStatsChange);
+  onStatsChangeRef.current = onStatsChange;
+  const onSaveStatusChangeRef = useRef(onSaveStatusChange);
+  onSaveStatusChangeRef.current = onSaveStatusChange;
+  const onEditorReadyRef = useRef(onEditorReady);
+  onEditorReadyRef.current = onEditorReady;
+  const onDoiPasteRef = useRef(onDoiPaste);
+  onDoiPasteRef.current = onDoiPaste;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -114,8 +116,8 @@ export function LatexEditor({
 
     let provider: WebsocketProvider | null = null;
     const collabEnabled = Boolean(collabToken);
-    const saveStatusTracker = onSaveStatusChange
-      ? createSaveStatusTracker(onSaveStatusChange, {
+    const saveStatusTracker = onSaveStatusChangeRef.current
+      ? createSaveStatusTracker(onSaveStatusChangeRef.current, {
           ackTimeoutMs: collabEnabled ? COLLAB_SAVE_MAX_WAIT_MS : 0,
           initialStatus: collabEnabled ? "syncing" : "saved",
           isSynced: () => !collabEnabled || (provider?.synced ?? false),
@@ -165,6 +167,14 @@ export function LatexEditor({
           )
         : getOfflineEditorInitialDoc(ytext.toString(), initialContent);
 
+    const reportStats = (content: string) => {
+      onStatsChangeRef.current?.(countDocumentStats(content));
+    };
+
+    const saveContent = (content: string) => {
+      onChangeRef.current(content);
+    };
+
     const enableEditingAfterSync = (view: EditorView) => {
       if (collabSynced) return;
       collabSynced = true;
@@ -195,9 +205,12 @@ export function LatexEditor({
     };
 
     if (collabToken) {
-      provider = new WebsocketProvider(collabBaseUrl, projectId, ydoc, {
-        params: { token: collabToken },
-      });
+      provider = new WebsocketProvider(
+        collabBaseUrl,
+        projectId,
+        ydoc,
+        collabWebsocketProviderOptions(collabToken)
+      );
       provider.on("status", (event: { status: string }) => {
         if (event.status === "disconnected") {
           saveStatusTracker?.onConnectionLost();
@@ -354,7 +367,9 @@ export function LatexEditor({
         },
       }),
       spellcheckCompartment.of(spellcheckExtensions(readStoredSpellcheckEnabled())),
-      ...(onDoiPaste && canEdit ? [createDoiPasteExtension(onDoiPaste)] : []),
+      ...(onDoiPasteRef.current && canEdit
+        ? [createDoiPasteExtension(onDoiPasteRef.current)]
+        : []),
     ];
 
     const state = EditorState.create({
@@ -367,7 +382,7 @@ export function LatexEditor({
     if (collabEnabled && provider?.synced) {
       enableEditingAfterSync(view);
     }
-    onEditorReady?.(view);
+    onEditorReadyRef.current?.(view);
     reportStats(initialDoc);
 
     return () => {
@@ -384,7 +399,7 @@ export function LatexEditor({
       provider?.destroy();
       ydoc.destroy();
     };
-  }, [filePath, projectId, collabToken, collabBaseUrl, canEdit, isDark, onSaveStatusChange, onDoiPaste]);
+  }, [filePath, projectId, collabToken, collabBaseUrl, canEdit, isDark]);
 
   useEffect(() => {
     if (jumpToLine && viewRef.current && jumpToLine > 0) {
