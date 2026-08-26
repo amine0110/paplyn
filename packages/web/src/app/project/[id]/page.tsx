@@ -1238,61 +1238,63 @@ export default function ProjectPage() {
           <MobileWorkspaceTabs activeTab={mobileTab} onChange={handleMobileTabChange} />
         </main>
 
-        {showAi && (
-          <>
-            {!isNarrow && (
-              <div className="absolute inset-0 bg-ink/10 z-20" onClick={() => setShowAi(false)} />
+        {!isNarrow && showAi && (
+          <div className="absolute inset-0 bg-ink/10 z-20" onClick={() => setShowAi(false)} />
+        )}
+        {isNarrow ? (
+          <div
+            className={cn(
+              "absolute inset-0 z-30 flex flex-col min-h-0 bg-surface",
+              !showAi && "hidden"
             )}
-            {isNarrow ? (
-              <div className="absolute inset-0 z-30 flex flex-col min-h-0 bg-surface">
-                <AiSidebar
-                  projectId={projectId}
-                  activeFile={activeFile}
-                  selectedText={selectedText}
-                  compileErrors={compileErrors}
-                  onInsert={handleInsertAtCursor}
-                  onReplace={handleReplaceSelection}
-                  onCitePaper={canEdit ? handleCitePaper : undefined}
-                  onApplyDoiCitation={canEdit ? handleApplyDoiCitation : undefined}
-                  onCiteArxivPaper={canEdit ? handleCiteArxivPaper : undefined}
-                  applyActionsContext={canEdit ? aiApplyActionsContext : undefined}
-                  onClose={() => setShowAi(false)}
-                  variant="sheet"
-                  pendingRequest={aiPendingRequest}
-                  onPendingRequestConsumed={() => setAiPendingRequest(null)}
-                  onCompileFixActionsApplied={canEdit ? handleCompileFixActionsApplied : undefined}
-                  onCompileFixSessionStart={canEdit ? handleCompileFixSessionStart : undefined}
-                  onCompileFixRetryNoOp={canEdit ? handleCompileFixRetryNoOp : undefined}
-                  messages={aiChatMessages}
-                  setMessages={setAiChatMessages}
-                />
-              </div>
-            ) : (
-              <AiSidebarPanel>
-                <AiSidebar
-                  projectId={projectId}
-                  activeFile={activeFile}
-                  selectedText={selectedText}
-                  compileErrors={compileErrors}
-                  onInsert={handleInsertAtCursor}
-                  onReplace={handleReplaceSelection}
-                  onCitePaper={canEdit ? handleCitePaper : undefined}
-                  onApplyDoiCitation={canEdit ? handleApplyDoiCitation : undefined}
-                  onCiteArxivPaper={canEdit ? handleCiteArxivPaper : undefined}
-                  applyActionsContext={canEdit ? aiApplyActionsContext : undefined}
-                  onClose={() => setShowAi(false)}
-                  variant="sidebar"
-                  pendingRequest={aiPendingRequest}
-                  onPendingRequestConsumed={() => setAiPendingRequest(null)}
-                  onCompileFixActionsApplied={canEdit ? handleCompileFixActionsApplied : undefined}
-                  onCompileFixSessionStart={canEdit ? handleCompileFixSessionStart : undefined}
-                  onCompileFixRetryNoOp={canEdit ? handleCompileFixRetryNoOp : undefined}
-                  messages={aiChatMessages}
-                  setMessages={setAiChatMessages}
-                />
-              </AiSidebarPanel>
-            )}
-          </>
+            aria-hidden={!showAi}
+          >
+            <AiSidebar
+              projectId={projectId}
+              activeFile={activeFile}
+              selectedText={selectedText}
+              compileErrors={compileErrors}
+              onInsert={handleInsertAtCursor}
+              onReplace={handleReplaceSelection}
+              onCitePaper={canEdit ? handleCitePaper : undefined}
+              onApplyDoiCitation={canEdit ? handleApplyDoiCitation : undefined}
+              onCiteArxivPaper={canEdit ? handleCiteArxivPaper : undefined}
+              applyActionsContext={canEdit ? aiApplyActionsContext : undefined}
+              onClose={() => setShowAi(false)}
+              variant="sheet"
+              pendingRequest={aiPendingRequest}
+              onPendingRequestConsumed={() => setAiPendingRequest(null)}
+              onCompileFixActionsApplied={canEdit ? handleCompileFixActionsApplied : undefined}
+              onCompileFixSessionStart={canEdit ? handleCompileFixSessionStart : undefined}
+              onCompileFixRetryNoOp={canEdit ? handleCompileFixRetryNoOp : undefined}
+              messages={aiChatMessages}
+              setMessages={setAiChatMessages}
+            />
+          </div>
+        ) : (
+          <AiSidebarPanel className={cn(!showAi && "hidden")} aria-hidden={!showAi}>
+            <AiSidebar
+              projectId={projectId}
+              activeFile={activeFile}
+              selectedText={selectedText}
+              compileErrors={compileErrors}
+              onInsert={handleInsertAtCursor}
+              onReplace={handleReplaceSelection}
+              onCitePaper={canEdit ? handleCitePaper : undefined}
+              onApplyDoiCitation={canEdit ? handleApplyDoiCitation : undefined}
+              onCiteArxivPaper={canEdit ? handleCiteArxivPaper : undefined}
+              applyActionsContext={canEdit ? aiApplyActionsContext : undefined}
+              onClose={() => setShowAi(false)}
+              variant="sidebar"
+              pendingRequest={aiPendingRequest}
+              onPendingRequestConsumed={() => setAiPendingRequest(null)}
+              onCompileFixActionsApplied={canEdit ? handleCompileFixActionsApplied : undefined}
+              onCompileFixSessionStart={canEdit ? handleCompileFixSessionStart : undefined}
+              onCompileFixRetryNoOp={canEdit ? handleCompileFixRetryNoOp : undefined}
+              messages={aiChatMessages}
+              setMessages={setAiChatMessages}
+            />
+          </AiSidebarPanel>
         )}
 
         {!showAi && <AiAssistantFab onClick={() => setShowAi(true)} />}

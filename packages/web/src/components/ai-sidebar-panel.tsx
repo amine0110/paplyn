@@ -12,9 +12,10 @@ import {
 interface AiSidebarPanelProps {
   children: React.ReactNode;
   className?: string;
+  "aria-hidden"?: boolean;
 }
 
-export function AiSidebarPanel({ children, className }: AiSidebarPanelProps) {
+export function AiSidebarPanel({ children, className, "aria-hidden": ariaHidden }: AiSidebarPanelProps) {
   const [width, setWidth] = useState(AI_SIDEBAR_WIDTH_DEFAULT);
   const widthRef = useRef(AI_SIDEBAR_WIDTH_DEFAULT);
   const draggingRef = useRef(false);
@@ -77,6 +78,7 @@ export function AiSidebarPanel({ children, className }: AiSidebarPanelProps) {
         className
       )}
       style={{ width }}
+      aria-hidden={ariaHidden}
     >
       <div
         role="separator"
