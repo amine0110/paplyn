@@ -23,7 +23,7 @@ export default function BillingPage() {
     });
     const data = await res.json();
     if (data.url) window.location.href = data.url;
-    else notice(data.error || "Checkout failed");
+    else notice({ message: data.error || "Checkout failed", variant: "error" });
     setLoading(null);
   }
 
@@ -32,7 +32,7 @@ export default function BillingPage() {
     const res = await fetch("/api/stripe");
     const data = await res.json();
     if (data.url) window.location.href = data.url;
-    else notice(data.error || "Portal unavailable");
+    else notice({ message: data.error || "Portal unavailable", variant: "error" });
     setLoading(null);
   }
 
