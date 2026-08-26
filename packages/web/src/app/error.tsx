@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { DetectedErrorReportFooter } from "@/components/detected-error-report-footer";
 import { Nav } from "@/components/nav";
 import { Button } from "@/components/ui/button";
-import { buildReportIssueHref } from "@/lib/user-reports-url";
+import { reportDetectedError } from "@/lib/report-detected-error";
 
 export default function Error({
   error,
@@ -13,14 +13,19 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const [autoReportSent, setAutoReportSent] = useState(false);
+  const errorMessage = error.message?.trim() || "Something went wrong";
+
   useEffect(() => {
     console.error(error);
   }, [error]);
 
-  const reportHref =
-    typeof window !== "undefined"
-      ? buildReportIssueHref(`${window.location.pathname}${window.location.search}`, "error")
-      : "/report?source=error";
+  useEffect(() => {
+    void reportDetectedError({
+      kind: "unexpected",
+      message: errorMessage,
+    }).then((result) => setAutoReportSent(result.sent));
+  }, [errorMessage]);
 
   return (
     <div className="min-h-screen">
@@ -34,10 +39,12 @@ export default function Error({
           <Button type="button" onClick={() => reset()}>
             Try again
           </Button>
-          <Link href={reportHref}>
-            <Button variant="outline">Report this issue</Button>
-          </Link>
         </div>
+        <DetectedErrorReportFooter
+          sent={autoReportSent}
+          message={errorMessage}
+          kind="unexpected"
+        />
       </main>
     </div>
   );

@@ -85,9 +85,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const turnstileOk = await verifyTurnstileToken(body.turnstileToken, clientIp);
-  if (!turnstileOk) {
-    return NextResponse.json({ error: "Captcha verification failed" }, { status: 400 });
+  if (!body.autoDetected) {
+    const turnstileOk = await verifyTurnstileToken(body.turnstileToken, clientIp);
+    if (!turnstileOk) {
+      return NextResponse.json({ error: "Captcha verification failed" }, { status: 400 });
+    }
   }
 
   const report = sanitizeUserReportInput(body, { signedIn, sessionEmail });

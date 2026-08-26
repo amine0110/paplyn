@@ -8,6 +8,7 @@ import { extractInsertableContent, hasInsertableContent } from "@/lib/ai-insert-
 import { detectFixCompileIntent } from "@/lib/ai-compile-fix-intent";
 import type { AiCompileError } from "@/lib/ai-compile-fix-context";
 import { AiMarkdown } from "@/components/ai-markdown";
+import { DetectedErrorReportFooter } from "@/components/detected-error-report-footer";
 import type { AiAppliedAction, AiClientAction, AiPaper, AiToolRead, AiUsedPlugin, ArxivPaperResult, DoiCitationPayload, ZoteroItemResult } from "@/lib/ai-types";
 import { AiComposerToolChip, AiComposerToolPicker, getComposerToolMeta } from "@/components/ai-composer-tool-picker";
 import { loadingLabelForAction, type AiPluginClientMeta } from "@/lib/ai-plugins/client-meta";
@@ -21,11 +22,14 @@ import {
   CHROME_SEND_BTN,
 } from "@/lib/chrome-interactive";
 import { resolveComposerForcedTool } from "@/lib/ai-composer-forced-tool";
+import { reportDetectedError } from "@/lib/report-detected-error";
 import { cn } from "@/components/ui/cn";
 
 export interface AiChatMessage {
   role: "user" | "assistant";
   content: string;
+  isFailure?: boolean;
+  autoReportSent?: boolean;
   usedPlugins?: AiUsedPlugin[];
   papers?: AiPaper[];
   arxivPapers?: ArxivPaperResult[];
@@ -241,6 +245,23 @@ export function AiSidebar({
     [applyActionsContext, onCompileFixActionsApplied, onCompileFixRetryNoOp, selectedText]
   );
 
+  const appendAiFailureMessage = useCallback(async (message: string) => {
+    const result = await reportDetectedError({
+      kind: "ai",
+      message,
+      page: `/project/${projectId}`,
+    });
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "assistant",
+        content: message,
+        isFailure: true,
+        autoReportSent: result.sent,
+      },
+    ]);
+  }, [projectId]);
+
   async function sendMessage(
     content: string,
     action?: string,
@@ -302,13 +323,9 @@ export function AiSidebar({
       if (res.status === 503) {
         setAvailable(false);
         const err = await res.json().catch(() => ({}));
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: err.error || aiUnavailableBannerMessage(isClientSelfHosted()),
-          },
-        ]);
+        await appendAiFailureMessage(
+          err.error || aiUnavailableBannerMessage(isClientSelfHosted()),
+        );
         return;
       }
 
@@ -324,7 +341,7 @@ export function AiSidebar({
             : typeof err.error === "object" && err.error !== null
               ? JSON.stringify(err.error)
               : fallback;
-        setMessages((prev) => [...prev, { role: "assistant", content: message }]);
+        await appendAiFailureMessage(message);
         return;
       }
 
@@ -334,13 +351,9 @@ export function AiSidebar({
       });
       const assistantContent = typeof data.content === "string" ? data.content.trim() : "";
       if (!assistantContent) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: "The assistant returned an empty response. Please try again.",
-          },
-        ]);
+        await appendAiFailureMessage(
+          "The assistant returned an empty response. Please try again.",
+        );
         return;
       }
 
@@ -392,7 +405,7 @@ export function AiSidebar({
         error instanceof Error && error.message
           ? error.message
           : "Failed to connect to AI service.";
-      setMessages((prev) => [...prev, { role: "assistant", content: message }]);
+      await appendAiFailureMessage(message);
     } finally {
       setLoading(false);
       setHasStreamProgress(false);
@@ -609,6 +622,16 @@ export function AiSidebar({
                 <div className="whitespace-pre-wrap text-sm leading-snug">{msg.content}</div>
               ) : (
                 <AiMarkdown content={msg.content} />
+              )}
+              {msg.role === "assistant" && msg.isFailure && (
+                <DetectedErrorReportFooter
+                  sent={msg.autoReportSent}
+                  message={msg.content}
+                  kind="ai"
+                  page={`/project/${projectId}`}
+                  className="mt-2 justify-start"
+                  linkClassName="text-xs"
+                />
               )}
               {msg.role === "assistant" && msg.papers && msg.papers.length > 0 && onCitePaper && (
                 <div className="mt-2.5 space-y-1.5 border-t border-border/70 pt-2">

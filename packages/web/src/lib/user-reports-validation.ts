@@ -39,6 +39,7 @@ export const userReportBodySchema = z.object({
   email: optionalEmailSchema,
   page: z.string().max(REPORT_PAGE_MAX).optional().default(""),
   source: reportSourceSchema.optional().default("report"),
+  autoDetected: z.boolean().optional().default(false),
   honeypot: z.string().optional().default(""),
   csrfToken: z.string().optional(),
   turnstileToken: z.string().optional(),
