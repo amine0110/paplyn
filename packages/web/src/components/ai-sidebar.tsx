@@ -8,7 +8,7 @@ import { extractInsertableContent, hasInsertableContent } from "@/lib/ai-insert-
 import { detectFixCompileIntent } from "@/lib/ai-compile-fix-intent";
 import type { AiCompileError } from "@/lib/ai-compile-fix-context";
 import { AiMarkdown } from "@/components/ai-markdown";
-import type { AiAppliedAction, AiClientAction, AiPaper, AiToolRead, AiUsedPlugin, ArxivPaperResult, DoiCitationPayload } from "@/lib/ai-types";
+import type { AiAppliedAction, AiClientAction, AiPaper, AiToolRead, AiUsedPlugin, ArxivPaperResult, DoiCitationPayload, ZoteroItemResult } from "@/lib/ai-types";
 import { AiComposerToolChip, AiComposerToolPicker, getComposerToolMeta } from "@/components/ai-composer-tool-picker";
 import { loadingLabelForAction, type AiPluginClientMeta } from "@/lib/ai-plugins/client-meta";
 import { applyAiClientActions, type ApplyAiActionsContext } from "@/lib/apply-ai-client-actions";
@@ -29,6 +29,7 @@ export interface AiChatMessage {
   usedPlugins?: AiUsedPlugin[];
   papers?: AiPaper[];
   arxivPapers?: ArxivPaperResult[];
+  zoteroItems?: ZoteroItemResult[];
   appliedActions?: AiAppliedAction[];
   toolReads?: AiToolRead[];
 }
@@ -50,6 +51,7 @@ interface AiSidebarProps {
   onCitePaper?: (paper: AiPaper) => void | Promise<void>;
   onApplyDoiCitation?: (citation: DoiCitationPayload) => void | Promise<void>;
   onCiteArxivPaper?: (paper: ArxivPaperResult) => void | Promise<void>;
+  onCiteZoteroItem?: (item: ZoteroItemResult) => void | Promise<void>;
   onClose: () => void;
   /** Context for applying agentic editor actions (collab-safe). */
   applyActionsContext?: Omit<ApplyAiActionsContext, "hasSelection">;
@@ -122,6 +124,7 @@ export function AiSidebar({
   onCitePaper,
   onApplyDoiCitation,
   onCiteArxivPaper,
+  onCiteZoteroItem,
   onClose,
   applyActionsContext,
   variant = "sidebar",
@@ -140,6 +143,7 @@ export function AiSidebar({
   const [available, setAvailable] = useState(true);
   const [citingKey, setCitingKey] = useState<string | null>(null);
   const [citingArxivId, setCitingArxivId] = useState<string | null>(null);
+  const [citingZoteroKey, setCitingZoteroKey] = useState<string | null>(null);
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
   const [toolInputPlaceholder, setToolInputPlaceholder] = useState<string | null>(null);
   const [voiceNote, setVoiceNote] = useState<string | null>(null);
@@ -345,6 +349,9 @@ export function AiSidebar({
       const arxivPapers = Array.isArray(data.arxivPapers)
         ? (data.arxivPapers as ArxivPaperResult[])
         : undefined;
+      const zoteroItems = Array.isArray(data.zoteroItems)
+        ? (data.zoteroItems as ZoteroItemResult[])
+        : undefined;
       const doiCitations = Array.isArray(data.doiCitations)
         ? (data.doiCitations as DoiCitationPayload[])
         : undefined;
@@ -375,6 +382,7 @@ export function AiSidebar({
           ...(usedPlugins?.length ? { usedPlugins } : {}),
           ...(papers?.length ? { papers } : {}),
           ...(arxivPapers?.length ? { arxivPapers } : {}),
+          ...(zoteroItems?.length ? { zoteroItems } : {}),
           ...(appliedActions?.length ? { appliedActions } : {}),
           ...(toolReads?.length ? { toolReads } : {}),
         },
@@ -398,6 +406,16 @@ export function AiSidebar({
       await onCiteArxivPaper(paper);
     } finally {
       setCitingArxivId(null);
+    }
+  }
+
+  async function handleCiteZotero(item: ZoteroItemResult) {
+    if (!onCiteZoteroItem) return;
+    setCitingZoteroKey(item.itemKey);
+    try {
+      await onCiteZoteroItem(item);
+    } finally {
+      setCitingZoteroKey(null);
     }
   }
 
@@ -663,7 +681,7 @@ export function AiSidebar({
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-7 px-2 text-[11px]"
+                              className="h-7 px-2 text-[11px] cursor-pointer"
                               disabled={loading || isCiting}
                               onClick={() => void handleCiteArxiv(paper)}
                             >
@@ -671,6 +689,43 @@ export function AiSidebar({
                             </Button>
                           )}
                         </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {msg.role === "assistant" && msg.zoteroItems && msg.zoteroItems.length > 0 && (
+                <div className="mt-2.5 space-y-1.5 border-t border-border/70 pt-2">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">
+                    From Zotero
+                  </p>
+                  {msg.zoteroItems.map((item) => {
+                    const isCiting = citingZoteroKey === item.itemKey;
+                    return (
+                      <div
+                        key={item.itemKey}
+                        className="flex items-start justify-between gap-2 rounded-lg border border-border/60 bg-canvas-dark/30 px-2 py-1.5"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium leading-snug text-ink line-clamp-2">
+                            {item.title}
+                          </p>
+                          <p className="mt-0.5 text-[10px] text-ink-muted">
+                            {formatAuthors(item.authors)}
+                            {item.year != null ? ` · ${item.year}` : ""} · {item.itemType}
+                          </p>
+                        </div>
+                        {onCiteZoteroItem && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 shrink-0 px-2 text-[11px] cursor-pointer"
+                            disabled={loading || isCiting}
+                            onClick={() => void handleCiteZotero(item)}
+                          >
+                            {isCiting ? "Citing…" : "Cite"}
+                          </Button>
+                        )}
                       </div>
                     );
                   })}

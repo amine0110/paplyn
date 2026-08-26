@@ -2,13 +2,16 @@ import { arxivPlugin } from "./arxiv";
 import { citeDoiPlugin } from "./cite-doi";
 import { githubImportPlugin } from "./github-import";
 import { semanticScholarPlugin } from "./semantic-scholar";
+import { createZoteroTool, zoteroPlugin } from "./zotero";
 import type { AiPlugin, ResolvedAiPlugins } from "./types";
+import type { ZoteroCredentials } from "@/lib/zotero";
 
 /** Register new plugins here — one file per capability. */
 const ALL_PLUGINS: AiPlugin[] = [
   semanticScholarPlugin,
   citeDoiPlugin,
   arxivPlugin,
+  zoteroPlugin,
   githubImportPlugin,
 ];
 
@@ -20,11 +23,17 @@ export function getEnabledAiPlugins(): AiPlugin[] {
   return ALL_PLUGINS.filter((plugin) => plugin.enabled);
 }
 
-export function resolveAiPlugins(): ResolvedAiPlugins {
+export function resolveAiPlugins(options?: {
+  zoteroCredentials?: ZoteroCredentials | null;
+}): ResolvedAiPlugins {
   const plugins = getEnabledAiPlugins();
   const tools: Record<string, ReturnType<AiPlugin["createTool"]>> = {};
 
   for (const plugin of plugins) {
+    if (plugin.id === "zotero") {
+      tools[plugin.toolName] = createZoteroTool(options?.zoteroCredentials ?? null);
+      continue;
+    }
     tools[plugin.toolName] = plugin.createTool();
   }
 

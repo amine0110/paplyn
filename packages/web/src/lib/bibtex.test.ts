@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AiPaper } from "@/lib/ai-types";
 import {
   appendBibEntry,
+  extractBibtexCitationKey,
   formatBibtexEntry,
   mergeBibtexEntry,
   parseBibKeys,
@@ -23,6 +24,11 @@ describe("bibtex helpers", () => {
   it("parses existing citation keys from bib content", () => {
     const keys = parseBibKeys(`@article{smith2020,\n  title = {A}\n}\n@book{jones2019, title={B}}`);
     expect(keys).toEqual(new Set(["smith2020", "jones2019"]));
+  });
+
+  it("extracts citation keys from BibTeX strings", () => {
+    expect(extractBibtexCitationKey("@article{smith2020, title={A}}")).toBe("smith2020");
+    expect(extractBibtexCitationKey("not bibtex")).toBeNull();
   });
 
   it("suggests authorYearTitle-ish keys and avoids collisions", () => {

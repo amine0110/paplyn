@@ -46,6 +46,7 @@ import {
   collectUsedPlugins,
   collectClientActionsFromToolResults,
   collectToolReadChips,
+  collectZoteroItemsFromToolResults,
   toAppliedActionSummaries,
   formatToolResultsAsAssistantMessage,
   formatAppliedActionsAsAssistantMessage,
@@ -86,6 +87,7 @@ import {
   formatToolProgressStart,
 } from "@/lib/ai-tool-progress";
 import { PRODUCT } from "@/lib/product";
+import { getUserZoteroCredentials } from "@/lib/user-zotero";
 import { checkAiLimit, incrementAiUsage } from "@/lib/usage";
 import { z } from "zod";
 
@@ -454,7 +456,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const compileErrorsRaw = normalizeAiCompileErrors(requestData.compileErrors);
   const compileFixRequest = isCompileFixRequest(requestData);
 
-  const { tools: pluginTools, systemPrompt: pluginSystemPrompt, plugins } = resolveAiPlugins();
+  const { tools: pluginTools, systemPrompt: pluginSystemPrompt, plugins } = resolveAiPlugins({
+    zoteroCredentials: await getUserZoteroCredentials(session.user.id),
+  });
 
   const texFileMap = new Map(texFiles.map((f) => [f.path, f.content]));
   const mainFile = access.project.mainFile;
@@ -665,6 +669,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const papers = collectPapersFromToolResults(result);
         const doiCitations = collectDoiCitationsFromToolResults(result);
         const arxivPapers = collectArxivPapersFromToolResults(result);
+        const zoteroItems = collectZoteroItemsFromToolResults(result);
         const actions = collectClientActionsFromToolResults(result);
         const appliedActions = toAppliedActionSummaries(actions);
         const toolReads = collectToolReadChips(result);
@@ -678,6 +683,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           ...(papers.length > 0 ? { papers } : {}),
           ...(doiCitations.length > 0 ? { doiCitations } : {}),
           ...(arxivPapers.length > 0 ? { arxivPapers } : {}),
+          ...(zoteroItems.length > 0 ? { zoteroItems } : {}),
           ...(actions.length > 0 ? { actions, appliedActions } : {}),
           ...(toolReads.length > 0 ? { toolReads } : {}),
         };

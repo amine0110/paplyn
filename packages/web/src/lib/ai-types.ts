@@ -41,6 +41,7 @@ export interface AiChatResponse {
   papers?: AiPaper[];
   doiCitations?: DoiCitationPayload[];
   arxivPapers?: ArxivPaperResult[];
+  zoteroItems?: ZoteroItemResult[];
   /** Editor actions for the client to apply (collab-safe via existing save paths). */
   actions?: AiClientAction[];
   appliedActions?: AiAppliedAction[];
@@ -81,5 +82,21 @@ export interface ArxivSearchPayload {
   summary: string;
   query: string;
   papers: ArxivPaperResult[];
+  error?: string;
+}
+
+export interface ZoteroItemResult {
+  itemKey: string;
+  title: string;
+  year: number | null;
+  authors: string[];
+  itemType: string;
+}
+
+export interface ZoteroSearchPayload {
+  kind: "zotero-search";
+  summary: string;
+  query: string;
+  items: ZoteroItemResult[];
   error?: string;
 }

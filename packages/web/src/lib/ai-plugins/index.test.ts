@@ -14,6 +14,7 @@ describe("ai-plugins registry", () => {
     expect(plugins[0]?.id).toBe("semantic-scholar");
     expect(plugins.some((p) => p.id === "cite-doi")).toBe(true);
     expect(plugins.some((p) => p.id === "arxiv")).toBe(true);
+    expect(plugins.some((p) => p.id === "zotero")).toBe(true);
     expect(plugins.some((p) => p.id === "github-import")).toBe(true);
   });
 
@@ -23,6 +24,7 @@ describe("ai-plugins registry", () => {
     expect(tools.search_literature).toBeDefined();
     expect(tools.cite_from_doi).toBeDefined();
     expect(tools.search_arxiv).toBeDefined();
+    expect(tools.search_zotero).toBeDefined();
     expect(tools.parse_github_repo).toBeDefined();
     expect(systemPrompt).toContain("search_literature");
     expect(systemPrompt).toContain("cite_from_doi");
@@ -61,6 +63,9 @@ describe("ai-plugins registry", () => {
 
     const arxiv = listAiPlugins().find((p) => p.id === "arxiv");
     expect(arxiv?.landing?.wordmark).toBe("arXiv");
+
+    const zotero = listAiPlugins().find((p) => p.id === "zotero");
+    expect(zotero?.landing?.wordmark).toBe("Zotero");
 
     const github = listAiPlugins().find((p) => p.id === "github-import");
     expect(github?.landing?.wordmark).toBe("GitHub");

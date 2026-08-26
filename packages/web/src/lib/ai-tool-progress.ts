@@ -54,6 +54,8 @@ export function formatToolProgressStart(
       return "Resolving DOI…";
     case "search_arxiv":
       return "Searching arXiv…";
+    case "search_zotero":
+      return "Searching Zotero…";
     case "parse_github_repo":
       return "Checking GitHub repo…";
     default:

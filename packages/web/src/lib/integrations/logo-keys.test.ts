@@ -5,6 +5,7 @@ describe("integrationLogoKeyFromId", () => {
   it("maps plugin ids to logo keys", () => {
     expect(integrationLogoKeyFromId("cite-doi")).toBe("crossref");
     expect(integrationLogoKeyFromId("github-import")).toBe("github");
+    expect(integrationLogoKeyFromId("zotero")).toBe("zotero");
     expect(integrationLogoKeyFromId("ollama")).toBe("ollama");
     expect(integrationLogoKeyFromId("latex")).toBe("latex");
   });

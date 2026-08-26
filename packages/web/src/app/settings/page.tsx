@@ -9,6 +9,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import { config } from "@/lib/config";
 import { PRODUCT } from "@/lib/product";
 import {
@@ -35,6 +36,14 @@ export default function SettingsPage() {
   const [changingPassword, setChangingPassword] = useState(false);
   const [connectedProviders, setConnectedProviders] = useState<string[]>([]);
   const [providersError, setProvidersError] = useState("");
+
+  const [zoteroUserId, setZoteroUserId] = useState("");
+  const [zoteroApiKey, setZoteroApiKey] = useState("");
+  const [hasZoteroKey, setHasZoteroKey] = useState(false);
+  const [zoteroApiKeyLast4, setZoteroApiKeyLast4] = useState<string | null>(null);
+  const [zoteroMessage, setZoteroMessage] = useState("");
+  const [zoteroError, setZoteroError] = useState("");
+  const [savingZotero, setSavingZotero] = useState(false);
 
 
   useEffect(() => {
@@ -77,6 +86,129 @@ export default function SettingsPage() {
       cancelled = true;
     };
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setZoteroUserId("");
+      setZoteroApiKey("");
+      setHasZoteroKey(false);
+      setZoteroApiKeyLast4(null);
+      setZoteroMessage("");
+      setZoteroError("");
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadZoteroSettings() {
+      try {
+        const response = await fetch("/api/settings/zotero");
+        if (!response.ok) {
+          throw new Error("Failed to load Zotero settings");
+        }
+        const data = (await response.json()) as {
+          zoteroUserId?: string | null;
+          hasZoteroKey?: boolean;
+          zoteroApiKeyLast4?: string | null;
+        };
+        if (!cancelled) {
+          setZoteroUserId(data.zoteroUserId ?? "");
+          setHasZoteroKey(Boolean(data.hasZoteroKey));
+          setZoteroApiKeyLast4(data.zoteroApiKeyLast4 ?? null);
+          setZoteroApiKey("");
+          setZoteroError("");
+        }
+      } catch {
+        if (!cancelled) {
+          setZoteroError("Could not load Zotero settings.");
+        }
+      }
+    }
+
+    void loadZoteroSettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
+
+  async function saveZotero(e: React.FormEvent) {
+    e.preventDefault();
+    setZoteroMessage("");
+    setZoteroError("");
+
+    const trimmedUserId = zoteroUserId.trim();
+    if (!trimmedUserId) {
+      setZoteroError("Zotero user ID is required.");
+      return;
+    }
+
+    if (!hasZoteroKey && !zoteroApiKey.trim()) {
+      setZoteroError("Zotero API key is required.");
+      return;
+    }
+
+    setSavingZotero(true);
+    try {
+      const response = await fetch("/api/settings/zotero", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          zoteroUserId: trimmedUserId,
+          ...(zoteroApiKey.trim() ? { zoteroApiKey: zoteroApiKey.trim() } : {}),
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        setZoteroError(typeof err.error === "string" ? err.error : "Failed to save Zotero settings");
+        return;
+      }
+
+      const data = (await response.json()) as {
+        zoteroUserId?: string | null;
+        hasZoteroKey?: boolean;
+        zoteroApiKeyLast4?: string | null;
+      };
+      setZoteroUserId(data.zoteroUserId ?? trimmedUserId);
+      setHasZoteroKey(Boolean(data.hasZoteroKey));
+      setZoteroApiKeyLast4(data.zoteroApiKeyLast4 ?? null);
+      setZoteroApiKey("");
+      setZoteroMessage("Zotero settings saved");
+    } catch {
+      setZoteroError("Something went wrong");
+    } finally {
+      setSavingZotero(false);
+    }
+  }
+
+  async function disconnectZotero() {
+    setZoteroMessage("");
+    setZoteroError("");
+    setSavingZotero(true);
+    try {
+      const response = await fetch("/api/settings/zotero", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clearZoteroApiKey: true, zoteroApiKey: "" }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        setZoteroError(typeof err.error === "string" ? err.error : "Failed to disconnect Zotero");
+        return;
+      }
+
+      setHasZoteroKey(false);
+      setZoteroApiKeyLast4(null);
+      setZoteroApiKey("");
+      setZoteroMessage("Zotero API key removed");
+    } catch {
+      setZoteroError("Something went wrong");
+    } finally {
+      setSavingZotero(false);
+    }
+  }
 
   async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
@@ -255,6 +387,72 @@ export default function SettingsPage() {
             <p className="text-sm text-ink-muted mb-4">{PRODUCT.appearanceNote}</p>
             <ThemeToggle />
           </section>
+
+          <form onSubmit={saveZotero}>
+            <section className="border border-border rounded-lg p-6 bg-surface">
+              <h2 className="font-medium mb-2">Zotero</h2>
+              <p className="text-sm text-ink-muted mb-4">
+                Connect your personal Zotero library to search and cite from{" "}
+                <code className="text-xs">references.bib</code> in the editor and AI assistant.
+                Create an API key on{" "}
+                <a
+                  href="https://www.zotero.org/settings/keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-accent hover:underline cursor-pointer"
+                >
+                  zotero.org/settings/keys
+                </a>
+                {" "}(read library access is enough).
+              </p>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="zotero-user-id">User ID</Label>
+                  <Input
+                    id="zotero-user-id"
+                    value={zoteroUserId}
+                    onChange={(e) => setZoteroUserId(e.target.value)}
+                    placeholder="Numeric user ID from Zotero settings"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="zotero-api-key">API key</Label>
+                  <PasswordInput
+                    id="zotero-api-key"
+                    value={zoteroApiKey}
+                    onChange={(e) => setZoteroApiKey(e.target.value)}
+                    placeholder={hasZoteroKey ? "••••••••" : "Paste your Zotero API key"}
+                    autoComplete="new-password"
+                  />
+                  {hasZoteroKey && (
+                    <p className="text-xs text-ink-muted">
+                      Connected
+                      {zoteroApiKeyLast4 ? ` (ends with ${zoteroApiKeyLast4})` : ""}. Leave blank to keep
+                      the current key.
+                    </p>
+                  )}
+                </div>
+                {zoteroError && <p className="text-sm text-error">{zoteroError}</p>}
+                {zoteroMessage && <p className="text-sm text-success">{zoteroMessage}</p>}
+                <div className="flex flex-wrap gap-2">
+                  <Button type="submit" disabled={savingZotero}>
+                    {savingZotero ? "Saving..." : "Save Zotero"}
+                  </Button>
+                  {hasZoteroKey && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={savingZotero}
+                      onClick={() => void disconnectZotero()}
+                    >
+                      Remove API key
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </section>
+          </form>
 
           {config.isSaas && (
             <section className="border border-border rounded-lg p-6 bg-surface">

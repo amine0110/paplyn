@@ -22,6 +22,8 @@ export const user = pgTable("user", {
   role: text("role").notNull().default("user"),
   plan: planEnum("plan").notNull().default("free"),
   stripeCustomerId: text("stripe_customer_id"),
+  zoteroUserId: text("zotero_user_id"),
+  zoteroApiKey: text("zotero_api_key"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

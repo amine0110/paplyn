@@ -78,7 +78,7 @@ import { countDocumentStats } from "@/lib/document-stats";
 import type { SaveStatus } from "@/lib/save-status";
 import { saveProjectFile } from "@/lib/save-file";
 import { runCollabSaveFallback } from "@/lib/collab-save-fallback";
-import type { AiPaper, ArxivPaperResult, DoiCitationPayload } from "@/lib/ai-types";
+import type { AiPaper, ArxivPaperResult, DoiCitationPayload, ZoteroItemResult } from "@/lib/ai-types";
 import {
   appendBibEntry,
   formatBibtexEntry,
@@ -755,6 +755,56 @@ export default function ProjectPage() {
     notice({ message: `Cited “${paper.title}” (arXiv)`, variant: "success" });
   }
 
+  async function handleCiteZoteroItem(item: ZoteroItemResult) {
+    if (!canEdit || !project) return;
+
+    const res = await fetch(`/api/projects/${projectId}/integrations/zotero/bibtex`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itemKey: item.itemKey }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      notice({
+        message: typeof err.error === "string" ? err.error : "Could not cite from Zotero",
+        variant: "error",
+      });
+      return;
+    }
+
+    const data = (await res.json()) as {
+      bibtex: string;
+      citationKey: string;
+      title?: string;
+    };
+
+    const filePaths = files.map((file) => file.path);
+    const fileContents = Object.fromEntries(files.map((file) => [file.path, file.content]));
+    const bibPath = resolveProjectBibPath({
+      mainFile: project.mainFile,
+      filePaths,
+      fileContents,
+    });
+
+    const existingBib = fileContents[bibPath] ?? "";
+    const { content: updatedBib, merged } = mergeBibtexEntry(
+      existingBib,
+      data.bibtex,
+      data.citationKey
+    );
+
+    if (merged || !existingBib) {
+      await saveFile(bibPath, updatedBib, false);
+    }
+
+    handleInsertAtCursor(`\\cite{${data.citationKey}}`);
+    notice({
+      message: `Cited “${item.title}” (Zotero)`,
+      variant: "success",
+    });
+  }
+
   async function handleCitePaper(paper: AiPaper) {
     if (!canEdit || !project) return;
 
@@ -1259,6 +1309,7 @@ export default function ProjectPage() {
               onCitePaper={canEdit ? handleCitePaper : undefined}
               onApplyDoiCitation={canEdit ? handleApplyDoiCitation : undefined}
               onCiteArxivPaper={canEdit ? handleCiteArxivPaper : undefined}
+              onCiteZoteroItem={canEdit ? handleCiteZoteroItem : undefined}
               applyActionsContext={canEdit ? aiApplyActionsContext : undefined}
               onClose={() => setShowAi(false)}
               variant="sheet"
@@ -1283,6 +1334,7 @@ export default function ProjectPage() {
               onCitePaper={canEdit ? handleCitePaper : undefined}
               onApplyDoiCitation={canEdit ? handleApplyDoiCitation : undefined}
               onCiteArxivPaper={canEdit ? handleCiteArxivPaper : undefined}
+              onCiteZoteroItem={canEdit ? handleCiteZoteroItem : undefined}
               applyActionsContext={canEdit ? aiApplyActionsContext : undefined}
               onClose={() => setShowAi(false)}
               variant="sidebar"
