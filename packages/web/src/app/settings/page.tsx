@@ -390,7 +390,15 @@ export default function SettingsPage() {
 
           <form onSubmit={saveZotero}>
             <section className="border border-border rounded-lg p-6 bg-surface">
-              <h2 className="font-medium mb-2">Zotero</h2>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <h2 className="font-medium">Zotero</h2>
+                <Link
+                  href="/docs/zotero"
+                  className="text-sm text-accent hover:underline cursor-pointer"
+                >
+                  How to get your Zotero key
+                </Link>
+              </div>
               <p className="text-sm text-ink-muted mb-4">
                 Connect your personal Zotero library to search and cite from{" "}
                 <code className="text-xs">references.bib</code> in the editor and AI assistant.
