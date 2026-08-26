@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { getGoogleAuthConfig, isGoogleAuthEnabled } from "@/lib/auth-providers";
+import {
+  getGithubAuthConfig,
+  getGoogleAuthConfig,
+  isGithubAuthEnabled,
+  isGoogleAuthEnabled,
+} from "@/lib/auth-providers";
 
 describe("auth-providers", () => {
   const env = process.env;
@@ -20,7 +25,7 @@ describe("auth-providers", () => {
     expect(isGoogleAuthEnabled()).toBe(false);
   });
 
-  it("returns null when only client id is set", () => {
+  it("returns null when only Google client id is set", () => {
     process.env.GOOGLE_CLIENT_ID = "google-client-id";
     delete process.env.GOOGLE_CLIENT_SECRET;
 
@@ -37,5 +42,32 @@ describe("auth-providers", () => {
       clientSecret: "google-client-secret",
     });
     expect(isGoogleAuthEnabled()).toBe(true);
+  });
+
+  it("returns null when GitHub env vars are missing", () => {
+    delete process.env.GITHUB_CLIENT_ID;
+    delete process.env.GITHUB_CLIENT_SECRET;
+
+    expect(getGithubAuthConfig()).toBeNull();
+    expect(isGithubAuthEnabled()).toBe(false);
+  });
+
+  it("returns null when only GitHub client id is set", () => {
+    process.env.GITHUB_CLIENT_ID = "github-client-id";
+    delete process.env.GITHUB_CLIENT_SECRET;
+
+    expect(getGithubAuthConfig()).toBeNull();
+    expect(isGithubAuthEnabled()).toBe(false);
+  });
+
+  it("returns config when both GitHub env vars are set", () => {
+    process.env.GITHUB_CLIENT_ID = "github-client-id";
+    process.env.GITHUB_CLIENT_SECRET = "github-client-secret";
+
+    expect(getGithubAuthConfig()).toEqual({
+      clientId: "github-client-id",
+      clientSecret: "github-client-secret",
+    });
+    expect(isGithubAuthEnabled()).toBe(true);
   });
 });

@@ -10,13 +10,15 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Nav } from "@/components/nav";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
+import { GitHubSignInButton } from "@/components/auth/github-sign-in-button";
 import { validatePasswordPair } from "@/lib/password-validation";
 
 type SignupFormProps = {
   googleEnabled: boolean;
+  githubEnabled: boolean;
 };
 
-function SignupForm({ googleEnabled }: SignupFormProps) {
+function SignupForm({ googleEnabled, githubEnabled }: SignupFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next") || "/dashboard";
@@ -66,9 +68,10 @@ function SignupForm({ googleEnabled }: SignupFormProps) {
       <div className="max-w-sm mx-auto px-4 py-20">
         <h1 className="font-serif text-2xl font-semibold text-center mb-8">Create your account</h1>
 
-        {googleEnabled && (
+        {(googleEnabled || githubEnabled) && (
           <div className="space-y-4 mb-6">
-            <GoogleSignInButton callbackURL={callbackURL} />
+            {googleEnabled && <GoogleSignInButton callbackURL={callbackURL} />}
+            {githubEnabled && <GitHubSignInButton callbackURL={callbackURL} />}
             <p className="text-xs text-center text-ink-muted">or sign up with email</p>
           </div>
         )}
@@ -116,10 +119,10 @@ function SignupForm({ googleEnabled }: SignupFormProps) {
   );
 }
 
-export function SignupPageClient({ googleEnabled }: SignupFormProps) {
+export function SignupPageClient({ googleEnabled, githubEnabled }: SignupFormProps) {
   return (
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-ink-muted">Loading…</div>}>
-      <SignupForm googleEnabled={googleEnabled} />
+      <SignupForm googleEnabled={googleEnabled} githubEnabled={githubEnabled} />
     </Suspense>
   );
 }

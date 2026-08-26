@@ -32,7 +32,7 @@ describe("Login page", () => {
   });
 
   it("renders forgot password link", () => {
-    render(<LoginPageClient googleEnabled={false} />);
+    render(<LoginPageClient googleEnabled={false} githubEnabled={false} />);
 
     expect(screen.getByRole("link", { name: "Forgot password?" })).toHaveAttribute(
       "href",
@@ -41,21 +41,36 @@ describe("Login page", () => {
   });
 
   it("hides Google button when Google auth is not configured", () => {
-    render(<LoginPageClient googleEnabled={false} />);
+    render(<LoginPageClient googleEnabled={false} githubEnabled={false} />);
 
     expect(screen.queryByRole("button", { name: "Continue with Google" })).not.toBeInTheDocument();
   });
 
   it("shows Google button when Google auth is configured", () => {
-    render(<LoginPageClient googleEnabled={true} />);
+    render(<LoginPageClient googleEnabled={true} githubEnabled={false} />);
 
     const button = screen.getByRole("button", { name: "Continue with Google" });
     expect(button).toBeInTheDocument();
     expect(button.querySelector("svg[aria-hidden='true']")).toBeInTheDocument();
   });
 
+  it("hides GitHub button when GitHub auth is not configured", () => {
+    render(<LoginPageClient googleEnabled={false} githubEnabled={false} />);
+
+    expect(screen.queryByRole("button", { name: "Continue with GitHub" })).not.toBeInTheDocument();
+  });
+
+  it("shows GitHub button when GitHub auth is configured", () => {
+    render(<LoginPageClient googleEnabled={false} githubEnabled={true} />);
+
+    const button = screen.getByRole("button", { name: "Continue with GitHub" });
+    expect(button).toBeInTheDocument();
+    expect(button).toHaveClass("cursor-pointer");
+    expect(button.querySelector("svg[aria-hidden='true']")).toBeInTheDocument();
+  });
+
   it("toggles password visibility", () => {
-    render(<LoginPageClient googleEnabled={false} />);
+    render(<LoginPageClient googleEnabled={false} githubEnabled={false} />);
 
     const password = screen.getByLabelText("Password");
     expect(password).toHaveAttribute("type", "password");
@@ -72,7 +87,7 @@ describe("Login page", () => {
   it("links to signup with the same next path", () => {
     useSearchParams.mockReturnValue(new URLSearchParams("next=/invite/invite-1"));
 
-    render(<LoginPageClient googleEnabled={false} />);
+    render(<LoginPageClient googleEnabled={false} githubEnabled={false} />);
 
     expect(screen.getByRole("link", { name: "Create one" })).toHaveAttribute(
       "href",

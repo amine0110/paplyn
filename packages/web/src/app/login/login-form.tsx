@@ -11,12 +11,14 @@ import { Label } from "@/components/ui/label";
 import { Nav } from "@/components/nav";
 import { PRODUCT } from "@/lib/product";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
+import { GitHubSignInButton } from "@/components/auth/github-sign-in-button";
 
 type LoginFormProps = {
   googleEnabled: boolean;
+  githubEnabled: boolean;
 };
 
-function LoginForm({ googleEnabled }: LoginFormProps) {
+function LoginForm({ googleEnabled, githubEnabled }: LoginFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next") || "/dashboard";
@@ -60,9 +62,10 @@ function LoginForm({ googleEnabled }: LoginFormProps) {
           </p>
         )}
 
-        {googleEnabled && (
+        {(googleEnabled || githubEnabled) && (
           <div className="space-y-4 mb-6">
-            <GoogleSignInButton callbackURL={callbackURL} />
+            {googleEnabled && <GoogleSignInButton callbackURL={callbackURL} />}
+            {githubEnabled && <GitHubSignInButton callbackURL={callbackURL} />}
             <p className="text-xs text-center text-ink-muted">or sign in with email</p>
           </div>
         )}
@@ -104,10 +107,10 @@ function LoginForm({ googleEnabled }: LoginFormProps) {
   );
 }
 
-export function LoginPageClient({ googleEnabled }: LoginFormProps) {
+export function LoginPageClient({ googleEnabled, githubEnabled }: LoginFormProps) {
   return (
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-ink-muted">Loading…</div>}>
-      <LoginForm googleEnabled={googleEnabled} />
+      <LoginForm googleEnabled={googleEnabled} githubEnabled={githubEnabled} />
     </Suspense>
   );
 }
