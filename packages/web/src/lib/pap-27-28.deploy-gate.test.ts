@@ -28,12 +28,14 @@ describe("PAP-27/28 AI composer and chat thread deploy gate", () => {
     );
   });
 
-  it("PAP-28: chat thread lives on the project page, not inside AiSidebar", () => {
+  it("PAP-28: chat thread survives close/reopen via module store and kept-mounted sidebar", () => {
     const page = readSource("app/project/[id]/page.tsx");
     expect(page).toContain("useProjectAiChatThread");
     expect(page).toContain("messages={aiChatMessages}");
     expect(page).toContain("setMessages={setAiChatMessages}");
     expect(page).toMatch(/setShowAi\(false\)/);
+    expect(page).not.toMatch(/\{showAi\s*&&[\s\S]{0,400}<AiSidebar/);
+    expect(page).toMatch(/!showAi.*hidden|hidden.*!showAi/);
 
     const sidebar = readSource("components/ai-sidebar.tsx");
     expect(sidebar).toContain("messages: AiChatMessage[]");
@@ -42,7 +44,8 @@ describe("PAP-27/28 AI composer and chat thread deploy gate", () => {
     expect(sidebar).not.toMatch(/useState<AiChatMessage\[\]>\(\[\]\)/);
 
     const hook = readSource("lib/use-project-ai-chat-thread.ts");
-    expect(hook).toContain("[projectId]");
-    expect(hook).toContain("setMessagesState([])");
+    expect(hook).toMatch(/new Map/);
+    expect(hook).not.toContain("setMessagesState([])");
+    expect(hook).not.toMatch(/sessionStorage|localStorage/);
   });
 });
