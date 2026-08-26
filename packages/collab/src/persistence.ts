@@ -1,8 +1,15 @@
 import { randomUUID } from "crypto";
 import postgres from "postgres";
 import Y, { type Doc } from "./yjs.js";
+import {
+  checkPersistConcatenationGuard,
+  countDocumentClassLinesInFirstCopy,
+  countDuplicateBibKeys,
+  extractFirstLaTeXCopy,
+  hasMultipleDocumentCopies,
+} from "./document-integrity.js";
 import { seedRoomFromProjectFiles } from "./room-seed.js";
-import { COLLAB_INTERNAL_PATHS, isYTextLike } from "./y-text.js";
+import { COLLAB_INTERNAL_PATHS, isYTextLike, replaceYTextContent } from "./y-text.js";
 
 const SAVE_DEBOUNCE_MS = parseInt(process.env.COLLAB_SAVE_DEBOUNCE_MS || "2000", 10);
 const SAVE_MAX_WAIT_MS = parseInt(process.env.COLLAB_SAVE_MAX_WAIT_MS || "10000", 10);
@@ -164,6 +171,23 @@ export class PersistEmptyWipeError extends Error {
   }
 }
 
+export class PersistConcatenationError extends Error {
+  constructor(
+    readonly path: string,
+    readonly existingHttpLength: number,
+    readonly proposedLength: number,
+    readonly documentClassCount: number,
+    readonly existingDocumentClassCount: number
+  ) {
+    super(
+      `[collab] refuse concatenated HTTP upsert for ${path}: ` +
+        `proposed length=${proposedLength} (${documentClassCount} \\documentclass), ` +
+        `existing project_file length=${existingHttpLength} (${existingDocumentClassCount} \\documentclass)`
+    );
+    this.name = "PersistConcatenationError";
+  }
+}
+
 export type SyncProjectFilesResult = {
   extractedCount: number;
   syncableCount: number;
@@ -224,6 +248,71 @@ export function assertNoEmptyWipeUpserts(
   }
 }
 
+/**
+ * Block HTTP upserts that would replace a clean/smaller project_file with concatenated
+ * LaTeX (multiple \\documentclass) or a dramatic size jump.
+ */
+export function assertNoConcatenatedDocumentUpserts(
+  files: Array<{ path: string; content: string }>,
+  existingByPath: Map<string, string>
+): void {
+  for (const file of files) {
+    const existing = existingByPath.get(file.path);
+    const check = checkPersistConcatenationGuard(file.path, existing, file.content);
+    if (!check.ok) {
+      throw new PersistConcatenationError(
+        check.path,
+        check.existingLength,
+        check.newLength,
+        check.documentClassCount,
+        check.existingDocumentClassCount
+      );
+    }
+  }
+}
+
+/**
+ * Replace concatenated Y.Text with HTTP truth or the first LaTeX copy before persist.
+ * Returns the number of paths repaired.
+ */
+export function repairConcatenatedTextInDoc(
+  doc: Doc,
+  existingByPath: Map<string, string>
+): number {
+  let repaired = 0;
+
+  for (const path of getSyncableTextPathsFromDoc(doc)) {
+    const shared = doc.get(path, Y.Text);
+    if (!isYTextLike(shared)) continue;
+
+    const content = shared.toString();
+    const httpContent = existingByPath.get(path);
+    const ext = getPathExtension(path);
+
+    if (ext === "bib" && httpContent && countDuplicateBibKeys(content) > 0 && countDuplicateBibKeys(httpContent) === 0) {
+      replaceYTextContent(shared, httpContent);
+      repaired += 1;
+      continue;
+    }
+
+    if (!hasMultipleDocumentCopies(content)) continue;
+
+    if (httpContent && !hasMultipleDocumentCopies(httpContent)) {
+      replaceYTextContent(shared, httpContent);
+      repaired += 1;
+      continue;
+    }
+
+    const firstCopy = extractFirstLaTeXCopy(content);
+    if (firstCopy.length > 0 && countDocumentClassLinesInFirstCopy(firstCopy) === 1) {
+      replaceYTextContent(shared, firstCopy);
+      repaired += 1;
+    }
+  }
+
+  return repaired;
+}
+
 async function loadBinaryProjectPaths(sql: postgres.Sql, projectId: string): Promise<Set<string>> {
   const rows = await sql<{ path: string }[]>`
     SELECT path FROM project_file
@@ -247,15 +336,22 @@ async function loadTextProjectFileContents(
 export async function syncProjectFilesFromDoc(
   sql: postgres.Sql,
   projectId: string,
-  doc: Doc
+  doc: Doc,
+  options: { existingByPath?: Map<string, string>; skipRepair?: boolean } = {}
 ): Promise<SyncProjectFilesResult> {
   const binaryPaths = await loadBinaryProjectPaths(sql, projectId);
+  const existingByPath =
+    options.existingByPath ?? (await loadTextProjectFileContents(sql, projectId));
+
+  if (!options.skipRepair) {
+    repairConcatenatedTextInDoc(doc, existingByPath);
+  }
+
   const extracted = getTextFilesFromDoc(doc);
   const files = filterSyncableTextFiles(extracted, binaryPaths);
   assertSyncableFilesExtracted(doc, extracted, binaryPaths);
-
-  const existingByPath = await loadTextProjectFileContents(sql, projectId);
   assertNoEmptyWipeUpserts(doc, files, existingByPath);
+  assertNoConcatenatedDocumentUpserts(files, existingByPath);
 
   for (const file of files) {
     const id = randomUUID();
@@ -303,8 +399,16 @@ function logUnchangedTexLengths(roomId: string, doc: Doc): void {
 /** Full persist pipeline: Yjs blob, HTTP project_file sync, then client ack. */
 export async function persistRoomState(sql: postgres.Sql, roomId: string, doc: Doc): Promise<void> {
   try {
+    const existingByPath = await loadTextProjectFileContents(sql, roomId);
+    const repaired = repairConcatenatedTextInDoc(doc, existingByPath);
+    if (repaired > 0) {
+      console.log(
+        `[collab] repaired ${repaired} concatenated Y.Text path(s) before persist roomId=${roomId}`
+      );
+    }
+
     await saveRoomState(sql, roomId, encodeDocState(doc));
-    await syncProjectFilesFromDoc(sql, roomId, doc);
+    await syncProjectFilesFromDoc(sql, roomId, doc, { existingByPath, skipRepair: true });
     logUnchangedTexLengths(roomId, doc);
     const pathLengths = Object.fromEntries(
       getTextFilesFromDoc(doc).map((file) => [file.path, file.content.length])
@@ -321,6 +425,11 @@ export async function persistRoomState(sql: postgres.Sql, roomId: string, doc: D
     } else if (err instanceof PersistEmptyWipeError) {
       console.error(
         `[collab] persist empty-wipe blocked for room ${roomId}:`,
+        err.message
+      );
+    } else if (err instanceof PersistConcatenationError) {
+      console.error(
+        `[collab] persist concatenation blocked for room ${roomId}:`,
         err.message
       );
     } else {

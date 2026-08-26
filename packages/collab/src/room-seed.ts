@@ -1,5 +1,6 @@
 import type postgres from "postgres";
 import type { Doc, Text } from "./yjs.js";
+import { hasMultipleDocumentCopies, countDuplicateBibKeys } from "./document-integrity.js";
 import { replaceYTextContent } from "./y-text.js";
 
 export type ProjectFileRow = {
@@ -53,6 +54,33 @@ export function seedDocFromProjectFiles(
     if (ytext.length === 0) {
       ytext.insert(0, file.content);
       seeded += 1;
+      continue;
+    }
+
+    const ytextContent = ytext.toString();
+    const httpIsCleanTex = !hasMultipleDocumentCopies(file.content);
+    const ytextIsConcatenatedTex = hasMultipleDocumentCopies(ytextContent);
+    const ext = file.path.includes(".") ? file.path.slice(file.path.lastIndexOf(".") + 1).toLowerCase() : "";
+
+    if (
+      ext === "bib" &&
+      countDuplicateBibKeys(ytextContent) > 0 &&
+      countDuplicateBibKeys(file.content) === 0 &&
+      file.content.length > 0
+    ) {
+      if (ytextContent !== file.content) {
+        replaceYTextContent(ytext, file.content);
+        seeded += 1;
+      }
+      continue;
+    }
+
+    // Stale client Yjs replay after HTTP restore: replace concatenated room text with HTTP.
+    if (ytextIsConcatenatedTex && httpIsCleanTex && file.content.length > 0) {
+      if (ytextContent !== file.content) {
+        replaceYTextContent(ytext, file.content);
+        seeded += 1;
+      }
       continue;
     }
 

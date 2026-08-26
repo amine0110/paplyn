@@ -57,6 +57,16 @@ describe("seedDocFromProjectFiles", () => {
     expect(doc.getText("main.tex").length).toBe(bloated.length);
   });
 
+  it("replaces concatenated Y.Text with clean HTTP on re-bind (stale client replay)", () => {
+    const doc = new Y.Doc();
+    doc.getText("main.tex").insert(0, SAMPLE.repeat(220));
+
+    const files = makeFiles([{ path: "main.tex", content: SAMPLE }]);
+    expect(seedDocFromProjectFiles(doc, files)).toBe(1);
+    expect(doc.getText("main.tex").toString()).toBe(SAMPLE);
+    expect(doc.getText("main.tex").toString().split("\\documentclass").length - 1).toBe(1);
+  });
+
   it("adopts newer HTTP project_file when collab room blob is older", () => {
     const doc = new Y.Doc();
     doc.getText("main.tex").insert(0, "stale yjs without marker");
