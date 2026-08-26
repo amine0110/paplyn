@@ -48,6 +48,7 @@ import { LayoutModeSwitcher } from "@/components/layout-mode-switcher";
 import { MobileWorkspaceTabs } from "@/components/mobile-workspace-tabs";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
+import { handleHardNavClick } from "@/lib/hard-navigate";
 import {
   CHROME_ICON_BTN_MD,
   CHROME_ICON_BTN_SM,
@@ -1026,6 +1027,7 @@ export default function ProjectPage() {
             aria-label="Back to manuscripts"
             title="Back to manuscripts"
             className={CHROME_ICON_BTN_MD}
+            onClick={(event) => handleHardNavClick(event, "/dashboard")}
           >
             <ChevronLeft className="h-4 w-4" />
           </Link>

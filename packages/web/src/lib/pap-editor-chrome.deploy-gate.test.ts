@@ -9,19 +9,22 @@ function readSrc(relativePath: string): string {
 }
 
 describe("PAP-19/20/21 editor chrome deploy gate", () => {
-  it("PAP-19: project header back control navigates to /dashboard in-app", () => {
+  it("PAP-19: project header back control hard-navigates to /dashboard in-app", () => {
     const page = readSrc("app/project/[id]/page.tsx");
     expect(page).toContain('href="/dashboard"');
     expect(page).toContain('aria-label="Back to manuscripts"');
     expect(page).toContain("CHROME_ICON_BTN_MD");
+    expect(page).toContain("handleHardNavClick");
+    expect(page).toMatch(/handleHardNavClick\([\s\S]*?["']\/dashboard["']/);
     expect(page).not.toContain("window.confirm");
   });
 
-  it("PAP-20: shared chrome classes and buttons expose pointer affordance", () => {
+  it("PAP-20: shared chrome classes, buttons, and AI FAB expose pointer affordance", () => {
     const css = readSrc("app/globals.css");
     expect(css).toContain(".chrome-icon-btn-md");
     expect(css).toMatch(/\.chrome-icon-btn-md[\s\S]*cursor-pointer/);
     expect(readSrc("components/ui/button.tsx")).toContain("cursor-pointer");
+    expect(readSrc("components/ai-assistant-fab.tsx")).toContain("cursor-pointer");
   });
 
   it("PAP-21: arXiv UI opens papers and cites without TeX import route", () => {

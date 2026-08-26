@@ -17,7 +17,7 @@ export function AiAssistantFab({ onClick, className }: AiAssistantFabProps) {
       onClick={onClick}
       aria-label="Open AI assistant"
       className={cn(
-        "fixed z-40 flex h-12 w-12 items-center justify-center rounded-full",
+        "fixed z-40 flex h-12 w-12 cursor-pointer items-center justify-center rounded-full",
         "bg-accent text-white shadow-lg",
         "transition-colors hover:bg-accent-light active:scale-95",
         FOCUS_RING,
