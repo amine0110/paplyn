@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { usePathname } from "next/navigation";
 import { Document, Page, pdfjs } from "react-pdf";
 import {
   AlertCircle,
@@ -11,8 +12,9 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DetectedErrorReportFooter } from "@/components/detected-error-report-footer";
 import { FixWithAiButton } from "@/components/fix-with-ai-button";
-import { ReportIssueLink } from "@/components/report-issue-link";
+import { reportDetectedError } from "@/lib/report-detected-error";
 import { downloadPdfBase64 } from "@/lib/project-files";
 import {
   buildPdfClickDomContext,
@@ -78,6 +80,8 @@ export function PdfPreview({
   staleErrorCount = 0,
   onFixWithAi,
 }: PdfPreviewProps) {
+  const pathname = usePathname();
+  const [autoReportSent, setAutoReportSent] = useState(false);
   const [numPages, setNumPages] = useState(0);
   const [page, setPage] = useState(1);
   const [scale, setScale] = useState(getDefaultPdfScale);
@@ -137,6 +141,34 @@ export function PdfPreview({
     return () => canvas.removeEventListener("click", handleCanvasClick);
   }, [handleCanvasClick, synctexData, onJumpToLine, page, scale]);
 
+  const failureMessage = useMemo(() => {
+    if (loading || pdfData) return null;
+    return (
+      compileErrors.find((error) => error.severity === "error")?.message ||
+      (compileFailed ? "Compilation failed — see errors below the editor" : null)
+    );
+  }, [loading, pdfData, compileErrors, compileFailed]);
+
+  useEffect(() => {
+    if (!failureMessage) {
+      setAutoReportSent(false);
+      return;
+    }
+
+    let cancelled = false;
+    void reportDetectedError({
+      kind: "compile",
+      message: failureMessage,
+      page: pathname,
+    }).then((result) => {
+      if (!cancelled) setAutoReportSent(result.sent);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [failureMessage, pathname]);
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center text-ink-muted text-sm font-serif">
@@ -146,10 +178,6 @@ export function PdfPreview({
   }
 
   if (!pdfData) {
-    const failureMessage =
-      compileErrors.find((e) => e.severity === "error")?.message ||
-      (compileFailed ? "Compilation failed — see errors below the editor" : null);
-
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-ink-muted text-sm font-serif px-6 text-center gap-2">
         {failureMessage ? (
@@ -163,7 +191,13 @@ export function PdfPreview({
                 className="mt-2"
               />
             )}
-            <ReportIssueLink className="mt-2" />
+            <DetectedErrorReportFooter
+              sent={autoReportSent}
+              message={failureMessage}
+              kind="compile"
+              page={pathname}
+              className="mt-2"
+            />
           </>
         ) : (
           <>

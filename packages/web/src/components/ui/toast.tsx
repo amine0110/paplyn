@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/components/ui/cn";
+import { ErrorReportLink } from "@/components/error-report-link";
 
 export type ToastVariant = "error" | "success" | "info";
 
@@ -21,7 +22,12 @@ export function Toast({ message, variant = "info" }: ToastProps) {
         variant === "info" && "text-ink"
       )}
     >
-      {message}
+      <p>{message}</p>
+      {variant === "error" && (
+        <div className="mt-2">
+          <ErrorReportLink message={message} className="text-error/90 hover:text-error" />
+        </div>
+      )}
     </div>
   );
 }

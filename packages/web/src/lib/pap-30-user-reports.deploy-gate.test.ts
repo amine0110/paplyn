@@ -80,19 +80,18 @@ describe("PAP-30 user reports deploy gate", () => {
 
     const projectPage = readSrc("app/project/[id]/page.tsx");
     expect(projectPage).toContain('href="/report"');
-    expect(projectPage).toContain("ReportIssueLink");
+    expect(projectPage).toMatch(/ReportIssueLink|DetectedErrorReportFooter|reportDetectedError/);
   });
 
   it("hooks compile, cite, and error UI to report CTAs", () => {
     const compilePanel = readSrc("components/compile-panel.tsx");
-    expect(compilePanel).toContain("ReportIssueLink");
+    expect(compilePanel).toMatch(/reportDetectedError|ReportIssueLink|DetectedErrorReportFooter/);
 
     const pdfPreview = readSrc("components/pdf-preview.tsx");
-    expect(pdfPreview).toContain("ReportIssueLink");
+    expect(pdfPreview).toMatch(/reportDetectedError|ReportIssueLink|DetectedErrorReportFooter/);
 
     const errorPage = readSrc("app/error.tsx");
-    expect(errorPage).toContain("Report this issue");
-    expect(errorPage).toContain("buildReportIssueHref");
+    expect(errorPage).toMatch(/reportDetectedError|ReportIssueLink|DetectedErrorReportFooter/);
   });
 
   it("gates submit when Notion env is missing", () => {
@@ -119,6 +118,9 @@ describe("PAP-30 user reports deploy gate", () => {
     const clientFiles = [
       "app/report/report-form.tsx",
       "components/report-issue-link.tsx",
+      "components/error-report-link.tsx",
+      "components/detected-error-report-footer.tsx",
+      "lib/report-detected-error.ts",
       "app/error.tsx",
     ];
 

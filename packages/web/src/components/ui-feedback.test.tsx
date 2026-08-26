@@ -69,5 +69,6 @@ describe("UiFeedback notice", () => {
     expect(toast).toHaveTextContent("Could not resolve DOI");
     expect(toast).toHaveClass("text-error");
     expect(toast).not.toHaveClass("text-accent");
+    expect(screen.getByRole("link", { name: "Report this issue" })).toBeInTheDocument();
   });
 });

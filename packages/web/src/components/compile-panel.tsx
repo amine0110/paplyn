@@ -1,9 +1,12 @@
 "use client";
 
 import { AlertCircle, AlertTriangle } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
+import { DetectedErrorReportFooter } from "@/components/detected-error-report-footer";
 import { FixWithAiButton } from "@/components/fix-with-ai-button";
-import { ReportIssueLink } from "@/components/report-issue-link";
 import { CHROME_LINK, CHROME_MENU_ITEM } from "@/lib/chrome-interactive";
+import { reportDetectedError } from "@/lib/report-detected-error";
 
 interface CompileError {
   line?: number;
@@ -21,13 +24,45 @@ interface CompilePanelProps {
   onFixWithAi?: () => void;
 }
 
+function compileFailureMessage(errors: CompileError[]): string {
+  const errorList = errors.filter((error) => error.severity === "error");
+  if (errorList.length === 0) return "Compilation failed";
+  return errorList
+    .slice(0, 5)
+    .map((error) => (error.line ? `L${error.line}: ${error.message}` : error.message))
+    .join("\n");
+}
+
 export function CompilePanel({ log, errors, onJumpToLine, showLog, onToggleLog, onFixWithAi }: CompilePanelProps) {
   const errorList = errors.filter((e) => e.severity === "error");
   const warnList = errors.filter((e) => e.severity === "warning");
+  const pathname = usePathname();
+  const [autoReportSent, setAutoReportSent] = useState(false);
+  const failureMessage = useMemo(() => compileFailureMessage(errors), [errors]);
 
   const hasErrors = errorList.length > 0;
   const hasWarnings = warnList.length > 0;
   const hasLog = log.trim().length > 0;
+
+  useEffect(() => {
+    if (!hasErrors) {
+      setAutoReportSent(false);
+      return;
+    }
+
+    let cancelled = false;
+    void reportDetectedError({
+      kind: "compile",
+      message: failureMessage,
+      page: pathname,
+    }).then((result) => {
+      if (!cancelled) setAutoReportSent(result.sent);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasErrors, failureMessage, pathname]);
 
   if (!hasErrors && !hasWarnings && !showLog && !hasLog) return null;
 
@@ -44,7 +79,16 @@ export function CompilePanel({ log, errors, onJumpToLine, showLog, onToggleLog, 
           {onFixWithAi && (
             <FixWithAiButton errorCount={errorList.length} onClick={onFixWithAi} />
           )}
-          {hasErrors && <ReportIssueLink className="text-xs" />}
+          {hasErrors && (
+            <DetectedErrorReportFooter
+              sent={autoReportSent}
+              message={failureMessage}
+              kind="compile"
+              page={pathname}
+              className="justify-start"
+              linkClassName="text-xs"
+            />
+          )}
           {warnList.length > 0 && (
             <span className="flex items-center gap-1 text-accent">
               <AlertTriangle className="h-3.5 w-3.5" />

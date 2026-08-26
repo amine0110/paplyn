@@ -88,6 +88,25 @@ describe("POST /api/user-reports", () => {
     expect(data.ok).toBe(true);
   });
 
+  it("accepts auto-detected error reports without turnstile", async () => {
+    process.env.NOTION_USER_REPORTS_TOKEN = "secret";
+    const { verifyTurnstileToken } = await import("@/lib/user-reports-turnstile");
+    vi.mocked(verifyTurnstileToken).mockClear();
+
+    const response = await POST(
+      makeRequest({
+        title: "Compile failed",
+        whatHappened: "Undefined control sequence",
+        source: "error",
+        page: "/project/1",
+        autoDetected: true,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(verifyTurnstileToken).not.toHaveBeenCalled();
+  });
+
   it("passes signed-in session email and defaults page to /report", async () => {
     process.env.NOTION_USER_REPORTS_TOKEN = "secret";
     vi.mocked(getSession).mockResolvedValueOnce({

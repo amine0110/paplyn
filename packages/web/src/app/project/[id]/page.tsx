@@ -26,7 +26,7 @@ import {
   resolveMainFileAfterRename,
 } from "@/lib/project-files";
 import { CompilePanel } from "@/components/compile-panel";
-import { ReportIssueLink } from "@/components/report-issue-link";
+import { DetectedErrorReportFooter } from "@/components/detected-error-report-footer";
 import { ProjectSettingsDialog } from "@/components/project-settings-dialog";
 import { ShareDialog } from "@/components/share-dialog";
 import { HistoryDialog } from "@/components/history-dialog";
@@ -81,6 +81,7 @@ import { countDocumentStats } from "@/lib/document-stats";
 import type { SaveStatus } from "@/lib/save-status";
 import { saveProjectFile } from "@/lib/save-file";
 import { runCollabSaveFallback } from "@/lib/collab-save-fallback";
+import { reportDetectedError } from "@/lib/report-detected-error";
 import type { AiPaper, ArxivPaperResult, DoiCitationPayload, ZoteroItemResult } from "@/lib/ai-types";
 import {
   appendBibEntry,
@@ -169,6 +170,8 @@ export default function ProjectPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [citeReportPrompt, setCiteReportPrompt] = useState(false);
+  const [citeAutoReportSent, setCiteAutoReportSent] = useState(false);
+  const [citeFailureMessage, setCiteFailureMessage] = useState("");
 
   const editorViewRef = useRef<EditorView | null>(null);
   const [editorView, setEditorView] = useState<EditorView | null>(null);
@@ -696,15 +699,25 @@ export default function ProjectPage() {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
+      const message = typeof err.error === "string" ? err.error : "Could not resolve DOI";
       notice({
-        message: typeof err.error === "string" ? err.error : "Could not resolve DOI",
+        message,
         variant: "error",
       });
+      const reportResult = await reportDetectedError({
+        kind: "cite",
+        message,
+        page: `/project/${projectId}`,
+      });
+      setCiteFailureMessage(message);
+      setCiteAutoReportSent(reportResult.sent);
       setCiteReportPrompt(true);
       return;
     }
 
     setCiteReportPrompt(false);
+    setCiteAutoReportSent(false);
+    setCiteFailureMessage("");
 
     const data = await res.json();
     await applyDoiCitation(data);
@@ -773,9 +786,15 @@ export default function ProjectPage() {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
+      const message = typeof err.error === "string" ? err.error : "Could not cite from Zotero";
       notice({
-        message: typeof err.error === "string" ? err.error : "Could not cite from Zotero",
+        message,
         variant: "error",
+      });
+      void reportDetectedError({
+        kind: "cite",
+        message,
+        page: `/project/${projectId}`,
       });
       return;
     }
@@ -1308,8 +1327,17 @@ export default function ProjectPage() {
           </div>
           {citeReportPrompt && (
             <div className="flex items-center justify-between gap-3 px-3 py-2 border-t border-border bg-error/5 text-sm shrink-0">
-              <span className="text-ink-muted">Could not cite from DOI.</span>
-              <ReportIssueLink />
+              <span className="text-ink-muted">
+                {citeFailureMessage || "Could not cite from DOI."}
+              </span>
+              <DetectedErrorReportFooter
+                sent={citeAutoReportSent}
+                message={citeFailureMessage || "Could not cite from DOI."}
+                kind="cite"
+                page={`/project/${projectId}`}
+                className="justify-end"
+                linkClassName="text-xs"
+              />
             </div>
           )}
           <CompilePanel
