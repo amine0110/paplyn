@@ -84,7 +84,7 @@ export function getForcedToolPrompt(toolName: string): string | undefined {
 export function resolveForcedToolChoice(options: {
   forcedTool?: string;
   userMessage: string;
-  pluginTools: Record<PluginToolName, Tool>;
+  pluginTools: Record<string, Tool>;
 }): PluginToolName | undefined {
   const { forcedTool, userMessage, pluginTools } = options;
   if (!forcedTool || !isPluginToolName(forcedTool)) return undefined;
