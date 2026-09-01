@@ -1,31 +1,49 @@
-/** One automatic compile-fix retry after a post-fix compile still fails. */
+/** Bounded automatic compile-fix retries after post-fix compiles still fail. */
+
+/** Total compile-fix rounds per user session (first manual turn + auto-retries). */
+export const COMPILE_FIX_MAX_ROUNDS = 4;
+
+/** Automatic follow-up compile-fix turns after the first manual compile-fix. */
+export const COMPILE_FIX_MAX_AUTO_RETRIES = COMPILE_FIX_MAX_ROUNDS - 1;
 
 export interface CompileFixRetrySession {
-  /** User initiated a compile-fix flow; one auto-retry is allowed per session. */
+  /** User initiated a compile-fix flow; bounded auto-retries are allowed per session. */
   active: boolean;
-  autoRetryUsed: boolean;
+  /** How many automatic compile-fix retries have already been scheduled. */
+  autoRetryCount: number;
   /** Compile was scheduled after compile-fix edits landed. */
   awaitingPostFixCompile: boolean;
+  /** Fingerprint of errors from the last post-fix compile (for no-progress detection). */
+  lastErrorFingerprint?: string;
+}
+
+export interface CompileErrorFingerprintInput {
+  message: string;
+  file?: string;
+  line?: number;
+  severity?: "error" | "warning";
 }
 
 export function createCompileFixRetrySession(): CompileFixRetrySession {
   return {
     active: false,
-    autoRetryUsed: false,
+    autoRetryCount: 0,
     awaitingPostFixCompile: false,
   };
 }
 
 export function beginCompileFixRetrySession(session: CompileFixRetrySession): void {
   session.active = true;
-  session.autoRetryUsed = false;
+  session.autoRetryCount = 0;
   session.awaitingPostFixCompile = false;
+  session.lastErrorFingerprint = undefined;
 }
 
 export function endCompileFixRetrySession(session: CompileFixRetrySession): void {
   session.active = false;
-  session.autoRetryUsed = false;
+  session.autoRetryCount = 0;
   session.awaitingPostFixCompile = false;
+  session.lastErrorFingerprint = undefined;
 }
 
 export function markCompileFixEditsApplied(
@@ -36,14 +54,30 @@ export function markCompileFixEditsApplied(
   session.awaitingPostFixCompile = true;
 }
 
+/** Stable fingerprint of compile errors for no-progress detection. */
+export function fingerprintCompileErrors(errors: CompileErrorFingerprintInput[]): string {
+  return errors
+    .filter((entry) => entry.severity !== "warning")
+    .map((entry) => `${entry.file ?? ""}:${entry.line ?? ""}:${entry.message}`)
+    .sort()
+    .join("|");
+}
+
 export interface CompileFixAutoRetryDecision {
   shouldRetry: boolean;
-  reason?: "still_has_errors" | "success" | "no_session" | "no_edits" | "retry_used";
+  reason?:
+    | "still_has_errors"
+    | "success"
+    | "no_session"
+    | "no_edits"
+    | "retry_used"
+    | "no_progress";
 }
 
 export function decideCompileFixAutoRetry(
   session: CompileFixRetrySession,
-  compileErrorCount: number
+  compileErrorCount: number,
+  errorFingerprint?: string
 ): CompileFixAutoRetryDecision {
   if (!session.awaitingPostFixCompile) {
     return { shouldRetry: false, reason: "no_edits" };
@@ -60,11 +94,23 @@ export function decideCompileFixAutoRetry(
     return { shouldRetry: false, reason: "success" };
   }
 
-  if (session.autoRetryUsed) {
+  if (
+    errorFingerprint &&
+    session.lastErrorFingerprint &&
+    errorFingerprint === session.lastErrorFingerprint
+  ) {
+    session.active = false;
+    return { shouldRetry: false, reason: "no_progress" };
+  }
+
+  if (session.autoRetryCount >= COMPILE_FIX_MAX_AUTO_RETRIES) {
     session.active = false;
     return { shouldRetry: false, reason: "retry_used" };
   }
 
-  session.autoRetryUsed = true;
+  session.autoRetryCount += 1;
+  if (errorFingerprint) {
+    session.lastErrorFingerprint = errorFingerprint;
+  }
   return { shouldRetry: true, reason: "still_has_errors" };
 }

@@ -613,6 +613,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       ? {
           maxGetFileCalls: COMPILE_FIX_MAX_GET_FILE_CALLS,
           compileFix: true,
+          manuscriptGuards: true,
           citedErrorLocation: primaryErrorLocation,
           refreshTexFiles: refreshTexFilesFromDb,
           onGetFileCall: (call) => {
@@ -624,6 +625,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           },
         }
       : {
+          manuscriptGuards: compileDiagnosticsReviewTurn,
           compileDiagnostics: hasCompileDiagnostics
             ? {
                 errors: mergedCompileDiagnostics,

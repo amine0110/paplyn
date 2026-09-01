@@ -1,7 +1,7 @@
 /** Client-side editor actions returned by the AI assistant API. */
 
 import { validateNoSiblingCommandStacking } from "@/lib/ai-edit-guards";
-import { validateCompileFixEdit } from "@/lib/ai-compile-fix-validation";
+import { validateCompileFixEdit, validateNoDummyManuscriptContent } from "@/lib/ai-compile-fix-validation";
 
 export const MAX_CLIENT_EDIT_CHARS = 8_000;
 
@@ -161,6 +161,8 @@ export interface ValidateActionContext {
   hasSelection: boolean;
   /** When true, apply compile-fix preamble/first-copy guards. */
   compileFix?: boolean;
+  /** When true, reject placeholder tables/figures/bibliography invented for compile/warning fixes. */
+  manuscriptGuards?: boolean;
 }
 
 export interface ValidatedAction {
@@ -323,7 +325,8 @@ function rejectCompileFixEdit(
   replace: string,
   previewContent: string,
   startLine?: number,
-  endLine?: number
+  endLine?: number,
+  search?: string
 ): RejectedAction | null {
   const check = validateCompileFixEdit({
     content,
@@ -331,7 +334,19 @@ function rejectCompileFixEdit(
     previewContent,
     startLine,
     endLine,
+    search,
   });
+  if (check.ok) return null;
+  return { rejected: true, reason: check.reason };
+}
+
+function rejectDummyManuscriptEdit(
+  ctx: ValidateActionContext,
+  replace: string,
+  originalLines?: string[]
+): RejectedAction | null {
+  if (!ctx.manuscriptGuards || ctx.compileFix) return null;
+  const check = validateNoDummyManuscriptContent({ replace, originalLines });
   if (check.ok) return null;
   return { rejected: true, reason: check.reason };
 }
@@ -524,8 +539,18 @@ export function validateClientAction(
       const stackingReject = rejectSiblingCommandStacking(content, preview.content);
       if (stackingReject) return stackingReject;
 
+      const dummyReject = rejectDummyManuscriptEdit(ctx, replace, preview.search.split("\n"));
+      if (dummyReject) return dummyReject;
+
       if (ctx.compileFix) {
-        const compileFixReject = rejectCompileFixEdit(content, replace, preview.content);
+        const compileFixReject = rejectCompileFixEdit(
+          content,
+          replace,
+          preview.content,
+          undefined,
+          undefined,
+          preview.search
+        );
         if (compileFixReject) return compileFixReject;
       }
 
@@ -560,6 +585,10 @@ export function validateClientAction(
 
       const stackingReject = rejectSiblingCommandStacking(content, preview.content);
       if (stackingReject) return stackingReject;
+
+      const originalLines = content.split("\n").slice(raw.startLine - 1, raw.endLine);
+      const dummyReject = rejectDummyManuscriptEdit(ctx, raw.replace, originalLines);
+      if (dummyReject) return dummyReject;
 
       if (ctx.compileFix) {
         const compileFixReject = rejectCompileFixEdit(
@@ -608,8 +637,20 @@ export function validateClientAction(
           rejections.push(`${file}: ${stackingReject.reason}`);
           continue;
         }
+        const dummyReject = rejectDummyManuscriptEdit(ctx, replace, preview.search.split("\n"));
+        if (dummyReject) {
+          rejections.push(`${file}: ${dummyReject.reason}`);
+          continue;
+        }
         if (ctx.compileFix) {
-          const compileFixReject = rejectCompileFixEdit(content, replace, preview.content);
+          const compileFixReject = rejectCompileFixEdit(
+            content,
+            replace,
+            preview.content,
+            undefined,
+            undefined,
+            preview.search
+          );
           if (compileFixReject) {
             rejections.push(`${file}: ${compileFixReject.reason}`);
             continue;

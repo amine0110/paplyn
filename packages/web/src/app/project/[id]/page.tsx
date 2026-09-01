@@ -41,6 +41,7 @@ import {
   createCompileFixRetrySession,
   decideCompileFixAutoRetry,
   endCompileFixRetrySession,
+  fingerprintCompileErrors,
   markCompileFixEditsApplied,
 } from "@/lib/compile-fix-auto-retry";
 import { mergeCompileDiagnostics } from "@/lib/compile-log-diagnostics";
@@ -386,6 +387,7 @@ export default function ProjectPage() {
   const compile = useCallback(async () => {
     const hadPdfBeforeCompile = pdfData !== null;
     let compileErrorCount = 0;
+    let compileErrorsSnapshot: CompileError[] = [];
     setCompiling(true);
     setCompileErrors([]);
     openProof();
@@ -397,6 +399,7 @@ export default function ProjectPage() {
         setCompileLog("");
         const errors: CompileError[] = [{ message: result.error, severity: "error" }];
         compileErrorCount = errors.length;
+        compileErrorsSnapshot = errors;
         setCompileErrors(errors);
         const stale = deriveProofStaleAfterCompile(hadPdfBeforeCompile, { success: false }, errors);
         setProofIsStale(stale.isStale);
@@ -420,6 +423,7 @@ export default function ProjectPage() {
           ];
         }
         compileErrorCount = countCompileErrors(errors);
+        compileErrorsSnapshot = errors;
         setCompileErrors(errors);
         const stale = deriveProofStaleAfterCompile(hadPdfBeforeCompile, result, errors);
         setProofIsStale(stale.isStale);
@@ -437,6 +441,7 @@ export default function ProjectPage() {
       setCompileLog("");
       const errors: CompileError[] = [{ message: "Failed to compile", severity: "error" }];
       compileErrorCount = errors.length;
+      compileErrorsSnapshot = errors;
       setCompileErrors(errors);
       const stale = deriveProofStaleAfterCompile(hadPdfBeforeCompile, { success: false }, errors);
       setProofIsStale(stale.isStale);
@@ -445,7 +450,8 @@ export default function ProjectPage() {
 
       const retryDecision = decideCompileFixAutoRetry(
         compileFixRetryRef.current,
-        compileErrorCount
+        compileErrorCount,
+        fingerprintCompileErrors(compileErrorsSnapshot)
       );
       if (retryDecision.shouldRetry) {
         setAiPendingRequest(buildCompileFixAutoRetryRequest());
