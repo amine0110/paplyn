@@ -443,7 +443,6 @@ export default function DashboardPage() {
                   type="file"
                   accept=".zip,application/zip"
                   onChange={handleImportZipChange}
-                  required
                 />
                 {importZip && (
                   <p className="text-xs text-ink-faint">{importZip.name}</p>
