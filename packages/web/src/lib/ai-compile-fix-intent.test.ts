@@ -3,9 +3,12 @@ import {
   buildCompileFixAiRequest,
   COMPILE_FIX_ACTION,
   COMPILE_FIX_USER_MESSAGE,
-  detectCompileDiagnosticsIntent,
   detectFixCompileIntent,
 } from "./ai-compile-fix-intent";
+import {
+  classifyCompileDiagnosticsReviewFallback,
+  detectCompileDiagnosticsIntent,
+} from "./ai-compile-diagnostics-intent";
 
 describe("compile-fix request helpers", () => {
   it("exposes the canonical compile-fix user message", () => {
@@ -52,8 +55,9 @@ describe("detectCompileDiagnosticsIntent", () => {
     expect(detectCompileDiagnosticsIntent("can you see the warnings that are showing")).toBe(
       true
     );
-    expect(detectCompileDiagnosticsIntent("Any overfull hbox issues?")).toBe(true);
-    expect(detectCompileDiagnosticsIntent("Check the compile log for undefined references")).toBe(
+    expect(detectCompileDiagnosticsIntent("why is the PDF failing")).toBe(true);
+    expect(detectCompileDiagnosticsIntent("what happened on the last build")).toBe(true);
+    expect(classifyCompileDiagnosticsReviewFallback("those yellow messages under the editor")).toBe(
       true
     );
   });
