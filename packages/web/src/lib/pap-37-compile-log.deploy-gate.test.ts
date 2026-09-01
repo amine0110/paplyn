@@ -19,6 +19,9 @@ describe("PAP-37 compile diagnostics deploy gate", () => {
 
   it("treats warning review as compile-aware without compile-fix", () => {
     expect(detectCompileDiagnosticsIntent(warningsMessage)).toBe(true);
+    expect(detectCompileDiagnosticsIntent("can you see the warnings that are showing")).toBe(
+      true
+    );
     expect(detectFixCompileIntent(warningsMessage)).toBe(false);
   });
 
@@ -42,8 +45,8 @@ describe("PAP-37 compile diagnostics deploy gate", () => {
     expect(routeSrc).toContain("compileLog");
     expect(routeSrc).toContain("normalizeAiCompileDiagnostics");
     expect(routeSrc).toContain("buildCompileDiagnosticsContext");
-    expect(routeSrc).toContain("detectCompileDiagnosticsIntent");
-    expect(routeSrc).toContain("includeCompileDiagnostics");
+    expect(routeSrc).toContain("mergeCompileDiagnostics");
+    expect(routeSrc).toContain("COMPILE_DIAGNOSTICS_REVIEW_SUFFIX");
 
     const workspaceSrc = readSrc("lib/ai-plugins/workspace-tools.ts");
     expect(workspaceSrc).toContain("get_compile_diagnostics");

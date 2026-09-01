@@ -119,6 +119,10 @@ const COMPILE_DIAGNOSTICS_FALLBACK_PATTERNS: RegExp[] = [
   /\bxelatex log\b/i,
   /\blualatex log\b/i,
   /\b(?:see|read|show|review) (?:the )?log\b/i,
+  /\bsee the warnings\b/i,
+  /\bwarnings? (?:that are )?showing\b/i,
+  /\bcan you see\b.+\bwarnings?\b/i,
+  /\bwarnings?\b.+\bcan you see\b/i,
 ];
 
 const CHAT_FALLBACK_PATTERNS: RegExp[] = [

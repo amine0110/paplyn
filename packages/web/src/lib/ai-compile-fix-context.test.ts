@@ -88,6 +88,15 @@ describe("buildCompileDiagnosticsContext", () => {
 
     expect(context).toContain("Compile warnings:");
     expect(context).toContain("main.tex:4: Overfull \\hbox");
+    expect(context).not.toContain("Compile log excerpt:");
+  });
+
+  it("includes log excerpt only when structured diagnostics are empty", () => {
+    const context = buildCompileDiagnosticsContext({
+      errors: [],
+      log: "This is pdfTeX\nOutput written on main.pdf",
+      includeRawLog: true,
+    });
     expect(context).toContain("Compile log excerpt:");
     expect(context).toContain("This is pdfTeX");
   });
