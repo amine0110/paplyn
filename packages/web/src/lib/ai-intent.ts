@@ -68,7 +68,7 @@ const EDIT_FALLBACK_PATTERNS: RegExp[] = [
   /\bmention\b/i,
   /\binsert\b/i,
   /\breplace\b/i,
-  /\bfix\b.+\b(text|wording|grammar|typo)\b/i,
+  /\bfix\b.+\b(text|wording|grammar|typo|abstract|introduction|conclusion|section|paragraph)\b/i,
   /\bimprove\b/i,
   /\btighten\b/i,
   /\bshorten\b/i,
@@ -131,6 +131,16 @@ export function pluginToolNamesForIntent(intent: AiIntent): readonly PluginToolN
   return PLUGIN_TOOLS_BY_INTENT[intent];
 }
 
+export function mountedPluginToolNames(options: {
+  intent: AiIntent;
+  forcedToolName?: PluginToolName;
+  compileFix: boolean;
+}): readonly PluginToolName[] {
+  if (options.compileFix) return [];
+  if (options.forcedToolName) return [options.forcedToolName];
+  return pluginToolNamesForIntent(options.intent);
+}
+
 export function workspaceToolNamesForIntent(intent: AiIntent): readonly string[] {
   if (intent === "chat") {
     return WORKSPACE_READ_TOOL_NAMES;
@@ -138,13 +148,34 @@ export function workspaceToolNamesForIntent(intent: AiIntent): readonly string[]
   return WORKSPACE_TOOL_NAMES;
 }
 
-export function pluginSystemPromptForIntent(intent: AiIntent, plugins: AiPlugin[]): string {
-  const mounted = new Set(pluginToolNamesForIntent(intent));
+export function pluginSystemPromptForMountedTools(
+  mountedToolNames: readonly PluginToolName[],
+  plugins: AiPlugin[]
+): string {
+  const mounted = new Set(mountedToolNames);
   return plugins
     .filter((plugin) => mounted.has(plugin.toolName as PluginToolName))
     .map((plugin) => plugin.systemPrompt?.trim())
     .filter(Boolean)
     .join("\n\n");
+}
+
+export function pluginSystemPromptForIntent(intent: AiIntent, plugins: AiPlugin[]): string {
+  return pluginSystemPromptForMountedTools(pluginToolNamesForIntent(intent), plugins);
+}
+
+export function pluginActionPromptForMountedTools(
+  mountedToolNames: readonly PluginToolName[],
+  action: string,
+  plugins: AiPlugin[]
+): string | undefined {
+  const mounted = new Set(mountedToolNames);
+  for (const plugin of plugins) {
+    if (!mounted.has(plugin.toolName as PluginToolName)) continue;
+    const prompt = plugin.actionPrompts?.[action]?.trim();
+    if (prompt) return prompt;
+  }
+  return undefined;
 }
 
 export function pickToolsByName<T extends Tool>(
@@ -173,14 +204,22 @@ export function toolsForIntent(
   return { ...pluginSubset, ...workspaceSubset };
 }
 
+export function toolsForForcedPlugin(
+  forcedToolName: PluginToolName,
+  pluginTools: Record<string, Tool>,
+  workspaceTools: Record<string, Tool>
+): Record<string, Tool> {
+  const forcedTool = pluginTools[forcedToolName];
+  if (!forcedTool) return { ...workspaceTools };
+  return { [forcedToolName]: forcedTool, ...workspaceTools };
+}
+
 export function getAllowedPluginToolNames(options: {
   intent: AiIntent;
   forcedToolName?: PluginToolName;
   compileFix: boolean;
 }): Set<PluginToolName> {
-  if (options.compileFix) return new Set();
-  if (options.forcedToolName) return new Set([options.forcedToolName]);
-  return new Set(pluginToolNamesForIntent(options.intent));
+  return new Set(mountedPluginToolNames(options));
 }
 
 const DISALLOWED_PLUGIN_TOOL_MESSAGE =
