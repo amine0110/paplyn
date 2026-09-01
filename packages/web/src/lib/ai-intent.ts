@@ -106,6 +106,21 @@ const IMPORT_FALLBACK_PATTERNS: RegExp[] = [
   /\bparse_github_repo\b/i,
 ];
 
+const COMPILE_DIAGNOSTICS_FALLBACK_PATTERNS: RegExp[] = [
+  /\bwarnings?\b/i,
+  /\boverfull\b/i,
+  /\bunderfull\b/i,
+  /\bundefined references?\b/i,
+  /\bcheck (?:the )?compile\b/i,
+  /\bseveral warnings?\b/i,
+  /\bcompile log\b/i,
+  /\bcompilation log\b/i,
+  /\bpdflatex log\b/i,
+  /\bxelatex log\b/i,
+  /\blualatex log\b/i,
+  /\b(?:see|read|show|review) (?:the )?log\b/i,
+];
+
 const CHAT_FALLBACK_PATTERNS: RegExp[] = [
   /\bwhat (?:is|does|are)\b/i,
   /\bexplain\b/i,
@@ -131,11 +146,18 @@ export function pluginToolNamesForIntent(intent: AiIntent): readonly PluginToolN
   return PLUGIN_TOOLS_BY_INTENT[intent];
 }
 
-export function workspaceToolNamesForIntent(intent: AiIntent): readonly string[] {
+export function workspaceToolNamesForIntent(
+  intent: AiIntent,
+  options?: { includeCompileDiagnostics?: boolean }
+): readonly string[] {
   if (intent === "chat") {
-    return WORKSPACE_READ_TOOL_NAMES;
+    return options?.includeCompileDiagnostics
+      ? WORKSPACE_READ_TOOL_NAMES
+      : ["list_files", "get_file"];
   }
-  return WORKSPACE_TOOL_NAMES;
+  return options?.includeCompileDiagnostics
+    ? WORKSPACE_TOOL_NAMES
+    : WORKSPACE_TOOL_NAMES.filter((name) => name !== "get_compile_diagnostics");
 }
 
 export function pluginSystemPromptForIntent(intent: AiIntent, plugins: AiPlugin[]): string {
@@ -163,12 +185,13 @@ export function pickToolsByName<T extends Tool>(
 export function toolsForIntent(
   intent: AiIntent,
   pluginTools: Record<string, Tool>,
-  workspaceTools: Record<string, Tool>
+  workspaceTools: Record<string, Tool>,
+  options?: { includeCompileDiagnostics?: boolean }
 ): Record<string, Tool> {
   const pluginSubset = pickToolsByName(pluginTools, pluginToolNamesForIntent(intent));
   const workspaceSubset = pickToolsByName(
     workspaceTools,
-    workspaceToolNamesForIntent(intent)
+    workspaceToolNamesForIntent(intent, options)
   );
   return { ...pluginSubset, ...workspaceSubset };
 }
@@ -227,10 +250,11 @@ export function classifyAiIntentFallback(options: {
   forcedTool?: string;
   action?: string;
   compileFix?: boolean;
+  compileDiagnostics?: boolean;
 }): AiIntent {
-  const { message, forcedTool, action, compileFix } = options;
+  const { message, forcedTool, action, compileFix, compileDiagnostics } = options;
 
-  if (compileFix) return "edit";
+  if (compileFix || compileDiagnostics) return "edit";
 
   const fromForced = intentFromForcedTool(forcedTool);
   if (fromForced) return fromForced;
@@ -257,6 +281,10 @@ export function classifyAiIntentFallback(options: {
     return "import";
   }
 
+  if (COMPILE_DIAGNOSTICS_FALLBACK_PATTERNS.some((pattern) => pattern.test(trimmed))) {
+    return "edit";
+  }
+
   if (EDIT_FALLBACK_PATTERNS.some((pattern) => pattern.test(trimmed))) {
     return "edit";
   }
@@ -273,11 +301,12 @@ export async function classifyAiIntent(options: {
   forcedTool?: string;
   action?: string;
   compileFix?: boolean;
+  compileDiagnostics?: boolean;
   model?: LanguageModel;
 }): Promise<AiIntent> {
-  const { message, forcedTool, action, compileFix, model } = options;
+  const { message, forcedTool, action, compileFix, compileDiagnostics, model } = options;
 
-  if (compileFix) return "edit";
+  if (compileFix || compileDiagnostics) return "edit";
 
   const fromForced = intentFromForcedTool(forcedTool);
   if (fromForced) return fromForced;
@@ -286,7 +315,7 @@ export async function classifyAiIntent(options: {
   if (fromAction) return fromAction;
 
   if (!model) {
-    return classifyAiIntentFallback({ message, forcedTool, action, compileFix });
+    return classifyAiIntentFallback({ message, forcedTool, action, compileFix, compileDiagnostics });
   }
 
   try {
@@ -312,7 +341,7 @@ ${message.trim()}`,
 
     return object.intent;
   } catch {
-    return classifyAiIntentFallback({ message, forcedTool, action, compileFix });
+    return classifyAiIntentFallback({ message, forcedTool, action, compileFix, compileDiagnostics });
   }
 }
 

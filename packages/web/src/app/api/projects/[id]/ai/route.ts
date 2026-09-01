@@ -23,17 +23,24 @@ import {
 import { buildAiFileContext } from "@/lib/ai-file-context";
 import {
   buildAiCompileFixContext,
+  buildCompileDiagnosticsContext,
   buildCompileFixTargetHint,
   buildCompileFixMultiErrorHint,
   COMPILE_FIX_MAX_GET_FILE_CALLS,
+  hasCompileDiagnosticsPayload,
+  normalizeAiCompileDiagnostics,
   normalizeAiCompileErrors,
   prepareCompileErrorsForCompileFix,
   selectCompileFixMessages,
+  truncateCompileLogExcerpt,
   type AiCompileError,
 } from "@/lib/ai-compile-fix-context";
 import { formatCompileFixLineChangeSummary } from "@/lib/ai-compile-fix-validation";
 import { buildCompileFixNoEditMessage } from "@/lib/ai-compile-fix-failure";
-import { detectFixCompileIntent } from "@/lib/ai-compile-fix-intent";
+import {
+  detectCompileDiagnosticsIntent,
+  detectFixCompileIntent,
+} from "@/lib/ai-compile-fix-intent";
 import {
   classifyAiIntent,
   getAllowedPluginToolNames,
@@ -68,6 +75,7 @@ import {
   WORKSPACE_SYSTEM_PROMPT,
   WORKSPACE_CHAT_SUFFIX,
   COMPILE_FIX_WORKSPACE_SUFFIX,
+  COMPILE_DIAGNOSTICS_WORKSPACE_SUFFIX,
 } from "@/lib/ai-plugins/workspace-tools";
 import {
   AI_RATE_LIMIT_MESSAGE,
@@ -139,6 +147,7 @@ const chatSchema = z.object({
       ])
     )
     .optional(),
+  compileLog: z.string().optional(),
 });
 
 type ChatRequest = z.infer<typeof chatSchema>;
@@ -196,9 +205,17 @@ function isCompileFixRequest(data: ChatRequest): boolean {
   return detectFixCompileIntent(getLastUserMessage(data.messages), data.action);
 }
 
+function isCompileDiagnosticsRequest(data: ChatRequest): boolean {
+  if (data.action === "explain-errors") return false;
+  return detectCompileDiagnosticsIntent(getLastUserMessage(data.messages), data.action);
+}
+
 function buildSystemPrompt(options: {
   data: ChatRequest;
   compileErrors: AiCompileError[];
+  compileDiagnostics: AiCompileError[];
+  compileLog?: string;
+  compileDiagnosticsAware: boolean;
   fileContext: string;
   pluginSystemPrompt: string;
   mode: AiContextMode;
@@ -209,6 +226,9 @@ function buildSystemPrompt(options: {
   const {
     data,
     compileErrors,
+    compileDiagnostics,
+    compileLog,
+    compileDiagnosticsAware,
     fileContext,
     pluginSystemPrompt,
     mode,
@@ -238,6 +258,10 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
     systemPrompt += `\n\n${WORKSPACE_CHAT_SUFFIX}`;
   }
 
+  if (!compileFix && compileDiagnosticsAware) {
+    systemPrompt += `\n\n${COMPILE_DIAGNOSTICS_WORKSPACE_SUFFIX}`;
+  }
+
   if (fileContext) {
     systemPrompt += compileFix
       ? `\n\n${fileContext}`
@@ -247,6 +271,19 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
   if (compileFix && compileErrors.length > 0) {
     systemPrompt +=
       "\n\nWhen fixing errors, call get_file for small line ranges around cited lines. Prefer replace_lines when errors cite a line number — large templates often have no unique apply_edit substrings. Use fix_compile_errors or apply_edit only when search matches exactly once. If apply_edit is rejected, use replace_lines for the cited line range.";
+  }
+
+  if (
+    !compileFix &&
+    hasCompileDiagnosticsPayload({ errors: compileDiagnostics, log: compileLog })
+  ) {
+    const diagnosticsContext = buildCompileDiagnosticsContext({
+      errors: compileDiagnostics,
+      log: compileLog,
+    });
+    if (diagnosticsContext) {
+      systemPrompt += `\n\nLatest compile result (use this or get_compile_diagnostics — never ask the user to paste logs):\n${diagnosticsContext}`;
+    }
   }
 
   if (compileFixTargetHint) {
@@ -461,7 +498,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .map((f) => ({ path: f.path, content: f.content }));
 
   const compileErrorsRaw = normalizeAiCompileErrors(requestData.compileErrors);
+  const compileDiagnosticsRaw = normalizeAiCompileDiagnostics(requestData.compileErrors);
+  const compileLog = truncateCompileLogExcerpt(requestData.compileLog);
   const compileFixRequest = isCompileFixRequest(requestData);
+  const compileDiagnosticsRequest = isCompileDiagnosticsRequest(requestData);
+  const hasCompileDiagnostics = hasCompileDiagnosticsPayload({
+    errors: compileDiagnosticsRaw,
+    log: compileLog,
+  });
+  const compileDiagnosticsAware = compileDiagnosticsRequest || hasCompileDiagnostics;
 
   const { tools: pluginTools, plugins } = resolveAiPlugins({
     zoteroCredentials: await getUserZoteroCredentials(session.user.id),
@@ -514,8 +559,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           onGetFileCall: (call) => {
             getFileCalls.push(call);
           },
+          compileDiagnostics: {
+            errors: compileDiagnosticsRaw,
+            log: compileLog,
+          },
         }
-      : {}
+      : {
+          compileDiagnostics: hasCompileDiagnostics
+            ? {
+                errors: compileDiagnosticsRaw,
+                log: compileLog,
+              }
+            : undefined,
+        }
   );
 
   const openai = createOpenAI({
@@ -530,6 +586,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     forcedTool: requestData.forcedTool,
     action: requestData.action,
     compileFix: compileFixRequest,
+    compileDiagnostics: compileDiagnosticsRequest,
     model: compileFixRequest ? undefined : model,
   });
   const scopedPluginSystemPrompt = compileFixRequest
@@ -568,6 +625,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const systemPrompt = buildSystemPrompt({
       data: requestData,
       compileErrors,
+      compileDiagnostics: compileDiagnosticsRaw,
+      compileLog,
+      compileDiagnosticsAware,
       fileContext,
       pluginSystemPrompt: scopedPluginSystemPrompt,
       mode: compileFixRequest ? mode : "full",
@@ -640,7 +700,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             maxRetries: 0,
             maxSteps: CHAT_MAX_STEPS,
             tools: wrapPluginToolsWithPolicy(
-              toolsForIntent(aiIntent, pluginTools, workspaceTools),
+              toolsForIntent(aiIntent, pluginTools, workspaceTools, {
+                includeCompileDiagnostics: compileDiagnosticsAware,
+              }),
               allowedPluginTools
             ),
           });

@@ -3,6 +3,7 @@ import {
   buildCompileFixAiRequest,
   COMPILE_FIX_ACTION,
   COMPILE_FIX_USER_MESSAGE,
+  detectCompileDiagnosticsIntent,
   detectFixCompileIntent,
 } from "./ai-compile-fix-intent";
 
@@ -36,5 +37,28 @@ describe("detectFixCompileIntent", () => {
   it("ignores unrelated chat", () => {
     expect(detectFixCompileIntent("Summarize my introduction")).toBe(false);
     expect(detectFixCompileIntent("Find papers about transformers")).toBe(false);
+  });
+
+  it("does not treat warning review as compile-fix", () => {
+    expect(detectFixCompileIntent("we have several warnings, can you check?")).toBe(false);
+  });
+});
+
+describe("detectCompileDiagnosticsIntent", () => {
+  it("detects warning and log review requests", () => {
+    expect(detectCompileDiagnosticsIntent("we have several warnings, can you check?")).toBe(
+      true
+    );
+    expect(detectCompileDiagnosticsIntent("Any overfull hbox issues?")).toBe(true);
+    expect(detectCompileDiagnosticsIntent("Check the compile log for undefined references")).toBe(
+      true
+    );
+  });
+
+  it("ignores compile-fix requests", () => {
+    expect(detectCompileDiagnosticsIntent("Fix the compile errors", "explain-errors")).toBe(
+      false
+    );
+    expect(detectCompileDiagnosticsIntent("Fix the errors in the project")).toBe(false);
   });
 });

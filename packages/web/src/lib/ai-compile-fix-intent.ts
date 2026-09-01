@@ -41,6 +41,22 @@ const FIX_INTENT_PATTERNS: RegExp[] = [
   /\berrors?\b/i,
 ];
 
+/** Review warnings/log/overfull — compile-aware chat, not the heavy compile-fix path. */
+const COMPILE_DIAGNOSTICS_PATTERNS: RegExp[] = [
+  /\bwarnings?\b/i,
+  /\boverfull\b/i,
+  /\bunderfull\b/i,
+  /\bundefined references?\b/i,
+  /\bcheck (?:the )?compile\b/i,
+  /\bseveral warnings?\b/i,
+  /\bcompile log\b/i,
+  /\bcompilation log\b/i,
+  /\bpdflatex log\b/i,
+  /\bxelatex log\b/i,
+  /\blualatex log\b/i,
+  /\b(?:see|read|show|review) (?:the )?log\b/i,
+];
+
 export function detectFixCompileIntent(text: string, action?: string): boolean {
   if (action === "explain-errors") return true;
 
@@ -48,4 +64,17 @@ export function detectFixCompileIntent(text: string, action?: string): boolean {
   if (!trimmed) return false;
 
   return FIX_INTENT_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
+export function detectCompileDiagnosticsIntent(text: string, action?: string): boolean {
+  if (action === "explain-errors") return false;
+
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+
+  return COMPILE_DIAGNOSTICS_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
+export function isCompileAwareMessage(text: string, action?: string): boolean {
+  return detectFixCompileIntent(text, action) || detectCompileDiagnosticsIntent(text, action);
 }

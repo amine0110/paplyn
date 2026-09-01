@@ -1372,6 +1372,7 @@ export default function ProjectPage() {
               activeFile={activeFile}
               selectedText={selectedText}
               compileErrors={compileErrors}
+              compileLog={compileLog}
               onInsert={handleInsertAtCursor}
               onReplace={handleReplaceSelection}
               onCitePaper={canEdit ? handleCitePaper : undefined}
@@ -1397,6 +1398,7 @@ export default function ProjectPage() {
               activeFile={activeFile}
               selectedText={selectedText}
               compileErrors={compileErrors}
+              compileLog={compileLog}
               onInsert={handleInsertAtCursor}
               onReplace={handleReplaceSelection}
               onCitePaper={canEdit ? handleCitePaper : undefined}

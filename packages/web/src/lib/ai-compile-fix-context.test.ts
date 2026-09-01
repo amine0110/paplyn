@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildAiCompileFixContext,
+  buildCompileDiagnosticsContext,
   buildCompileFixTargetHint,
   buildCompileFixMultiErrorHint,
   buildGetFileWindow,
@@ -11,6 +12,7 @@ import {
   inferFirstCopyCompileFixLocation,
   isBrokenBeginDocumentLine,
   normalizeAiCompileErrors,
+  normalizeAiCompileDiagnostics,
   parseFileLineFromMessage,
   prepareCompileErrorsForCompileFix,
   resolveCompileErrorLocation,
@@ -60,6 +62,34 @@ describe("normalizeAiCompileErrors", () => {
       severity: "error" as const,
     }));
     expect(normalizeAiCompileErrors(errors)).toHaveLength(25);
+  });
+});
+
+describe("normalizeAiCompileDiagnostics", () => {
+  it("keeps warnings alongside errors for review turns", () => {
+    expect(
+      normalizeAiCompileDiagnostics([
+        { message: "Fatal error", severity: "error", file: "main.tex", line: 1 },
+        { message: "Overfull hbox", severity: "warning", file: "main.tex", line: 2 },
+      ])
+    ).toEqual([
+      { message: "Fatal error", severity: "error", file: "main.tex", line: 1 },
+      { message: "Overfull hbox", severity: "warning", file: "main.tex", line: 2 },
+    ]);
+  });
+});
+
+describe("buildCompileDiagnosticsContext", () => {
+  it("formats warnings and log excerpt", () => {
+    const context = buildCompileDiagnosticsContext({
+      errors: [{ message: "Overfull \\hbox", severity: "warning", file: "main.tex", line: 4 }],
+      log: "This is pdfTeX\nOverfull \\hbox",
+    });
+
+    expect(context).toContain("Compile warnings:");
+    expect(context).toContain("main.tex:4: Overfull \\hbox");
+    expect(context).toContain("Compile log excerpt:");
+    expect(context).toContain("This is pdfTeX");
   });
 });
 

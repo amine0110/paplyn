@@ -21,6 +21,7 @@ export interface BuildAiCompileFixContextOptions {
 const FILE_LINE_MESSAGE_RE = /([^\s():/\\]+\.tex):(\d+)/i;
 const MAX_COMPILE_ERROR_MESSAGE_LENGTH = 400;
 const MAX_COMPILE_ERRORS = 25;
+const MAX_COMPILE_LOG_EXCERPT_CHARS = 12_000;
 
 /** Lines above/below a cited error line for the first targeted get_file call. */
 export const COMPILE_FIX_LINE_RADIUS = 10;
@@ -36,18 +37,25 @@ function truncateCompileErrorMessage(message: string): string {
   return `${message.slice(0, MAX_COMPILE_ERROR_MESSAGE_LENGTH)}…`;
 }
 
-export function normalizeAiCompileErrors(
+function normalizeAiCompileErrorEntries(
   errors?: (string | AiCompileError)[]
 ): AiCompileError[] {
   if (!errors?.length) return [];
 
-  const normalized = errors.map((entry) => {
+  return errors.map((entry) => {
     const base = typeof entry === "string" ? { message: entry } : { ...entry };
     return {
       ...base,
       message: truncateCompileErrorMessage(base.message),
     };
   });
+}
+
+export function normalizeAiCompileErrors(
+  errors?: (string | AiCompileError)[]
+): AiCompileError[] {
+  const normalized = normalizeAiCompileErrorEntries(errors);
+  if (!normalized.length) return [];
 
   const hasErrors = normalized.some((entry) => entry.severity === "error");
   const filtered = hasErrors
@@ -55,6 +63,56 @@ export function normalizeAiCompileErrors(
     : normalized;
 
   return filtered.slice(0, MAX_COMPILE_ERRORS);
+}
+
+/** Keep errors and warnings for compile-aware review (warnings-only turns). */
+export function normalizeAiCompileDiagnostics(
+  errors?: (string | AiCompileError)[]
+): AiCompileError[] {
+  return normalizeAiCompileErrorEntries(errors).slice(0, MAX_COMPILE_ERRORS);
+}
+
+export function truncateCompileLogExcerpt(log?: string): string {
+  const trimmed = log?.trim() ?? "";
+  if (!trimmed) return "";
+  if (trimmed.length <= MAX_COMPILE_LOG_EXCERPT_CHARS) return trimmed;
+  return `${trimmed.slice(0, MAX_COMPILE_LOG_EXCERPT_CHARS)}…`;
+}
+
+export function hasCompileDiagnosticsPayload(options: {
+  errors?: AiCompileError[];
+  log?: string;
+}): boolean {
+  return (options.errors?.length ?? 0) > 0 || Boolean(options.log?.trim());
+}
+
+export function buildCompileDiagnosticsContext(options: {
+  errors: AiCompileError[];
+  log?: string;
+}): string {
+  const { errors, log } = options;
+  const parts: string[] = [];
+
+  if (errors.length > 0) {
+    const errorLines = errors.filter((entry) => entry.severity !== "warning");
+    const warningLines = errors.filter((entry) => entry.severity === "warning");
+    if (errorLines.length > 0) {
+      parts.push(`Compile errors:\n${formatCompileErrorLines(errorLines)}`);
+    }
+    if (warningLines.length > 0) {
+      parts.push(`Compile warnings:\n${formatCompileErrorLines(warningLines)}`);
+    }
+    if (errorLines.length === 0 && warningLines.length === 0) {
+      parts.push(`Compile diagnostics:\n${formatCompileErrorLines(errors)}`);
+    }
+  }
+
+  const logExcerpt = truncateCompileLogExcerpt(log);
+  if (logExcerpt) {
+    parts.push(`Compile log excerpt:\n${logExcerpt}`);
+  }
+
+  return parts.join("\n\n");
 }
 
 export function formatCompileErrorLines(errors: AiCompileError[]): string {

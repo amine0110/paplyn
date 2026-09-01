@@ -50,6 +50,15 @@ describe("classifyAiIntentFallback", () => {
     ).toBe("edit");
   });
 
+  it("classifies compile warning review as edit", () => {
+    expect(
+      classifyAiIntentFallback({
+        message: "we have several warnings, can you check?",
+        compileDiagnostics: true,
+      })
+    ).toBe("edit");
+  });
+
   it("classifies section questions as chat", () => {
     expect(
       classifyAiIntentFallback({
@@ -108,9 +117,18 @@ describe("toolsForIntent", () => {
     expect("search_literature" in tools).toBe(false);
     expect("list_files" in tools).toBe(true);
     expect("get_file" in tools).toBe(true);
+    expect("get_compile_diagnostics" in tools).toBe(false);
     for (const name of CLIENT_ACTION_TOOL_NAMES) {
       expect(name in tools).toBe(false);
     }
+  });
+
+  it("mounts compile diagnostics tool when requested", () => {
+    const tools = toolsForIntent("edit", allPluginTools, allWorkspaceTools, {
+      includeCompileDiagnostics: true,
+    });
+    expect("get_compile_diagnostics" in tools).toBe(true);
+    expect("apply_edit" in tools).toBe(true);
   });
 
   it("mounts literature tools but not Zotero", () => {
