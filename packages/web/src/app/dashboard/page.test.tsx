@@ -249,6 +249,72 @@ describe("Dashboard archived projects", () => {
   });
 });
 
+describe("Dashboard zip import", () => {
+  beforeEach(() => {
+    leaveForLogin.mockReset();
+    mockUseRequireSession.mockReturnValue({ isAuthenticated: true });
+    vi.restoreAllMocks();
+    vi.spyOn(global, "fetch").mockImplementation((url) => {
+      if (url === "/api/projects/import") {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ id: "new-proj" }),
+        } as Response);
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ owned: [], shared: [] }),
+      } as Response);
+    });
+  });
+
+  it("submits the selected zip from React state after name autofill clears the native file input", async () => {
+    renderDashboard();
+
+    fireEvent.click(screen.getByRole("button", { name: "Import zip" }));
+
+    const fileInput = screen.getByLabelText(/zip archive/i) as HTMLInputElement;
+    expect(fileInput).not.toHaveAttribute("required");
+
+    const zipFile = new File(["tex content"], "Similarity_Dataset_Paper.zip", {
+      type: "application/zip",
+    });
+    fireEvent.change(fileInput, { target: { files: [zipFile] } });
+
+    expect(screen.getByLabelText(/project name/i)).toHaveValue("Similarity_Dataset_Paper");
+    expect(screen.getByText("Similarity_Dataset_Paper.zip")).toBeInTheDocument();
+
+    // Simulate Chrome clearing the native FileList after onChange resets input.value.
+    Object.defineProperty(fileInput, "files", {
+      configurable: true,
+      value: { length: 0, item: () => null },
+    });
+    expect(fileInput.files?.length).toBe(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/projects/import",
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+
+    const importCall = vi
+      .mocked(global.fetch)
+      .mock.calls.find(([url]) => url === "/api/projects/import");
+    expect(importCall).toBeDefined();
+
+    const formData = importCall![1]!.body as FormData;
+    expect(formData.get("name")).toBe("Similarity_Dataset_Paper");
+    const zip = formData.get("zip");
+    expect(zip).toBeInstanceOf(File);
+    expect((zip as File).name).toBe("Similarity_Dataset_Paper.zip");
+  });
+});
+
 describe("Dashboard session loss", () => {
   beforeEach(() => {
     leaveForLogin.mockReset();
