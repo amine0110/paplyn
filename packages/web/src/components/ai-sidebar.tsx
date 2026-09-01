@@ -5,10 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Sparkles, Send, X, Mic, MicOff, Square } from "lucide-react";
 import { aiUnavailableBannerMessage, isClientSelfHosted } from "@/lib/ai-config";
 import { extractInsertableContent, hasInsertableContent } from "@/lib/ai-insert-content";
-import {
-  detectCompileDiagnosticsIntent,
-  detectFixCompileIntent,
-} from "@/lib/ai-compile-fix-intent";
+import { classifyCompileDiagnosticsReviewFallback } from "@/lib/ai-compile-diagnostics-intent";
+import { resolveCompileRouting } from "@/lib/ai-compile-fix-intent";
 import type { AiCompileError } from "@/lib/ai-compile-fix-context";
 import { hasCompileDiagnosticsPayload } from "@/lib/ai-compile-fix-context";
 import { AiMarkdown } from "@/components/ai-markdown";
@@ -282,8 +280,12 @@ export function AiSidebar({
     setSelectedTool(null);
     setToolInputPlaceholder(null);
 
-    const fixIntent = detectFixCompileIntent(content, action);
-    const diagnosticsIntent = detectCompileDiagnosticsIntent(content, action);
+    const diagnosticsIntent = classifyCompileDiagnosticsReviewFallback(content, action);
+    const { compileFix: fixIntent, diagnosticsReview } = resolveCompileRouting({
+      message: content,
+      action,
+      diagnosticsReview: diagnosticsIntent,
+    });
     const effectiveAction = fixIntent ? "explain-errors" : action;
     const hasDiagnostics = hasCompileDiagnosticsPayload({
       errors: compileErrors,
@@ -294,9 +296,9 @@ export function AiSidebar({
       onCompileFixSessionStart?.();
     }
 
-    if ((fixIntent || diagnosticsIntent) && !hasDiagnostics) {
+    if ((fixIntent || diagnosticsReview) && !hasDiagnostics) {
       const userMsg: AiChatMessage = { role: "user", content: content || action || "" };
-      const compileFirstMessage = diagnosticsIntent
+      const compileFirstMessage = diagnosticsReview
         ? "Please compile your project first so I can review the warnings and log."
         : "Please compile your project first so I can see the current errors.";
       setMessages((prev) => [

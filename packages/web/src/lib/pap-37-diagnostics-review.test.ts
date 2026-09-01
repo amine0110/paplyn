@@ -1,7 +1,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { detectCompileDiagnosticsIntent } from "@/lib/ai-compile-fix-intent";
+import {
+  classifyCompileDiagnosticsReviewFallback,
+  COMPILE_DIAGNOSTICS_REVIEW_EXAMPLE_PHRASES,
+} from "@/lib/ai-compile-diagnostics-intent";
 import {
   buildCompileDiagnosticsContext,
   formatCompileErrorLines,
@@ -15,12 +18,12 @@ function readSrc(relativePath: string): string {
 }
 
 describe("PAP-37 diagnostics review", () => {
-  const liveFailPhrase = "can you see the warnings that are showing";
-
-  it("classifies live-fail phrasing as compile diagnostics intent", () => {
-    expect(detectCompileDiagnosticsIntent(liveFailPhrase)).toBe(true);
-    expect(detectCompileDiagnosticsIntent("we have several warnings, can you check?")).toBe(true);
-  });
+  it.each(COMPILE_DIAGNOSTICS_REVIEW_EXAMPLE_PHRASES)(
+    "classifies varied phrasing via fallback safety net: %s",
+    (phrase) => {
+      expect(classifyCompileDiagnosticsReviewFallback(phrase)).toBe(true);
+    }
+  );
 
   it("includes exact warning strings in diagnostics context when payload is present", () => {
     const warning = "Package hyperref Warning: Token not allowed in a PDF string (Unicode):";
@@ -49,10 +52,12 @@ describe("PAP-37 diagnostics review", () => {
     expect(workspaceSrc).toMatch(/get_compile_diagnostics/);
   });
 
-  it("omits project source from diagnostics review system prompt path", () => {
+  it("routes diagnostics review through LLM classifier with regex fallback", () => {
     const routeSrc = readSrc("app/api/projects/[id]/ai/route.ts");
-    expect(routeSrc).toContain("compileDiagnosticsReview");
-    expect(routeSrc).toContain("COMPILE_DIAGNOSTICS_REVIEW_SUFFIX");
+    expect(routeSrc).toContain("classifyCompileDiagnosticsReview");
+    expect(routeSrc).toMatch(/compileDiagnosticsReview[\s\S]*isCompileFixRequest/s);
+    expect(routeSrc).toContain("resolveCompileRouting");
+    expect(routeSrc).toMatch(/includeCompileDiagnostics:\s*hasCompileDiagnostics/);
     expect(routeSrc).toMatch(/includeFileContext.*compileDiagnosticsReview/s);
     expect(routeSrc).toContain("mergeCompileDiagnostics");
   });

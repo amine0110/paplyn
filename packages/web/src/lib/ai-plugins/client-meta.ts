@@ -1,4 +1,5 @@
-import { detectCompileDiagnosticsIntent, detectFixCompileIntent } from "@/lib/ai-compile-fix-intent";
+import { classifyCompileDiagnosticsReviewFallback } from "@/lib/ai-compile-diagnostics-intent";
+import { detectFixCompileIntent } from "@/lib/ai-compile-fix-intent";
 import { getEnabledAiPlugins } from "./index";
 
 export interface AiPluginClientMeta {
@@ -129,7 +130,7 @@ export function loadingLabelForAction(
     return "Fixing compile errors…";
   }
 
-  if (detectCompileDiagnosticsIntent(userMessage ?? "", action)) {
+  if (classifyCompileDiagnosticsReviewFallback(userMessage ?? "")) {
     return "Reviewing compile warnings…";
   }
 

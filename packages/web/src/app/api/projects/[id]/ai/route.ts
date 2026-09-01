@@ -38,10 +38,8 @@ import {
 import { mergeCompileDiagnostics } from "@/lib/compile-log-diagnostics";
 import { formatCompileFixLineChangeSummary } from "@/lib/ai-compile-fix-validation";
 import { buildCompileFixNoEditMessage } from "@/lib/ai-compile-fix-failure";
-import {
-  detectCompileDiagnosticsIntent,
-  detectFixCompileIntent,
-} from "@/lib/ai-compile-fix-intent";
+import { classifyCompileDiagnosticsReview } from "@/lib/ai-compile-diagnostics-intent";
+import { resolveCompileRouting } from "@/lib/ai-compile-fix-intent";
 import {
   classifyAiIntent,
   getAllowedPluginToolNames,
@@ -204,14 +202,15 @@ function getLastUserMessage(messages: ChatRequest["messages"]): string {
   return "";
 }
 
-function isCompileFixRequest(data: ChatRequest): boolean {
-  if (data.action === "explain-errors") return true;
-  return detectFixCompileIntent(getLastUserMessage(data.messages), data.action);
-}
-
-function isCompileDiagnosticsRequest(data: ChatRequest): boolean {
-  if (data.action === "explain-errors") return false;
-  return detectCompileDiagnosticsIntent(getLastUserMessage(data.messages), data.action);
+function isCompileFixRequest(
+  data: ChatRequest,
+  diagnosticsReview: boolean
+): boolean {
+  return resolveCompileRouting({
+    message: getLastUserMessage(data.messages),
+    action: data.action,
+    diagnosticsReview,
+  }).compileFix;
 }
 
 function buildSystemPrompt(options: {
@@ -509,8 +508,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
   const requestData = parsed.data;
   const lastUserMessage = getLastUserMessage(requestData.messages);
-  const compileFixRequest = isCompileFixRequest(requestData);
-  const compileDiagnosticsRequest = isCompileDiagnosticsRequest(requestData);
 
   const openai = createOpenAI({
     apiKey: aiConfig.apiKey,
@@ -518,12 +515,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   });
 
   const model = openai(aiConfig.model);
+  const compileDiagnosticsReview = await classifyCompileDiagnosticsReview({
+    message: lastUserMessage,
+    action: requestData.action,
+    model,
+  });
+  const compileFixRequest = isCompileFixRequest(requestData, compileDiagnosticsReview);
+
   const aiIntent: AiIntent = await classifyAiIntent({
     message: lastUserMessage,
     forcedTool: requestData.forcedTool,
     action: requestData.action,
     compileFix: compileFixRequest,
-    compileDiagnostics: compileDiagnosticsRequest,
+    compileDiagnostics: compileDiagnosticsReview,
     model: compileFixRequest ? undefined : model,
   });
 
@@ -548,8 +552,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     errors: mergedCompileDiagnostics,
     log: compileLog,
   });
-  const compileDiagnosticsAware = compileDiagnosticsRequest || hasCompileDiagnostics;
-  const compileDiagnosticsReview = compileDiagnosticsRequest;
+  const compileDiagnosticsAware = hasCompileDiagnostics || compileDiagnosticsReview;
+  const compileDiagnosticsReviewTurn = compileDiagnosticsReview;
 
   const forcedToolName = !compileFixRequest
     ? resolveForcedToolChoice({
@@ -664,7 +668,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       compileDiagnostics: mergedCompileDiagnostics,
       compileLog,
       compileDiagnosticsAware,
-      compileDiagnosticsReview,
+      compileDiagnosticsReview: compileDiagnosticsReviewTurn,
       fileContext,
       pluginSystemPrompt: scopedPluginSystemPrompt,
       plugins,
@@ -731,7 +735,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             maxSteps: CHAT_MAX_STEPS,
             tools: wrapPluginToolsWithPolicy(
               toolsForIntent(aiIntent, pluginTools, workspaceTools, {
-                includeCompileDiagnostics: compileDiagnosticsAware,
+                includeCompileDiagnostics: hasCompileDiagnostics,
               }),
               allowedPluginTools
             ),
