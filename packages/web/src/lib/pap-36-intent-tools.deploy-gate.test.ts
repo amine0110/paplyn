@@ -22,10 +22,21 @@ describe("PAP-36 intent-based tool mounting deploy gate", () => {
     const routeSrc = readSrc("app/api/projects/[id]/ai/route.ts");
     expect(routeSrc).toContain("classifyAiIntent");
     expect(routeSrc).toContain("toolsForIntent");
+    expect(routeSrc).toContain("toolsForForcedPlugin");
     expect(routeSrc).toContain("wrapPluginToolsWithPolicy");
     expect(routeSrc).not.toMatch(
       /:\s*streamText\(\{[\s\S]*tools:\s*\{\s*\.\.\.pluginTools,\s*\.\.\.workspaceTools\s*\}/
     );
+    expect(routeSrc).not.toContain("asPluginToolsRecord");
+    expect(routeSrc).not.toContain("pluginToolsRecord");
+  });
+
+  it("classifies intent before resolveAiPlugins", () => {
+    const routeSrc = readSrc("app/api/projects/[id]/ai/route.ts");
+    const classifyIndex = routeSrc.indexOf("classifyAiIntent");
+    const resolveIndex = routeSrc.indexOf("resolveAiPlugins");
+    expect(classifyIndex).toBeGreaterThan(-1);
+    expect(resolveIndex).toBeGreaterThan(classifyIndex);
   });
 
   it("omits search_zotero from unforced edit and chat tool maps", () => {
@@ -49,6 +60,7 @@ describe("PAP-36 intent-based tool mounting deploy gate", () => {
   it("keeps forced toolChoice and compile-fix workspace-only paths", () => {
     const routeSrc = readSrc("app/api/projects/[id]/ai/route.ts");
     expect(routeSrc).toContain('toolChoice: { type: "tool", toolName: forcedToolName }');
+    expect(routeSrc).toContain("toolsForForcedPlugin(forcedToolName");
     expect(routeSrc).toContain("tools: workspaceTools");
     expect(routeSrc).toContain("compileFix: compileFixRequest");
   });

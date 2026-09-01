@@ -44,15 +44,17 @@ import {
 import {
   classifyAiIntent,
   getAllowedPluginToolNames,
-  pluginSystemPromptForIntent,
+  mountedPluginToolNames,
+  pluginActionPromptForMountedTools,
+  pluginSystemPromptForMountedTools,
+  toolsForForcedPlugin,
   toolsForIntent,
   wrapPluginToolsWithPolicy,
+  type AiIntent,
 } from "@/lib/ai-intent";
-import { getForcedToolPrompt, getPluginActionPrompt, isRegisteredPluginToolName, resolveAiPlugins } from "@/lib/ai-plugins";
-import {
-  asPluginToolsRecord,
-  resolveForcedToolChoice,
-} from "@/lib/ai-plugins/forced-tool";
+import type { AiPlugin } from "@/lib/ai-plugins/types";
+import { getForcedToolPrompt, isRegisteredPluginToolName, resolveAiPlugins } from "@/lib/ai-plugins";
+import { resolveForcedToolChoice, type PluginToolName } from "@/lib/ai-plugins/forced-tool";
 import {
   collectArxivPapersFromToolResults,
   collectDoiCitationsFromToolResults,
@@ -218,6 +220,8 @@ function buildSystemPrompt(options: {
   compileDiagnosticsAware: boolean;
   fileContext: string;
   pluginSystemPrompt: string;
+  plugins: AiPlugin[];
+  mountedPluginToolNames: readonly PluginToolName[];
   mode: AiContextMode;
   retryHint?: string;
   compileFixTargetHint?: string;
@@ -231,6 +235,8 @@ function buildSystemPrompt(options: {
     compileDiagnosticsAware,
     fileContext,
     pluginSystemPrompt,
+    plugins,
+    mountedPluginToolNames: mountedTools,
     mode,
     retryHint,
     compileFixTargetHint,
@@ -296,7 +302,8 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
 
   if (data.action && !(data.forcedTool && isRegisteredPluginToolName(data.forcedTool))) {
     const actionPrompt =
-      getPluginActionPrompt(data.action) ?? WRITING_ACTION_PROMPTS[data.action];
+      pluginActionPromptForMountedTools(mountedTools, data.action, plugins) ??
+      WRITING_ACTION_PROMPTS[data.action];
     if (actionPrompt) {
       systemPrompt += `\n\n${actionPrompt}`;
     }
@@ -491,6 +498,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
   const requestData = parsed.data;
+  const lastUserMessage = getLastUserMessage(requestData.messages);
+  const compileFixRequest = isCompileFixRequest(requestData);
+  const compileDiagnosticsRequest = isCompileDiagnosticsRequest(requestData);
+
+  const openai = createOpenAI({
+    apiKey: aiConfig.apiKey,
+    baseURL: aiConfig.baseUrl,
+  });
+
+  const model = openai(aiConfig.model);
+  const aiIntent: AiIntent = await classifyAiIntent({
+    message: lastUserMessage,
+    forcedTool: requestData.forcedTool,
+    action: requestData.action,
+    compileFix: compileFixRequest,
+    compileDiagnostics: compileDiagnosticsRequest,
+    model: compileFixRequest ? undefined : model,
+  });
+
+  const { tools: pluginTools, plugins } = resolveAiPlugins({
+    zoteroCredentials: await getUserZoteroCredentials(session.user.id),
+  });
 
   const files = await db.select().from(projectFile).where(eq(projectFile.projectId, id));
   const texFiles = files
@@ -500,17 +529,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const compileErrorsRaw = normalizeAiCompileErrors(requestData.compileErrors);
   const compileDiagnosticsRaw = normalizeAiCompileDiagnostics(requestData.compileErrors);
   const compileLog = truncateCompileLogExcerpt(requestData.compileLog);
-  const compileFixRequest = isCompileFixRequest(requestData);
-  const compileDiagnosticsRequest = isCompileDiagnosticsRequest(requestData);
   const hasCompileDiagnostics = hasCompileDiagnosticsPayload({
     errors: compileDiagnosticsRaw,
     log: compileLog,
   });
   const compileDiagnosticsAware = compileDiagnosticsRequest || hasCompileDiagnostics;
 
-  const { tools: pluginTools, plugins } = resolveAiPlugins({
-    zoteroCredentials: await getUserZoteroCredentials(session.user.id),
+  const forcedToolName = !compileFixRequest
+    ? resolveForcedToolChoice({
+        forcedTool: requestData.forcedTool,
+        userMessage: lastUserMessage,
+        pluginTools,
+      })
+    : undefined;
+
+  const mountedTools = mountedPluginToolNames({
+    intent: aiIntent,
+    forcedToolName,
+    compileFix: compileFixRequest,
   });
+  const scopedPluginSystemPrompt = compileFixRequest
+    ? ""
+    : pluginSystemPromptForMountedTools(mountedTools, plugins);
 
   const texFileMap = new Map(texFiles.map((f) => [f.path, f.content]));
   const mainFile = access.project.mainFile;
@@ -574,25 +614,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         }
   );
 
-  const openai = createOpenAI({
-    apiKey: aiConfig.apiKey,
-    baseURL: aiConfig.baseUrl,
-  });
-
-  const model = openai(aiConfig.model);
-  const lastUserMessage = getLastUserMessage(requestData.messages);
-  const aiIntent = await classifyAiIntent({
-    message: lastUserMessage,
-    forcedTool: requestData.forcedTool,
-    action: requestData.action,
-    compileFix: compileFixRequest,
-    compileDiagnostics: compileDiagnosticsRequest,
-    model: compileFixRequest ? undefined : model,
-  });
-  const scopedPluginSystemPrompt = compileFixRequest
-    ? ""
-    : pluginSystemPromptForIntent(aiIntent, plugins);
-
   const compileFixMetricsRef: { current: CompileFixMetrics | null } = { current: null };
 
   async function runStreamText(mode: AiContextMode, options?: { retryHint?: string }) {
@@ -630,6 +651,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       compileDiagnosticsAware,
       fileContext,
       pluginSystemPrompt: scopedPluginSystemPrompt,
+      plugins,
+      mountedPluginToolNames: mountedTools,
       mode: compileFixRequest ? mode : "full",
       retryHint: options?.retryHint,
       compileFixTargetHint,
@@ -656,15 +679,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       });
     }
 
-    const pluginToolsRecord = !compileFixRequest ? asPluginToolsRecord(pluginTools) : null;
-    const forcedToolName = pluginToolsRecord
-      ? resolveForcedToolChoice({
-          forcedTool: requestData.forcedTool,
-          userMessage: lastUserMessage,
-          pluginTools: pluginToolsRecord,
-        })
-      : undefined;
-
     const allowedPluginTools = getAllowedPluginToolNames({
       intent: aiIntent,
       forcedToolName,
@@ -680,7 +694,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           maxSteps: COMPILE_FIX_MAX_STEPS,
           tools: workspaceTools,
         })
-      : forcedToolName && pluginToolsRecord
+      : forcedToolName
         ? streamText({
             model,
             system: systemPrompt,
@@ -688,7 +702,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             maxRetries: 0,
             maxSteps: CHAT_MAX_STEPS,
             tools: wrapPluginToolsWithPolicy(
-              { ...pluginToolsRecord, ...workspaceTools },
+              toolsForForcedPlugin(forcedToolName, pluginTools, workspaceTools),
               allowedPluginTools
             ),
             toolChoice: { type: "tool", toolName: forcedToolName },

@@ -11,7 +11,11 @@ import {
   classifyAiIntent,
   classifyAiIntentFallback,
   getAllowedPluginToolNames,
+  mountedPluginToolNames,
+  pluginActionPromptForMountedTools,
+  pluginSystemPromptForMountedTools,
   pluginToolNamesForIntent,
+  toolsForForcedPlugin,
   toolsForIntent,
   wrapPluginToolsWithPolicy,
 } from "./ai-intent";
@@ -90,6 +94,15 @@ describe("classifyAiIntentFallback", () => {
       })
     ).not.toBe("library");
   });
+
+  it("classifies manuscript fix requests as edit, not compile-fix routing", () => {
+    expect(
+      classifyAiIntentFallback({
+        message: "Fix the abstract to mention our baseline",
+        compileFix: false,
+      })
+    ).toBe("edit");
+  });
 });
 
 describe("classifyAiIntent", () => {
@@ -142,6 +155,55 @@ describe("toolsForIntent", () => {
     const tools = toolsForIntent("library", allPluginTools, allWorkspaceTools);
     expect("search_zotero" in tools).toBe(true);
     expect("search_literature" in tools).toBe(false);
+  });
+});
+
+describe("toolsForForcedPlugin", () => {
+  it("mounts only the forced plugin plus workspace tools", () => {
+    const tools = toolsForForcedPlugin(
+      "search_zotero",
+      allPluginTools,
+      allWorkspaceTools
+    );
+    expect(Object.keys(tools).filter((name) => name in allPluginTools)).toEqual([
+      "search_zotero",
+    ]);
+    expect("list_files" in tools).toBe(true);
+    expect("search_literature" in tools).toBe(false);
+  });
+});
+
+describe("mounted plugin prompts", () => {
+  it("scopes action prompts to mounted plugins only", () => {
+    const { plugins } = resolveAiPlugins();
+    const zoteroOnly = mountedPluginToolNames({
+      intent: "library",
+      forcedToolName: "search_zotero",
+      compileFix: false,
+    });
+    expect(
+      pluginActionPromptForMountedTools(zoteroOnly, "citation", plugins)
+    ).toContain("Zotero");
+    const literaturePrompt = pluginActionPromptForMountedTools(
+      ["search_literature"],
+      "find-papers",
+      plugins
+    );
+    expect(literaturePrompt).toContain("Semantic Scholar");
+    expect(literaturePrompt).not.toContain("Zotero");
+  });
+
+  it("scopes system prompts to mounted plugins only", () => {
+    const { plugins } = resolveAiPlugins();
+    const zoteroPrompt = pluginSystemPromptForMountedTools(["search_zotero"], plugins);
+    const literaturePrompt = pluginSystemPromptForMountedTools(
+      ["search_literature", "search_arxiv"],
+      plugins
+    );
+    expect(zoteroPrompt).toContain("Zotero");
+    expect(zoteroPrompt).not.toContain("Semantic Scholar");
+    expect(literaturePrompt).toContain("Semantic Scholar");
+    expect(literaturePrompt).not.toContain("Zotero");
   });
 });
 
