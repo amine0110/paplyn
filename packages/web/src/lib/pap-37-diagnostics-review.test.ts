@@ -55,7 +55,8 @@ describe("PAP-37 diagnostics review", () => {
   it("routes diagnostics review through LLM classifier with regex fallback", () => {
     const routeSrc = readSrc("app/api/projects/[id]/ai/route.ts");
     expect(routeSrc).toContain("classifyCompileDiagnosticsReview");
-    expect(routeSrc).toContain("compileDiagnosticsReviewTurn");
+    expect(routeSrc).toMatch(/compileDiagnosticsReview[\s\S]*isCompileFixRequest/s);
+    expect(routeSrc).toContain("resolveCompileRouting");
     expect(routeSrc).toMatch(/includeCompileDiagnostics:\s*hasCompileDiagnostics/);
     expect(routeSrc).toMatch(/includeFileContext.*compileDiagnosticsReview/s);
     expect(routeSrc).toContain("mergeCompileDiagnostics");

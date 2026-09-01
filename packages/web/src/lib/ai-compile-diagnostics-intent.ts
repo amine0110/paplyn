@@ -27,9 +27,10 @@ export const COMPILE_DIAGNOSTICS_REVIEW_FALLBACK_PATTERNS: RegExp[] = [
   /\bpdf\s+(?:failed|failing|not\s+generat)/i,
   /\b(?:any|several)\s+warnings?\b/i,
   /\b(?:pdflatex|xelatex|lualatex)\s+log\b/i,
-  /\bcan you see\b/i,
-  /\bshowing\b/i,
   /\b(?:any|those)\s+(?:overfull|underfull)\b/i,
+  /\bwhy\b.+\b(?:compile|pdf|build)\b/i,
+  /\bwarnings?\b.+\bshowing\b/i,
+  /\bcan you see\b.+\bwarnings?\b/i,
 ];
 
 export const COMPILE_DIAGNOSTICS_REVIEW_EXAMPLE_PHRASES = [
@@ -93,17 +94,17 @@ User message:
 
 export async function classifyCompileDiagnosticsReview(options: {
   message: string;
-  compileFix?: boolean;
+  action?: string;
   model?: LanguageModel;
 }): Promise<boolean> {
-  const { message, compileFix, model } = options;
-  if (compileFix) return false;
+  const { message, action, model } = options;
+  if (action === "explain-errors") return false;
 
   const trimmed = message.trim();
   if (!trimmed) return false;
 
   if (!model) {
-    return classifyCompileDiagnosticsReviewFallback(trimmed);
+    return classifyCompileDiagnosticsReviewFallback(trimmed, action);
   }
 
   try {
@@ -115,6 +116,6 @@ export async function classifyCompileDiagnosticsReview(options: {
     });
     return object.reviewCompileDiagnostics;
   } catch {
-    return classifyCompileDiagnosticsReviewFallback(trimmed);
+    return classifyCompileDiagnosticsReviewFallback(trimmed, action);
   }
 }

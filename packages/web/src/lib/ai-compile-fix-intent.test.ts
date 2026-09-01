@@ -4,9 +4,11 @@ import {
   COMPILE_FIX_ACTION,
   COMPILE_FIX_USER_MESSAGE,
   detectFixCompileIntent,
+  resolveCompileRouting,
 } from "./ai-compile-fix-intent";
 import {
   classifyCompileDiagnosticsReviewFallback,
+  COMPILE_DIAGNOSTICS_REVIEW_EXAMPLE_PHRASES,
   detectCompileDiagnosticsIntent,
 } from "./ai-compile-diagnostics-intent";
 
@@ -29,12 +31,12 @@ describe("detectFixCompileIntent", () => {
     expect(detectFixCompileIntent("anything", "explain-errors")).toBe(true);
   });
 
-  it("detects free-text fix and compile intent", () => {
+  it("detects explicit fix-the-errors phrasing", () => {
     expect(
       detectFixCompileIntent("Fix the errors in the project, it is not compiling")
     ).toBe(true);
-    expect(detectFixCompileIntent("Why won't this compile?")).toBe(true);
-    expect(detectFixCompileIntent("There are LaTeX errors in section 2")).toBe(true);
+    expect(detectFixCompileIntent("Fix the compile errors")).toBe(true);
+    expect(detectFixCompileIntent(COMPILE_FIX_USER_MESSAGE)).toBe(true);
   });
 
   it("ignores unrelated chat", () => {
@@ -42,8 +44,42 @@ describe("detectFixCompileIntent", () => {
     expect(detectFixCompileIntent("Find papers about transformers")).toBe(false);
   });
 
-  it("does not treat warning review as compile-fix", () => {
+  it("does not treat compile status or warning review as compile-fix", () => {
     expect(detectFixCompileIntent("we have several warnings, can you check?")).toBe(false);
+    expect(detectFixCompileIntent("Why won't this compile?")).toBe(false);
+    expect(detectFixCompileIntent("what's wrong with the compile")).toBe(false);
+    expect(detectFixCompileIntent("did it compile clean")).toBe(false);
+    expect(detectFixCompileIntent("what happened on the last build")).toBe(false);
+  });
+});
+
+describe("compile review vs fix routing", () => {
+  it.each(COMPILE_DIAGNOSTICS_REVIEW_EXAMPLE_PHRASES)(
+    "routes review phrase to diagnostics review, not compile-fix: %s",
+    (phrase) => {
+      expect(detectFixCompileIntent(phrase)).toBe(false);
+      expect(classifyCompileDiagnosticsReviewFallback(phrase)).toBe(true);
+      expect(
+        resolveCompileRouting({
+          message: phrase,
+          diagnosticsReview: true,
+        })
+      ).toEqual({ compileFix: false, diagnosticsReview: true });
+    }
+  );
+
+  it("keeps explain-errors on the compile-fix path", () => {
+    expect(
+      resolveCompileRouting({
+        message: "what's wrong with the compile",
+        action: "explain-errors",
+        diagnosticsReview: false,
+      })
+    ).toEqual({ compileFix: true, diagnosticsReview: false });
+  });
+
+  it("does not match abstract questions via broad can-you-see fallback", () => {
+    expect(classifyCompileDiagnosticsReviewFallback("can you see the abstract")).toBe(false);
   });
 });
 

@@ -35,11 +35,11 @@ describe("classifyCompileDiagnosticsReview", () => {
     ).resolves.toBe(true);
   });
 
-  it("returns false during compile-fix turns", async () => {
+  it("returns false during explain-errors action", async () => {
     await expect(
       classifyCompileDiagnosticsReview({
         message: "check the log",
-        compileFix: true,
+        action: "explain-errors",
       })
     ).resolves.toBe(false);
   });
