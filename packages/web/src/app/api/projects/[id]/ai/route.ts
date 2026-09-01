@@ -34,6 +34,13 @@ import {
 import { formatCompileFixLineChangeSummary } from "@/lib/ai-compile-fix-validation";
 import { buildCompileFixNoEditMessage } from "@/lib/ai-compile-fix-failure";
 import { detectFixCompileIntent } from "@/lib/ai-compile-fix-intent";
+import {
+  classifyAiIntent,
+  getAllowedPluginToolNames,
+  pluginSystemPromptForIntent,
+  toolsForIntent,
+  wrapPluginToolsWithPolicy,
+} from "@/lib/ai-intent";
 import { getForcedToolPrompt, getPluginActionPrompt, isRegisteredPluginToolName, resolveAiPlugins } from "@/lib/ai-plugins";
 import {
   asPluginToolsRecord,
@@ -456,7 +463,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const compileErrorsRaw = normalizeAiCompileErrors(requestData.compileErrors);
   const compileFixRequest = isCompileFixRequest(requestData);
 
-  const { tools: pluginTools, systemPrompt: pluginSystemPrompt, plugins } = resolveAiPlugins({
+  const { tools: pluginTools, plugins } = resolveAiPlugins({
     zoteroCredentials: await getUserZoteroCredentials(session.user.id),
   });
 
@@ -517,6 +524,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   });
 
   const model = openai(aiConfig.model);
+  const lastUserMessage = getLastUserMessage(requestData.messages);
+  const aiIntent = await classifyAiIntent({
+    message: lastUserMessage,
+    forcedTool: requestData.forcedTool,
+    action: requestData.action,
+    compileFix: compileFixRequest,
+    model: compileFixRequest ? undefined : model,
+  });
+  const scopedPluginSystemPrompt = compileFixRequest
+    ? ""
+    : pluginSystemPromptForIntent(aiIntent, plugins);
 
   const compileFixMetricsRef: { current: CompileFixMetrics | null } = { current: null };
 
@@ -551,7 +569,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       data: requestData,
       compileErrors,
       fileContext,
-      pluginSystemPrompt,
+      pluginSystemPrompt: scopedPluginSystemPrompt,
       mode: compileFixRequest ? mode : "full",
       retryHint: options?.retryHint,
       compileFixTargetHint,
@@ -578,7 +596,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       });
     }
 
-    const lastUserMessage = getLastUserMessage(requestData.messages);
     const pluginToolsRecord = !compileFixRequest ? asPluginToolsRecord(pluginTools) : null;
     const forcedToolName = pluginToolsRecord
       ? resolveForcedToolChoice({
@@ -587,6 +604,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           pluginTools: pluginToolsRecord,
         })
       : undefined;
+
+    const allowedPluginTools = getAllowedPluginToolNames({
+      intent: aiIntent,
+      forcedToolName,
+      compileFix: compileFixRequest,
+    });
 
     const streamResult = compileFixRequest
       ? streamText({
@@ -604,7 +627,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             messages,
             maxRetries: 0,
             maxSteps: CHAT_MAX_STEPS,
-            tools: { ...pluginToolsRecord, ...workspaceTools },
+            tools: wrapPluginToolsWithPolicy(
+              { ...pluginToolsRecord, ...workspaceTools },
+              allowedPluginTools
+            ),
             toolChoice: { type: "tool", toolName: forcedToolName },
           })
         : streamText({
@@ -613,7 +639,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             messages,
             maxRetries: 0,
             maxSteps: CHAT_MAX_STEPS,
-            tools: { ...pluginTools, ...workspaceTools },
+            tools: wrapPluginToolsWithPolicy(
+              toolsForIntent(aiIntent, pluginTools, workspaceTools),
+              allowedPluginTools
+            ),
           });
 
     return { streamResult, systemPrompt };
