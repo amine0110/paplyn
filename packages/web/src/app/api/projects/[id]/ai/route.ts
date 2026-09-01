@@ -6,7 +6,6 @@ import {
   type GenerateTextResult,
   type StepResult,
   type StreamTextResult,
-  type Tool,
   type ToolSet,
 } from "ai";
 import { eq } from "drizzle-orm";
@@ -612,15 +611,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       compileFix: compileFixRequest,
     });
 
-    const streamTools: Record<string, Tool> = compileFixRequest
-      ? workspaceTools
-      : wrapPluginToolsWithPolicy(
-          forcedToolName && pluginToolsRecord
-            ? { ...pluginToolsRecord, ...workspaceTools }
-            : toolsForIntent(aiIntent, pluginTools, workspaceTools),
-          allowedPluginTools
-        );
-
     const streamResult = compileFixRequest
       ? streamText({
           model,
@@ -628,7 +618,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           messages,
           maxRetries: 0,
           maxSteps: COMPILE_FIX_MAX_STEPS,
-          tools: streamTools as ToolSet,
+          tools: workspaceTools,
         })
       : forcedToolName && pluginToolsRecord
         ? streamText({
@@ -637,7 +627,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             messages,
             maxRetries: 0,
             maxSteps: CHAT_MAX_STEPS,
-            tools: streamTools as ToolSet,
+            tools: wrapPluginToolsWithPolicy(
+              { ...pluginToolsRecord, ...workspaceTools },
+              allowedPluginTools
+            ),
             toolChoice: { type: "tool", toolName: forcedToolName },
           })
         : streamText({
@@ -646,7 +639,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             messages,
             maxRetries: 0,
             maxSteps: CHAT_MAX_STEPS,
-            tools: streamTools as ToolSet,
+            tools: wrapPluginToolsWithPolicy(
+              toolsForIntent(aiIntent, pluginTools, workspaceTools),
+              allowedPluginTools
+            ),
           });
 
     return { streamResult, systemPrompt };

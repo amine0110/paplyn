@@ -49,7 +49,7 @@ describe("PAP-36 intent-based tool mounting deploy gate", () => {
   it("keeps forced toolChoice and compile-fix workspace-only paths", () => {
     const routeSrc = readSrc("app/api/projects/[id]/ai/route.ts");
     expect(routeSrc).toContain('toolChoice: { type: "tool", toolName: forcedToolName }');
-    expect(routeSrc).toMatch(/compileFixRequest[\s\S]*\?\s*workspaceTools/);
+    expect(routeSrc).toContain("tools: workspaceTools");
     expect(routeSrc).toContain("compileFix: compileFixRequest");
   });
 });
