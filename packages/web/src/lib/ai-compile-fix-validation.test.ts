@@ -12,6 +12,7 @@ import {
   validateLaTeXPreambleOrder,
   validateNoDuplicateBeginDocument,
   validateNoDuplicateDocumentClass,
+  validateNoDummyManuscriptContent,
   validateNoInventedPackages,
 } from "./ai-compile-fix-validation";
 
@@ -283,6 +284,25 @@ describe("validateCompileFixEdit", () => {
         endLine: 2,
         replace: "\\usepackage{amsmath}",
         previewContent: preview,
+      })
+    ).toEqual({ ok: true });
+  });
+});
+
+describe("validateNoDummyManuscriptContent", () => {
+  it("rejects new float environments not present in replaced lines", () => {
+    const result = validateNoDummyManuscriptContent({
+      replace: "\\begin{table}\\caption{T}\\label{tab:x}\\end{table}",
+      originalLines: ["See Table~\\ref{tab:x}."],
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it("allows label-only fixes on existing floats", () => {
+    expect(
+      validateNoDummyManuscriptContent({
+        replace: "\\begin{figure}\\includegraphics{a}\\label{fig:x}\\end{figure}",
+        originalLines: ["\\begin{figure}", "\\includegraphics{a}", "\\end{figure}"],
       })
     ).toEqual({ ok: true });
   });

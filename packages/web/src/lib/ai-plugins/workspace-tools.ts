@@ -271,19 +271,40 @@ After applying edits, reply with a short human sentence about what changed. Neve
 /** Extra guidance for general chat (non compile-fix) turns. */
 export const WORKSPACE_CHAT_SUFFIX = `Treat user messages that state or request a change to the paper as edit requests: locate the field in the project .tex files, apply_edit or replace_lines, then confirm briefly in your reply. Distinguish add (insert new) from fill/replace (overwrite the existing value in place — never stack a new line next to an unreplaced old value).`;
 
-export const COMPILE_DIAGNOSTICS_WORKSPACE_SUFFIX = `The latest compile result is already attached to this request or available via get_compile_diagnostics. Use those diagnostics directly — never ask the user to paste compile logs, errors, or warnings. If no compile has run yet, tell them to compile the project first (one short sentence).`;
+export const NO_DUMMY_MANUSCRIPT_CONTENT_SUFFIX = `Never invent placeholder manuscript content to silence undefined references or citations.
+
+For undefined \\ref/\\label:
+- Search the project for an existing figure, table, or section with that content. If found, add the missing \\label on that float or heading.
+- If the float or section does not exist, say which label is missing — do NOT create placeholder tables, figures, or sections.
+
+For undefined citations:
+- Check the project's .bib files for the citation key. If the key exists, fix \\cite, \\bibliography, or natbib wiring.
+- If the key is absent, list the missing keys — do NOT invent \\bibitem entries, stub bibliographies, or dummy papers.
+
+If you cannot make a surgical fix that should reduce the actual error or warning, return no edit and explain what is missing. Do not apply an edit that adds dummy content or makes the compile worse.`;
+
+export const COMPILE_DIAGNOSTICS_WORKSPACE_SUFFIX = `The latest compile result is already attached to this request or available via get_compile_diagnostics. Use those diagnostics directly — never ask the user to paste compile logs, errors, or warnings. If no compile has run yet, tell them to compile the project first (one short sentence).
+
+When fixing warnings, undefined refs, or undefined citations from the compile output:
+${NO_DUMMY_MANUSCRIPT_CONTENT_SUFFIX}`;
 
 export const COMPILE_DIAGNOSTICS_REVIEW_SUFFIX = `The user is asking about compile warnings or the compile log. Your FIRST step is to read the attached compile diagnostics or call get_compile_diagnostics — do NOT read project source with get_file/list_files to guess warnings.
 
 Reply by quoting the actual compiler output only (file:line when present, plus the compiler's exact warning text). If there are no warnings in the diagnostics, say the last compile had none.
 
+When the user asks to fix warnings or undefined refs/cites:
+${NO_DUMMY_MANUSCRIPT_CONTENT_SUFFIX}
+
 Forbidden:
 - Do NOT invent a catalog of "typical" LaTeX warnings.
 - Do NOT say "you'll typically see", "when the file is compiled you will see", or similar.
 - Do NOT describe warnings that are not present in the attached diagnostics or get_compile_diagnostics result.
-- Do NOT analyze source to predict warnings before reading diagnostics.`;
+- Do NOT analyze source to predict warnings before reading diagnostics.
+- Do NOT insert placeholder tables, figures, sections, or minimal bibliographies to silence undefined refs/cites.`;
 
 export const COMPILE_FIX_WORKSPACE_SUFFIX = `Focus on fixing compile errors in the FIRST document copy only (from the first \\\\documentclass through the first \\\\end{document}). pdflatex stops at the first \\\\end{document} — ignore duplicate templates pasted after it.
+
+${NO_DUMMY_MANUSCRIPT_CONTENT_SUFFIX}
 
 Rules:
 1. Never put \\\\usepackage, \\\\title, or body content before \\\\documentclass. Repair the cited line — do not prepend a new preamble or smash multiple commands onto one line.
@@ -301,6 +322,8 @@ export interface WorkspaceToolsOptions {
   onGetFileCall?: (call: { path: string; startLine: number; endLine: number }) => void;
   /** Enable compile-fix edit guards (preamble order, first copy, package invention). */
   compileFix?: boolean;
+  /** Reject placeholder tables/figures/bibliography for compile/warning fixes. */
+  manuscriptGuards?: boolean;
   /** Primary cited error location for compile-fix preload. */
   citedErrorLocation?: { file: string; line: number } | null;
   /** Refresh project files between get_file retries (compile-fix DB race). */
@@ -370,9 +393,9 @@ export function createWorkspaceTools(
       };
     };
 
-  const { maxGetFileCalls, onGetFileCall, compileFix, citedErrorLocation, refreshTexFiles, compileDiagnostics } =
+  const { maxGetFileCalls, onGetFileCall, compileFix, manuscriptGuards, citedErrorLocation, refreshTexFiles, compileDiagnostics } =
     options;
-  const validateCtx: ValidateActionContext = { ...ctx, compileFix };
+  const validateCtx: ValidateActionContext = { ...ctx, compileFix, manuscriptGuards };
   let getFileCallCount = 0;
   const readLineCoverage: Map<string, LineCoverageRange[]> = new Map();
 

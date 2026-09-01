@@ -7,6 +7,66 @@ const USEPACKAGE_LINE_RE = /^\s*\\usepackage(\[[^\]]*\])?\s*\{[^}]+\}\s*$/;
 const BARE_USEPACKAGE_RE = /^\s*\\usepackage(\[[^\]]*\])?\s*$/;
 const USEPACKAGE_PKG_RE = /\\usepackage(?:\[[^\]]*\])?\{([^}]+)\}/g;
 
+const FLOAT_BEGIN_RE = /\\begin\{(?:table\*?|figure\*?|tabular\*?)\}/g;
+const BIBLIOGRAPHY_RE = /\\(?:bibliography\{|begin\{thebibliography\})|\\bibitem\b/g;
+const NEW_SECTION_RE = /\\(?:section|subsection)\{/g;
+
+function countPatternMatches(text: string, pattern: RegExp): number {
+  return [...text.matchAll(pattern)].length;
+}
+
+export type NoDummyManuscriptValidation =
+  | { ok: true }
+  | { ok: false; reason: string };
+
+/**
+ * Reject placeholder tables/figures/sections/bibliography invented to silence undefined refs/cites.
+ * Allows adding \\label on existing content and fixing citation wiring.
+ */
+export function validateNoDummyManuscriptContent(options: {
+  replace: string;
+  originalLines?: string[];
+}): NoDummyManuscriptValidation {
+  const { replace, originalLines } = options;
+  const originalBlock = originalLines?.join("\n") ?? "";
+
+  const floatAdds = countPatternMatches(replace, FLOAT_BEGIN_RE) - countPatternMatches(originalBlock, FLOAT_BEGIN_RE);
+  if (floatAdds > 0) {
+    return {
+      ok: false,
+      reason:
+        "Edit would add a new table or figure environment to silence undefined refs. " +
+        "Attach \\label to an existing float if it exists, or tell the user which label is missing — " +
+        "do not invent placeholder floats.",
+    };
+  }
+
+  const bibAdds =
+    countPatternMatches(replace, BIBLIOGRAPHY_RE) - countPatternMatches(originalBlock, BIBLIOGRAPHY_RE);
+  if (bibAdds > 0) {
+    return {
+      ok: false,
+      reason:
+        "Edit would add bibliography or \\bibitem entries to silence undefined citations. " +
+        "Fix \\cite/\\bibliography/natbib wiring from the project .bib when keys exist, " +
+        "or tell the user which citation keys are missing — do not invent bib entries or stub bibliographies.",
+    };
+  }
+
+  const sectionAdds =
+    countPatternMatches(replace, NEW_SECTION_RE) - countPatternMatches(originalBlock, NEW_SECTION_RE);
+  if (sectionAdds > 0) {
+    return {
+      ok: false,
+      reason:
+        "Edit would add a new section to silence compile warnings. " +
+        "Explain which labels or citations are missing instead of inventing manuscript sections.",
+    };
+  }
+
+  return { ok: true };
+}
+
 export interface FirstNonCommentLine {
   line: number;
   text: string;
@@ -227,6 +287,8 @@ export interface ValidateCompileFixEditOptions {
   startLine?: number;
   endLine?: number;
   replace: string;
+  /** Search span for apply_edit validation. */
+  search?: string;
   /** Resulting file content after the edit. */
   previewContent: string;
 }
@@ -235,7 +297,7 @@ export interface ValidateCompileFixEditOptions {
 export function validateCompileFixEdit(
   options: ValidateCompileFixEditOptions
 ): LaTeXPreambleValidation {
-  const { content, startLine, endLine, replace, previewContent } = options;
+  const { content, startLine, endLine, replace, search, previewContent } = options;
 
   const firstCopyEnd = getFirstLaTeXCopyEndLine(content);
   if (startLine != null && startLine > firstCopyEnd) {
@@ -277,6 +339,15 @@ export function validateCompileFixEdit(
     const packageCheck = validateNoInventedPackages(originalLines, replace);
     if (!packageCheck.ok) return packageCheck;
   }
+
+  const originalLines =
+    startLine != null && endLine != null
+      ? content.split("\n").slice(startLine - 1, endLine)
+      : search
+        ? search.split("\n")
+        : [];
+  const dummyCheck = validateNoDummyManuscriptContent({ replace, originalLines });
+  if (!dummyCheck.ok) return dummyCheck;
 
   const documentClassLine = getDocumentClassLine(content);
   if (

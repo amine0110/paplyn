@@ -31,6 +31,8 @@ export const COMPILE_DIAGNOSTICS_REVIEW_FALLBACK_PATTERNS: RegExp[] = [
   /\bwhy\b.+\b(?:compile|pdf|build)\b/i,
   /\bwarnings?\b.+\bshowing\b/i,
   /\bcan you see\b.+\bwarnings?\b/i,
+  /\bcan we fix\b/i,
+  /\bfix them\b/i,
 ];
 
 export const COMPILE_DIAGNOSTICS_REVIEW_EXAMPLE_PHRASES = [
