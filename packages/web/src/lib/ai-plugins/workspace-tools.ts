@@ -273,6 +273,16 @@ export const WORKSPACE_CHAT_SUFFIX = `Treat user messages that state or request 
 
 export const COMPILE_DIAGNOSTICS_WORKSPACE_SUFFIX = `The latest compile result is already attached to this request or available via get_compile_diagnostics. Use those diagnostics directly — never ask the user to paste compile logs, errors, or warnings. If no compile has run yet, tell them to compile the project first (one short sentence).`;
 
+export const COMPILE_DIAGNOSTICS_REVIEW_SUFFIX = `The user is asking about compile warnings or the compile log. Your FIRST step is to read the attached compile diagnostics or call get_compile_diagnostics — do NOT read project source with get_file/list_files to guess warnings.
+
+Reply by quoting the actual compiler output only (file:line when present, plus the compiler's exact warning text). If there are no warnings in the diagnostics, say the last compile had none.
+
+Forbidden:
+- Do NOT invent a catalog of "typical" LaTeX warnings.
+- Do NOT say "you'll typically see", "when the file is compiled you will see", or similar.
+- Do NOT describe warnings that are not present in the attached diagnostics or get_compile_diagnostics result.
+- Do NOT analyze source to predict warnings before reading diagnostics.`;
+
 export const COMPILE_FIX_WORKSPACE_SUFFIX = `Focus on fixing compile errors in the FIRST document copy only (from the first \\\\documentclass through the first \\\\end{document}). pdflatex stops at the first \\\\end{document} — ignore duplicate templates pasted after it.
 
 Rules:
@@ -559,7 +569,11 @@ export function createWorkspaceTools(
           errorCount: errors.filter((entry) => entry.severity !== "warning").length,
           warningCount: errors.filter((entry) => entry.severity === "warning").length,
           logExcerpt: log,
-          formatted: buildCompileDiagnosticsContext({ errors, log }),
+          formatted: buildCompileDiagnosticsContext({
+            errors,
+            log,
+            includeRawLog: errors.length === 0,
+          }),
           error:
             errors.length === 0 && !log
               ? "No compile diagnostics yet. Ask the user to compile the project first."

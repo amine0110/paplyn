@@ -49,6 +49,9 @@ describe("detectCompileDiagnosticsIntent", () => {
     expect(detectCompileDiagnosticsIntent("we have several warnings, can you check?")).toBe(
       true
     );
+    expect(detectCompileDiagnosticsIntent("can you see the warnings that are showing")).toBe(
+      true
+    );
     expect(detectCompileDiagnosticsIntent("Any overfull hbox issues?")).toBe(true);
     expect(detectCompileDiagnosticsIntent("Check the compile log for undefined references")).toBe(
       true

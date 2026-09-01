@@ -35,6 +35,7 @@ import {
   truncateCompileLogExcerpt,
   type AiCompileError,
 } from "@/lib/ai-compile-fix-context";
+import { mergeCompileDiagnostics } from "@/lib/compile-log-diagnostics";
 import { formatCompileFixLineChangeSummary } from "@/lib/ai-compile-fix-validation";
 import { buildCompileFixNoEditMessage } from "@/lib/ai-compile-fix-failure";
 import {
@@ -78,6 +79,7 @@ import {
   WORKSPACE_CHAT_SUFFIX,
   COMPILE_FIX_WORKSPACE_SUFFIX,
   COMPILE_DIAGNOSTICS_WORKSPACE_SUFFIX,
+  COMPILE_DIAGNOSTICS_REVIEW_SUFFIX,
 } from "@/lib/ai-plugins/workspace-tools";
 import {
   AI_RATE_LIMIT_MESSAGE,
@@ -218,6 +220,7 @@ function buildSystemPrompt(options: {
   compileDiagnostics: AiCompileError[];
   compileLog?: string;
   compileDiagnosticsAware: boolean;
+  compileDiagnosticsReview: boolean;
   fileContext: string;
   pluginSystemPrompt: string;
   plugins: AiPlugin[];
@@ -233,6 +236,7 @@ function buildSystemPrompt(options: {
     compileDiagnostics,
     compileLog,
     compileDiagnosticsAware,
+    compileDiagnosticsReview,
     fileContext,
     pluginSystemPrompt,
     plugins,
@@ -268,7 +272,12 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
     systemPrompt += `\n\n${COMPILE_DIAGNOSTICS_WORKSPACE_SUFFIX}`;
   }
 
-  if (fileContext) {
+  if (!compileFix && compileDiagnosticsReview) {
+    systemPrompt += `\n\n${COMPILE_DIAGNOSTICS_REVIEW_SUFFIX}`;
+  }
+
+  const includeFileContext = Boolean(fileContext) && !(compileDiagnosticsReview && compileDiagnosticsAware);
+  if (includeFileContext) {
     systemPrompt += compileFix
       ? `\n\n${fileContext}`
       : `\nCurrent project files:\n${fileContext}`;
@@ -286,6 +295,7 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
     const diagnosticsContext = buildCompileDiagnosticsContext({
       errors: compileDiagnostics,
       log: compileLog,
+      includeRawLog: compileDiagnostics.length === 0,
     });
     if (diagnosticsContext) {
       systemPrompt += `\n\nLatest compile result (use this or get_compile_diagnostics — never ask the user to paste logs):\n${diagnosticsContext}`;
@@ -527,13 +537,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .map((f) => ({ path: f.path, content: f.content }));
 
   const compileErrorsRaw = normalizeAiCompileErrors(requestData.compileErrors);
-  const compileDiagnosticsRaw = normalizeAiCompileDiagnostics(requestData.compileErrors);
   const compileLog = truncateCompileLogExcerpt(requestData.compileLog);
+  const mainFile = access.project.mainFile;
+  const mergedCompileDiagnostics = mergeCompileDiagnostics(
+    normalizeAiCompileDiagnostics(requestData.compileErrors),
+    compileLog,
+    { mainFile }
+  );
   const hasCompileDiagnostics = hasCompileDiagnosticsPayload({
-    errors: compileDiagnosticsRaw,
+    errors: mergedCompileDiagnostics,
     log: compileLog,
   });
   const compileDiagnosticsAware = compileDiagnosticsRequest || hasCompileDiagnostics;
+  const compileDiagnosticsReview = compileDiagnosticsRequest;
 
   const forcedToolName = !compileFixRequest
     ? resolveForcedToolChoice({
@@ -553,7 +569,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     : pluginSystemPromptForMountedTools(mountedTools, plugins);
 
   const texFileMap = new Map(texFiles.map((f) => [f.path, f.content]));
-  const mainFile = access.project.mainFile;
   const mainFileContent = texFileMap.get(mainFile) ?? "";
 
   const compileFixErrorPrep = compileFixRequest
@@ -600,14 +615,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             getFileCalls.push(call);
           },
           compileDiagnostics: {
-            errors: compileDiagnosticsRaw,
+            errors: mergedCompileDiagnostics,
             log: compileLog,
           },
         }
       : {
           compileDiagnostics: hasCompileDiagnostics
             ? {
-                errors: compileDiagnosticsRaw,
+                errors: mergedCompileDiagnostics,
                 log: compileLog,
               }
             : undefined,
@@ -646,9 +661,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const systemPrompt = buildSystemPrompt({
       data: requestData,
       compileErrors,
-      compileDiagnostics: compileDiagnosticsRaw,
+      compileDiagnostics: mergedCompileDiagnostics,
       compileLog,
       compileDiagnosticsAware,
+      compileDiagnosticsReview,
       fileContext,
       pluginSystemPrompt: scopedPluginSystemPrompt,
       plugins,

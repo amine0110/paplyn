@@ -43,6 +43,7 @@ import {
   endCompileFixRetrySession,
   markCompileFixEditsApplied,
 } from "@/lib/compile-fix-auto-retry";
+import { mergeCompileDiagnostics } from "@/lib/compile-log-diagnostics";
 import { AiAssistantFab } from "@/components/ai-assistant-fab";
 import { SelectionAiBubble } from "@/components/selection-ai-bubble";
 import { EditorStatusBar, EditorToolbar } from "@/components/editor-toolbar";
@@ -401,7 +402,12 @@ export default function ProjectPage() {
         setProofIsStale(stale.isStale);
       } else {
         setCompileLog(result.log || "");
-        let errors: CompileError[] = result.errors || [];
+        let errors: CompileError[] = mergeCompileDiagnostics(result.errors || [], result.log, {
+          mainFile: project?.mainFile,
+        }).map((entry) => ({
+          ...entry,
+          severity: entry.severity ?? "warning",
+        }));
         if (!result.success && !errors.some((e) => e.severity === "error")) {
           errors = [
             ...errors,

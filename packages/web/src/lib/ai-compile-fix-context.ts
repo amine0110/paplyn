@@ -89,8 +89,10 @@ export function hasCompileDiagnosticsPayload(options: {
 export function buildCompileDiagnosticsContext(options: {
   errors: AiCompileError[];
   log?: string;
+  /** Include raw log excerpt when structured diagnostics are empty. */
+  includeRawLog?: boolean;
 }): string {
-  const { errors, log } = options;
+  const { errors, log, includeRawLog = true } = options;
   const parts: string[] = [];
 
   if (errors.length > 0) {
@@ -107,9 +109,11 @@ export function buildCompileDiagnosticsContext(options: {
     }
   }
 
-  const logExcerpt = truncateCompileLogExcerpt(log);
-  if (logExcerpt) {
-    parts.push(`Compile log excerpt:\n${logExcerpt}`);
+  if (includeRawLog && errors.length === 0) {
+    const logExcerpt = truncateCompileLogExcerpt(log);
+    if (logExcerpt) {
+      parts.push(`Compile log excerpt:\n${logExcerpt}`);
+    }
   }
 
   return parts.join("\n\n");

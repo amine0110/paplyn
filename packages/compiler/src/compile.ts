@@ -201,12 +201,37 @@ function parseLog(log: string, mainFile: string): CompileError[] {
       });
     }
 
-    const warnMatch = line.match(/LaTeX Warning: (.+)/);
+    const warnMatch = line.match(/^(?:LaTeX|Package \S+) Warning:\s*(.+)$/);
     if (warnMatch) {
+      const fullMessage = warnMatch[1]!.trim();
+      const onLine = fullMessage.match(/ on (?:input )?line (\d+)/i);
+      const inFile = fullMessage.match(/ in ([^\s]+\.tex)/i);
       errors.push({
-        message: warnMatch[1].trim(),
+        message: line.trim(),
         severity: "warning",
+        ...(onLine ? { line: parseInt(onLine[1], 10) } : {}),
+        ...(inFile ? { file: inFile[1] } : {}),
       });
+      continue;
+    }
+
+    if (/^Overfull \\hbox/.test(line) || /^Underfull \\hbox/.test(line)) {
+      const lineRef = line.match(/ at lines (\d+)(?:--(\d+))?/);
+      errors.push({
+        message: line.trim(),
+        severity: "warning",
+        ...(lineRef ? { line: parseInt(lineRef[1], 10), file: mainFile } : {}),
+      });
+      continue;
+    }
+
+    if (/^There were undefined references\.?$/i.test(line.trim())) {
+      errors.push({ message: line.trim(), severity: "warning" });
+      continue;
+    }
+
+    if (/^There were undefined citations\.?$/i.test(line.trim())) {
+      errors.push({ message: line.trim(), severity: "warning" });
     }
   }
 
