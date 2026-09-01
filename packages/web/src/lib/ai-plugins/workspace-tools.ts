@@ -6,10 +6,19 @@ import {
   type AiClientAction,
   type ValidateActionContext,
 } from "@/lib/ai-client-actions";
-import { buildGetFileWindow } from "@/lib/ai-compile-fix-context";
+import {
+  buildCompileDiagnosticsContext,
+  buildGetFileWindow,
+  truncateCompileLogExcerpt,
+  type AiCompileError,
+} from "@/lib/ai-compile-fix-context";
 
 /** Read-only workspace tools (no client-side action). */
-export const WORKSPACE_READ_TOOL_NAMES = ["list_files", "get_file"] as const;
+export const WORKSPACE_READ_TOOL_NAMES = [
+  "list_files",
+  "get_file",
+  "get_compile_diagnostics",
+] as const;
 
 /** Tools that return validated client edit actions. */
 export const CLIENT_ACTION_TOOL_NAMES = [
@@ -235,6 +244,7 @@ export function readTexFile(
 export const WORKSPACE_SYSTEM_PROMPT = `You are a workspace agent for this LaTeX project. You have tools to list, read, and edit files:
 - list_files — list all .tex file paths in the project
 - get_file — read a line range from one .tex file (content is raw file text; line numbers are in startLine/endLine/totalLines; max ${GET_FILE_MAX_LINES} lines per call)
+- get_compile_diagnostics — return the latest compile errors, warnings, and log excerpt from the project (never ask the user to paste logs)
 - apply_edit — surgical search/replace in a file (search must match exactly once)
 - replace_lines — replace a 1-based inclusive line range without substring search (prefer when compile errors cite a line number)
 - fix_compile_errors — batch search/replace fixes for compile errors
@@ -261,6 +271,8 @@ After applying edits, reply with a short human sentence about what changed. Neve
 /** Extra guidance for general chat (non compile-fix) turns. */
 export const WORKSPACE_CHAT_SUFFIX = `Treat user messages that state or request a change to the paper as edit requests: locate the field in the project .tex files, apply_edit or replace_lines, then confirm briefly in your reply. Distinguish add (insert new) from fill/replace (overwrite the existing value in place — never stack a new line next to an unreplaced old value).`;
 
+export const COMPILE_DIAGNOSTICS_WORKSPACE_SUFFIX = `The latest compile result is already attached to this request or available via get_compile_diagnostics. Use those diagnostics directly — never ask the user to paste compile logs, errors, or warnings. If no compile has run yet, tell them to compile the project first (one short sentence).`;
+
 export const COMPILE_FIX_WORKSPACE_SUFFIX = `Focus on fixing compile errors in the FIRST document copy only (from the first \\\\documentclass through the first \\\\end{document}). pdflatex stops at the first \\\\end{document} — ignore duplicate templates pasted after it.
 
 Rules:
@@ -283,6 +295,11 @@ export interface WorkspaceToolsOptions {
   citedErrorLocation?: { file: string; line: number } | null;
   /** Refresh project files between get_file retries (compile-fix DB race). */
   refreshTexFiles?: () => Promise<Map<string, string>>;
+  /** Latest compile diagnostics for get_compile_diagnostics. */
+  compileDiagnostics?: {
+    errors: AiCompileError[];
+    log?: string;
+  };
 }
 
 export function createWorkspaceTools(
@@ -343,7 +360,7 @@ export function createWorkspaceTools(
       };
     };
 
-  const { maxGetFileCalls, onGetFileCall, compileFix, citedErrorLocation, refreshTexFiles } =
+  const { maxGetFileCalls, onGetFileCall, compileFix, citedErrorLocation, refreshTexFiles, compileDiagnostics } =
     options;
   const validateCtx: ValidateActionContext = { ...ctx, compileFix };
   let getFileCallCount = 0;
@@ -524,6 +541,31 @@ export function createWorkspaceTools(
       }),
       execute: async ({ path, startLine, endLine }) =>
         wrapGetFile({ path, startLine, endLine }),
+    }),
+    get_compile_diagnostics: tool({
+      description:
+        "Return the latest compile errors, warnings, and log excerpt from the project's most recent compile. Use this when the user asks about warnings, overfull boxes, or the compile log — never ask them to paste logs.",
+      parameters: z.object({
+        scope: z
+          .enum(["latest"])
+          .describe("Use 'latest' for the most recent compile result"),
+      }),
+      execute: async () => {
+        const errors = compileDiagnostics?.errors ?? [];
+        const log = truncateCompileLogExcerpt(compileDiagnostics?.log);
+        return {
+          errors,
+          warnings: errors.filter((entry) => entry.severity === "warning"),
+          errorCount: errors.filter((entry) => entry.severity !== "warning").length,
+          warningCount: errors.filter((entry) => entry.severity === "warning").length,
+          logExcerpt: log,
+          formatted: buildCompileDiagnosticsContext({ errors, log }),
+          error:
+            errors.length === 0 && !log
+              ? "No compile diagnostics yet. Ask the user to compile the project first."
+              : "",
+        };
+      },
     }),
     insert_at_cursor: tool({
       description:

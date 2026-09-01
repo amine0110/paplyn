@@ -5,8 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Sparkles, Send, X, Mic, MicOff, Square } from "lucide-react";
 import { aiUnavailableBannerMessage, isClientSelfHosted } from "@/lib/ai-config";
 import { extractInsertableContent, hasInsertableContent } from "@/lib/ai-insert-content";
-import { detectFixCompileIntent } from "@/lib/ai-compile-fix-intent";
+import {
+  detectCompileDiagnosticsIntent,
+  detectFixCompileIntent,
+} from "@/lib/ai-compile-fix-intent";
 import type { AiCompileError } from "@/lib/ai-compile-fix-context";
+import { hasCompileDiagnosticsPayload } from "@/lib/ai-compile-fix-context";
 import { AiMarkdown } from "@/components/ai-markdown";
 import { DetectedErrorReportFooter } from "@/components/detected-error-report-footer";
 import type { AiAppliedAction, AiClientAction, AiPaper, AiToolRead, AiUsedPlugin, ArxivPaperResult, DoiCitationPayload, ZoteroItemResult } from "@/lib/ai-types";
@@ -50,6 +54,7 @@ interface AiSidebarProps {
   activeFile: string | null;
   selectedText: string;
   compileErrors: AiCompileError[];
+  compileLog?: string;
   onInsert: (text: string) => void;
   onReplace?: (text: string) => void;
   onCitePaper?: (paper: AiPaper) => void | Promise<void>;
@@ -123,6 +128,7 @@ export function AiSidebar({
   activeFile,
   selectedText,
   compileErrors,
+  compileLog = "",
   onInsert,
   onReplace,
   onCitePaper,
@@ -277,20 +283,28 @@ export function AiSidebar({
     setToolInputPlaceholder(null);
 
     const fixIntent = detectFixCompileIntent(content, action);
+    const diagnosticsIntent = detectCompileDiagnosticsIntent(content, action);
     const effectiveAction = fixIntent ? "explain-errors" : action;
+    const hasDiagnostics = hasCompileDiagnosticsPayload({
+      errors: compileErrors,
+      log: compileLog,
+    });
 
     if (fixIntent && !options?.autoCompileFixRetry) {
       onCompileFixSessionStart?.();
     }
 
-    if (fixIntent && compileErrors.length === 0) {
+    if ((fixIntent || diagnosticsIntent) && !hasDiagnostics) {
       const userMsg: AiChatMessage = { role: "user", content: content || action || "" };
+      const compileFirstMessage = diagnosticsIntent
+        ? "Please compile your project first so I can review the warnings and log."
+        : "Please compile your project first so I can see the current errors.";
       setMessages((prev) => [
         ...prev,
         userMsg,
         {
           role: "assistant",
-          content: "Please compile your project first so I can see the current errors.",
+          content: compileFirstMessage,
         },
       ]);
       setInput("");
@@ -316,7 +330,8 @@ export function AiSidebar({
           selectedText: selectedText || undefined,
           action: effectiveAction,
           forcedTool,
-          compileErrors: compileErrors.length > 0 ? compileErrors : undefined,
+          compileErrors: hasDiagnostics ? compileErrors : undefined,
+          compileLog: compileLog.trim() ? compileLog : undefined,
         }),
       });
 
