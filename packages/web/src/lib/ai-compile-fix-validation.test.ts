@@ -3,7 +3,9 @@ import {
   countBeginDocumentInFirstCopy,
   countDocumentClassLinesBeforeBeginDocument,
   countDocumentClassLinesInFirstCopy,
+  detectUndefinedCitationCommands,
   formatCompileFixLineChangeSummary,
+  getAllowlistedPackagesForCompileErrors,
   getDocumentClassLine,
   getFirstLaTeXCopyEndLine,
   getFirstNonCommentLine,
@@ -122,7 +124,39 @@ describe("validateNoInventedPackages", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.reason).toContain("cite");
-      expect(result.reason).toContain("do not invent");
+      expect(result.reason).toMatch(/do not invent|Edit rejected/i);
+    }
+  });
+
+  it("rejects inventing foo package", () => {
+    const result = validateNoInventedPackages(
+      ["\\usepackage{amsmath}"],
+      "\\usepackage{amsmath}\n\\usepackage{foo}"
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toContain("foo");
+    }
+  });
+
+  it("allows natbib when citep is in allowedPackages", () => {
+    expect(
+      validateNoInventedPackages(
+        ["\\usepackage{amsmath}"],
+        "\\usepackage{amsmath}\n\\usepackage{natbib}",
+        { allowedPackages: ["natbib"] }
+      )
+    ).toEqual({ ok: true });
+  });
+
+  it("rejects natbib without allowlist", () => {
+    const result = validateNoInventedPackages(
+      ["\\usepackage{amsmath}"],
+      "\\usepackage{amsmath}\n\\usepackage{natbib}"
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toContain("natbib");
     }
   });
 });
@@ -287,6 +321,36 @@ describe("validateCompileFixEdit", () => {
       })
     ).toEqual({ ok: true });
   });
+
+  it("allows natbib insert when compile error cites undefined citep", () => {
+    const content = [
+      "\\documentclass{article}",
+      "\\usepackage{graphicx}",
+      "\\begin{document}",
+      "See \\citep{foo}.",
+      "\\end{document}",
+    ].join("\n");
+    const preview = [
+      "\\documentclass{article}",
+      "\\usepackage{graphicx}",
+      "\\usepackage{natbib}",
+      "\\begin{document}",
+      "See \\citep{foo}.",
+      "\\end{document}",
+    ].join("\n");
+    expect(
+      validateCompileFixEdit({
+        content,
+        startLine: 2,
+        endLine: 2,
+        replace: "\\usepackage{graphicx}\n\\usepackage{natbib}",
+        previewContent: preview,
+        compileErrors: [
+          { message: "template.tex:4: Undefined control sequence. \\citep" },
+        ],
+      })
+    ).toEqual({ ok: true });
+  });
 });
 
 describe("validateNoDummyManuscriptContent", () => {
@@ -312,6 +376,29 @@ describe("getDocumentClassLine", () => {
   it("finds the first documentclass line", () => {
     expect(getDocumentClassLine(concatenatedIeee)).toBe(1);
     expect(getDocumentClassLine("\\usepackage{x}\n\\documentclass{article}")).toBe(2);
+  });
+});
+
+describe("detectUndefinedCitationCommands", () => {
+  it("detects citep and citet from error messages", () => {
+    expect(
+      detectUndefinedCitationCommands([
+        { message: "template.tex:64: Undefined control sequence. \\citep" },
+      ])
+    ).toEqual(["citep"]);
+    expect(
+      detectUndefinedCitationCommands([
+        { message: "Undefined control sequence. l.12 \\citet{smith2020}" },
+      ])
+    ).toEqual(["citet"]);
+  });
+
+  it("returns allowlisted natbib for citep errors", () => {
+    expect(
+      getAllowlistedPackagesForCompileErrors([
+        { message: "main.tex:5: Undefined control sequence \\citep" },
+      ])
+    ).toEqual(["natbib"]);
   });
 });
 
