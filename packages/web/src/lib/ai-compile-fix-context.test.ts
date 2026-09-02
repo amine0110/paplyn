@@ -4,7 +4,9 @@ import {
   buildCompileDiagnosticsContext,
   buildCompileFixTargetHint,
   buildCompileFixMultiErrorHint,
+  buildCompileFixCiteCommandHint,
   buildGetFileWindow,
+  COMPILE_FIX_GET_FILE_BEFORE_EDIT,
   enrichCompileErrorsWithLocations,
   extractLineSnippet,
   formatCompileErrorLines,
@@ -173,6 +175,26 @@ describe("buildCompileFixTargetHint", () => {
     expect(hint).toContain("FIRST tool call");
     expect(hint).toContain("FIRST document copy");
     expect(hint).toContain("Do not prepend");
+    expect(hint).toContain("natbib");
+    expect(hint).toContain(String(COMPILE_FIX_GET_FILE_BEFORE_EDIT));
+  });
+});
+
+describe("buildCompileFixCiteCommandHint", () => {
+  it("guides a complete citep fix in one turn", () => {
+    const hint = buildCompileFixCiteCommandHint([
+      { message: "template.tex:64: Undefined control sequence. \\citep" },
+    ]);
+    expect(hint).toContain("\\citep");
+    expect(hint).toContain("natbib");
+    expect(hint).toContain("allowlisted");
+    expect(hint).toMatch(/EVERY|every/i);
+  });
+
+  it("returns undefined when error is unrelated", () => {
+    expect(
+      buildCompileFixCiteCommandHint([{ message: "Missing } inserted" }])
+    ).toBeUndefined();
   });
 });
 

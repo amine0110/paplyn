@@ -163,6 +163,8 @@ export interface ValidateActionContext {
   compileFix?: boolean;
   /** When true, reject placeholder tables/figures/bibliography invented for compile/warning fixes. */
   manuscriptGuards?: boolean;
+  /** Active compile errors — relax package invention for allowlisted undefined commands. */
+  compileErrors?: readonly { message: string }[];
 }
 
 export interface ValidatedAction {
@@ -326,7 +328,8 @@ function rejectCompileFixEdit(
   previewContent: string,
   startLine?: number,
   endLine?: number,
-  search?: string
+  search?: string,
+  compileErrors?: readonly { message: string }[]
 ): RejectedAction | null {
   const check = validateCompileFixEdit({
     content,
@@ -335,6 +338,7 @@ function rejectCompileFixEdit(
     startLine,
     endLine,
     search,
+    compileErrors,
   });
   if (check.ok) return null;
   return { rejected: true, reason: check.reason };
@@ -549,7 +553,8 @@ export function validateClientAction(
           preview.content,
           undefined,
           undefined,
-          preview.search
+          preview.search,
+          ctx.compileErrors
         );
         if (compileFixReject) return compileFixReject;
       }
@@ -596,7 +601,9 @@ export function validateClientAction(
           raw.replace,
           preview.content,
           raw.startLine,
-          raw.endLine
+          raw.endLine,
+          undefined,
+          ctx.compileErrors
         );
         if (compileFixReject) return compileFixReject;
       }
@@ -649,7 +656,8 @@ export function validateClientAction(
             preview.content,
             undefined,
             undefined,
-            preview.search
+            preview.search,
+            ctx.compileErrors
           );
           if (compileFixReject) {
             rejections.push(`${file}: ${compileFixReject.reason}`);

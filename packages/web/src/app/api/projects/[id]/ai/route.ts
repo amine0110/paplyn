@@ -26,6 +26,7 @@ import {
   buildCompileDiagnosticsContext,
   buildCompileFixTargetHint,
   buildCompileFixMultiErrorHint,
+  buildCompileFixCiteCommandHint,
   COMPILE_FIX_MAX_GET_FILE_CALLS,
   hasCompileDiagnosticsPayload,
   normalizeAiCompileDiagnostics,
@@ -228,6 +229,7 @@ function buildSystemPrompt(options: {
   retryHint?: string;
   compileFixTargetHint?: string;
   compileFixMultiErrorHint?: string;
+  compileFixCiteCommandHint?: string;
 }): string {
   const {
     data,
@@ -244,6 +246,7 @@ function buildSystemPrompt(options: {
     retryHint,
     compileFixTargetHint,
     compileFixMultiErrorHint,
+    compileFixCiteCommandHint,
   } = options;
   const compileFix = mode !== "full";
 
@@ -307,6 +310,10 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
 
   if (compileFixMultiErrorHint) {
     systemPrompt += `\n\n${compileFixMultiErrorHint}`;
+  }
+
+  if (compileFixCiteCommandHint) {
+    systemPrompt += `\n\n${compileFixCiteCommandHint}`;
   }
 
   if (data.action && !(data.forcedTool && isRegisteredPluginToolName(data.forcedTool))) {
@@ -616,6 +623,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           manuscriptGuards: true,
           citedErrorLocation: primaryErrorLocation,
           refreshTexFiles: refreshTexFilesFromDb,
+          compileErrors,
           onGetFileCall: (call) => {
             getFileCalls.push(call);
           },
@@ -664,6 +672,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         ? buildCompileFixMultiErrorHint(compileErrors)
         : undefined;
 
+    const compileFixCiteCommandHint =
+      compileFixRequest && compileErrors.length > 0
+        ? buildCompileFixCiteCommandHint(compileErrors)
+        : undefined;
+
     const systemPrompt = buildSystemPrompt({
       data: requestData,
       compileErrors,
@@ -679,6 +692,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       retryHint: options?.retryHint,
       compileFixTargetHint,
       compileFixMultiErrorHint,
+      compileFixCiteCommandHint,
     });
 
     if (compileFixRequest) {

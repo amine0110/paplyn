@@ -1,5 +1,9 @@
 import { type TexFileInput } from "@/lib/ai-file-context";
-import { getFirstLaTeXCopyEndLine } from "@/lib/ai-compile-fix-validation";
+import {
+  detectUndefinedCitationCommands,
+  getAllowlistedPackagesForCompileErrors,
+  getFirstLaTeXCopyEndLine,
+} from "@/lib/ai-compile-fix-validation";
 
 const DOCUMENTCLASS_LINE_RE = /^\s*\\documentclass\b/;
 
@@ -31,6 +35,9 @@ export const COMPILE_FIX_MIN_READ_END_LINE = 30;
 
 /** Maximum get_file calls allowed per compile-fix request (large templates need a few slices). */
 export const COMPILE_FIX_MAX_GET_FILE_CALLS = 4;
+
+/** After this many get_file calls in one compile-fix turn, further reads are blocked until an edit is attempted. */
+export const COMPILE_FIX_GET_FILE_BEFORE_EDIT = 2;
 
 function truncateCompileErrorMessage(message: string): string {
   if (message.length <= MAX_COMPILE_ERROR_MESSAGE_LENGTH) return message;
@@ -302,11 +309,30 @@ export function buildCompileFixTargetHint(location: {
   const { startLine, endLine } = buildGetFileWindow(location.line);
   return (
     `Primary error location: ${location.file}:${location.line}. ` +
-    `Your FIRST tool call must be get_file(path="${location.file}", startLine=${startLine}, endLine=${endLine}). ` +
+    `Your FIRST tool call must be get_file(path="${location.file}", startLine=${startLine}, endLine=${endLine}) — ` +
+    `a small window around the cited error line only (not lines 1–100). ` +
+    `After at most ${COMPILE_FIX_GET_FILE_BEFORE_EDIT} get_file calls you must call replace_lines, apply_edit, or fix_compile_errors. ` +
     `Then call replace_lines on that exact line in the FIRST document copy (line ${location.line} — ` +
     `if it is a broken \\begin{document without a closing brace, fix that line first before adding \\documentclass). ` +
-    `Do not read line ranges past line ${endLine} before attempting an edit. ` +
-    `Do not prepend a preamble or invent packages.`
+    `Do not read overlapping windows past line ${endLine} before attempting an edit. ` +
+    `Do not prepend a preamble. Only \\usepackage{natbib} may be added when the error is undefined \\citep or \\citet.`
+  );
+}
+
+/** Hint for fixing undefined \\citep/\\citet in one compile-fix turn. */
+export function buildCompileFixCiteCommandHint(errors: AiCompileError[]): string | undefined {
+  const commands = detectUndefinedCitationCommands(errors);
+  if (commands.length === 0) return undefined;
+
+  const commandList = commands.map((cmd) => `\\${cmd}`).join(", ");
+  const allowedPkg = getAllowlistedPackagesForCompileErrors(errors)[0] ?? "natbib";
+
+  return (
+    `Undefined ${commandList} in compile output — fix completely in this turn. ` +
+    `Preferred: insert \\usepackage{${allowedPkg}} on the line immediately after the last existing ` +
+    `\\usepackage in the FIRST document copy (${allowedPkg} is allowlisted for this error). ` +
+    `Alternative: replace EVERY ${commandList} in the first copy with \\cite in a single ` +
+    `fix_compile_errors batch or one replace_lines/apply_edit — not one occurrence per round.`
   );
 }
 

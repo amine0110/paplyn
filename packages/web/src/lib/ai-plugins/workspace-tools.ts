@@ -9,6 +9,7 @@ import {
 import {
   buildCompileDiagnosticsContext,
   buildGetFileWindow,
+  COMPILE_FIX_GET_FILE_BEFORE_EDIT,
   truncateCompileLogExcerpt,
   type AiCompileError,
 } from "@/lib/ai-compile-fix-context";
@@ -308,10 +309,10 @@ ${NO_DUMMY_MANUSCRIPT_CONTENT_SUFFIX}
 
 Rules:
 1. Never put \\\\usepackage, \\\\title, or body content before \\\\documentclass. Repair the cited line — do not prepend a new preamble or smash multiple commands onto one line.
-2. Prefer replace_lines on the exact cited line in the first copy. Do not invent packages (no new \\\\usepackage{cite} unless that exact line already existed). Fixing a bare \\\\usepackage line is allowed.
+2. Prefer replace_lines on the exact cited line in the first copy. Do not invent packages except \\\\usepackage{natbib} when the compile error is undefined \\\\citep or \\\\citet (insert it immediately after an existing \\\\usepackage in the first copy). Fixing a bare \\\\usepackage line is allowed. For \\\\citep/\\\\citet errors you may also replace ALL occurrences with \\\\cite in one edit.
 3. When several errors cite line numbers, plan ALL replace_lines against the ORIGINAL file (before any edits) and apply from the highest line number downward so line numbers stay valid. Attempt every cited error in the first copy in one turn when possible.
-4. Use get_file with small line ranges around cited error lines (limited calls). Prefer replace_lines when errors cite a line number — large concatenated templates often have no unique substrings for apply_edit.
-5. In your reply, state exactly which lines you changed (e.g. "Changed main.tex line 3."). If an edit is rejected, say so — never claim a fix after a rejected or unsafe edit.
+4. Your FIRST get_file must be a small window around the cited error line (see Primary error location) — not overlapping lines 1–100. After at most ${COMPILE_FIX_GET_FILE_BEFORE_EDIT} get_file calls you must call replace_lines, apply_edit, or fix_compile_errors.
+5. In your reply, state exactly which lines you changed (e.g. "Changed main.tex line 3."). If an edit is rejected, quote the rejection reason — never claim a fix after a rejected or unsafe edit.
 
 Use fix_compile_errors or apply_edit only when search text matches exactly once. Keep edits minimal.`;
 
@@ -333,6 +334,8 @@ export interface WorkspaceToolsOptions {
     errors: AiCompileError[];
     log?: string;
   };
+  /** Active compile errors for package allowlist validation. */
+  compileErrors?: AiCompileError[];
 }
 
 export function createWorkspaceTools(
@@ -393,9 +396,9 @@ export function createWorkspaceTools(
       };
     };
 
-  const { maxGetFileCalls, onGetFileCall, compileFix, manuscriptGuards, citedErrorLocation, refreshTexFiles, compileDiagnostics } =
+  const { maxGetFileCalls, onGetFileCall, compileFix, manuscriptGuards, citedErrorLocation, refreshTexFiles, compileDiagnostics, compileErrors } =
     options;
-  const validateCtx: ValidateActionContext = { ...ctx, compileFix, manuscriptGuards };
+  const validateCtx: ValidateActionContext = { ...ctx, compileFix, manuscriptGuards, compileErrors };
   let getFileCallCount = 0;
   const readLineCoverage: Map<string, LineCoverageRange[]> = new Map();
 
@@ -500,7 +503,19 @@ export function createWorkspaceTools(
     startLine: number;
     endLine: number;
   }) => {
-    if (maxGetFileCalls != null && getFileCallCount >= maxGetFileCalls) {
+    const getFileBudget =
+      compileFix ? COMPILE_FIX_GET_FILE_BEFORE_EDIT : maxGetFileCalls;
+
+    if (getFileBudget != null && getFileCallCount >= getFileBudget) {
+      const citedLine = citedErrorLocation?.line;
+      const citedHint =
+        citedLine != null
+          ? ` Use replace_lines on ${citedErrorLocation?.file ?? path} line ${citedLine} now.`
+          : " Use replace_lines on the cited error line now.";
+      const budgetMessage = compileFix
+        ? `get_file budget used (${COMPILE_FIX_GET_FILE_BEFORE_EDIT} reads per compile-fix turn). ` +
+          `You must call replace_lines, apply_edit, or fix_compile_errors before reading more.${citedHint}`
+        : `get_file limit reached (${getFileBudget} calls). Use replace_lines on the cited error line or apply_edit now.`;
       return {
         path,
         content: "",
@@ -508,18 +523,37 @@ export function createWorkspaceTools(
         endLine,
         totalLines: 0,
         note: "",
-        error: `get_file limit reached (${maxGetFileCalls} calls). Use replace_lines on the cited error line or apply_edit now.`,
+        error: budgetMessage,
       };
     }
 
+    let readStartLine = startLine;
+    let readEndLine = endLine;
+    let steerNote = "";
+
+    if (compileFix && citedErrorLocation && getFileCallCount === 0) {
+      const resolved = resolveTexFilePath(ctx.texFiles, path);
+      const citedResolved = resolveTexFilePath(ctx.texFiles, citedErrorLocation.file);
+      if (resolved && citedResolved === resolved) {
+        const citedWindow = buildGetFileWindow(citedErrorLocation.line);
+        if (readStartLine !== citedWindow.startLine || readEndLine !== citedWindow.endLine) {
+          readStartLine = citedWindow.startLine;
+          readEndLine = citedWindow.endLine;
+          steerNote =
+            `Steered to cited error window (lines ${readStartLine}–${readEndLine} around line ${citedErrorLocation.line}). ` +
+            `Do not request overlapping 1–${GET_FILE_MAX_LINES} windows before editing. `;
+        }
+      }
+    }
+
     getFileCallCount += 1;
-    onGetFileCall?.({ path, startLine, endLine });
+    onGetFileCall?.({ path, startLine: readStartLine, endLine: readEndLine });
 
     if (
       citedFilePreload &&
       resolveTexFilePath(ctx.texFiles, path) === citedFilePreload.path
     ) {
-      const citedRead = readTexFile(ctx.texFiles, path, startLine, endLine);
+      const citedRead = readTexFile(ctx.texFiles, path, readStartLine, readEndLine);
       if (isReadableGetFileResult(citedRead)) {
         recordLineCoverage(
           readLineCoverage,
@@ -528,11 +562,11 @@ export function createWorkspaceTools(
           citedRead.startLine,
           citedRead.endLine
         );
-        return citedRead;
+        return steerNote ? { ...citedRead, note: `${steerNote}${citedRead.note}`.trim() } : citedRead;
       }
     }
 
-    const result = await readTexFileWithRetry({ path, startLine, endLine });
+    const result = await readTexFileWithRetry({ path, startLine: readStartLine, endLine: readEndLine });
     if (isReadableGetFileResult(result)) {
       recordLineCoverage(
         readLineCoverage,
@@ -542,7 +576,7 @@ export function createWorkspaceTools(
         result.endLine
       );
     }
-    return result;
+    return steerNote ? { ...result, note: `${steerNote}${result.note}`.trim() } : result;
   };
 
   return {
