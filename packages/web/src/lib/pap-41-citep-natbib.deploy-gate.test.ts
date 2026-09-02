@@ -57,8 +57,8 @@ describe("PAP-41 citep/natbib first-pass compile-fix", () => {
     const cite = buildCompileFixCiteCommandHint([
       { message: "template.tex:64: Undefined control sequence. \\citep" },
     ]);
-    expect(cite).toMatch(/allowlisted/i);
-    expect(cite).toMatch(/EVERY|every/i);
+    expect(cite).toMatch(/natbib/i);
+    expect(cite).toMatch(/this turn/i);
   });
 
   it("wires compileErrors and cite hint through the AI route", () => {

@@ -525,6 +525,39 @@ describe("workspace-tools", () => {
     }
   });
 
+  it("allows siunitx insert during compile-fix when error cites SI", async () => {
+    const content = [
+      "\\documentclass{article}",
+      "\\usepackage{amsmath}",
+      "\\begin{document}",
+      "Mass is \\SI{1}{kg}.",
+      "\\end{document}",
+    ].join("\n");
+    const files = new Map([["main.tex", content]]);
+    const tools = createWorkspaceTools(
+      { texFiles: files, hasSelection: false },
+      {
+        compileFix: true,
+        compileErrors: [{ message: "main.tex:4: Undefined control sequence. \\SI" }],
+      }
+    );
+
+    const result = await tools.replace_lines.execute({
+      file: "main.tex",
+      startLine: 2,
+      endLine: 2,
+      replace: "\\usepackage{amsmath}\n\\usepackage{siunitx}",
+    });
+
+    expect(result.kind).toBe("client-action");
+    if (result.kind === "client-action") {
+      expect(result.action).toMatchObject({
+        type: "replace_lines",
+        replace: expect.stringContaining("siunitx"),
+      });
+    }
+  });
+
   it("rejects invented foo package during compile-fix", async () => {
     const content = "\\documentclass{article}\n\\usepackage{amsmath}\n\\begin{document}\n\\end{document}";
     const files = new Map([["main.tex", content]]);

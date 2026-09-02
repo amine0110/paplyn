@@ -88,6 +88,7 @@ export async function consumeAiStream(
           ...(event.actions ? { actions: event.actions } : {}),
           ...(event.appliedActions ? { appliedActions: event.appliedActions } : {}),
           ...(event.toolReads ? { toolReads: event.toolReads } : {}),
+          ...(event.compileFixStopRetry ? { compileFixStopRetry: true } : {}),
         };
       }
     }

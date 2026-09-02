@@ -1,6 +1,10 @@
 import express from "express";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import { compileProject, isLatexEngine } from "./compile.js";
 import type { CompileRequest } from "./types.js";
+
+const execFileAsync = promisify(execFile);
 
 const app = express();
 app.use(express.json({ limit: "50mb" }));
@@ -11,6 +15,25 @@ const MAX_FILE_SIZE_MB = parseInt(process.env.COMPILE_MAX_FILE_SIZE_MB || "10", 
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "compiler" });
+});
+
+app.get("/tex-package/:name", async (req, res) => {
+  const raw = req.params.name?.trim() ?? "";
+  const name = raw.replace(/\.sty$/i, "");
+  if (!name || !/^[a-zA-Z0-9_-]+$/.test(name)) {
+    res.status(400).json({ error: "Invalid package name" });
+    return;
+  }
+
+  try {
+    const { stdout } = await execFileAsync("kpsewhich", [`${name}.sty`], {
+      timeout: 5000,
+    });
+    const available = stdout.trim().length > 0;
+    res.json({ package: name, available });
+  } catch {
+    res.json({ package: name, available: false });
+  }
 });
 
 app.post("/compile", async (req, res) => {

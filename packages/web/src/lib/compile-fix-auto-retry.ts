@@ -1,5 +1,9 @@
 /** Bounded automatic compile-fix retries after post-fix compiles still fail. */
 
+import {
+  analyzeCompileMissingPackage,
+} from "@/lib/compile-missing-package";
+
 /** Total compile-fix rounds per user session (first manual turn + auto-retries). */
 export const COMPILE_FIX_MAX_ROUNDS = 4;
 
@@ -71,13 +75,19 @@ export interface CompileFixAutoRetryDecision {
     | "no_session"
     | "no_edits"
     | "retry_used"
-    | "no_progress";
+    | "no_progress"
+    | "missing_compiler_package"
+    | "unknown_command";
 }
 
 export function decideCompileFixAutoRetry(
   session: CompileFixRetrySession,
   compileErrorCount: number,
-  errorFingerprint?: string
+  errorFingerprint?: string,
+  options?: {
+    errors?: CompileErrorFingerprintInput[];
+    log?: string;
+  }
 ): CompileFixAutoRetryDecision {
   if (!session.awaitingPostFixCompile) {
     return { shouldRetry: false, reason: "no_edits" };
@@ -92,6 +102,21 @@ export function decideCompileFixAutoRetry(
   if (compileErrorCount <= 0) {
     session.active = false;
     return { shouldRetry: false, reason: "success" };
+  }
+
+  if (options?.errors?.length) {
+    const analysis = analyzeCompileMissingPackage({
+      errors: options.errors,
+      log: options.log,
+    });
+    if (analysis.kind === "missing_compiler_package") {
+      session.active = false;
+      return { shouldRetry: false, reason: "missing_compiler_package" };
+    }
+    if (analysis.kind === "unknown_command") {
+      session.active = false;
+      return { shouldRetry: false, reason: "unknown_command" };
+    }
   }
 
   if (

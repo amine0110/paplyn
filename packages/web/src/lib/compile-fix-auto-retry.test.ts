@@ -24,6 +24,28 @@ describe("compile-fix auto-retry session", () => {
     expect(session.autoRetryCount).toBe(1);
   });
 
+  it("stops on unknown_command", () => {
+    const session = createCompileFixRetrySession();
+    session.active = true;
+    session.awaitingPostFixCompile = true;
+    expect(
+      decideCompileFixAutoRetry(session, 1, "fp", {
+        errors: [{ message: "Undefined control sequence. \\customMacro" }],
+      })
+    ).toEqual({ shouldRetry: false, reason: "unknown_command" });
+  });
+
+  it("stops on missing_compiler_package", () => {
+    const session = createCompileFixRetrySession();
+    session.active = true;
+    session.awaitingPostFixCompile = true;
+    expect(
+      decideCompileFixAutoRetry(session, 1, "fp", {
+        errors: [{ message: "LaTeX Error: File `minted.sty' not found." }],
+      })
+    ).toEqual({ shouldRetry: false, reason: "missing_compiler_package" });
+  });
+
   it(`stops on retry_used after ${COMPILE_FIX_MAX_AUTO_RETRIES} auto-retries`, () => {
     const session = createCompileFixRetrySession();
     beginCompileFixRetrySession(session);
