@@ -5,7 +5,7 @@ import {
   analyzeCompileMissingPackage,
   getAllowedPackagesForCompileErrors,
 } from "@/lib/compile-missing-package";
-import { buildMissingCompilerPackageUserMessage } from "@/lib/compile-fix-missing-package-message";
+import { buildMissingCompilerPackageUserMessage, buildUnknownCommandUserMessage } from "@/lib/compile-fix-missing-package-message";
 import { decideCompileFixAutoRetry, createCompileFixRetrySession } from "@/lib/compile-fix-auto-retry";
 import { COMPILE_FIX_WORKSPACE_SUFFIX } from "@/lib/ai-plugins/workspace-tools";
 import { validateNoInventedPackages } from "@/lib/ai-compile-fix-validation";
@@ -55,12 +55,21 @@ describe("PAP-42 generalized compile-fix missing-package handling", () => {
   it("user-facing missing-package copy is plain English with /report link", () => {
     const message = buildMissingCompilerPackageUserMessage({
       packageName: "minted",
-      command: "minted",
       page: "/project/x",
     });
     expect(message).toMatch(/needs the LaTeX package.*minted/i);
     expect(message).toMatch(/Request this package/);
     expect(message).not.toMatch(/retry_used/i);
+  });
+
+  it("unknown-command copy does not claim the command is a package", () => {
+    const message = buildUnknownCommandUserMessage({
+      command: "foo",
+      page: "/project/x",
+    });
+    expect(message).toMatch(/doesn't know the command \\foo/i);
+    expect(message).not.toMatch(/needs the LaTeX package/i);
+    expect(message).not.toMatch(/package \*\*foo\*\*/i);
   });
 
   it("compile-fix suffix mentions in-image packages beyond natbib", () => {
@@ -72,7 +81,7 @@ describe("PAP-42 generalized compile-fix missing-package handling", () => {
     const routeSrc = readSrc("app/api/projects/[id]/ai/route.ts");
     expect(routeSrc).toContain("analyzeCompileMissingPackage");
     expect(routeSrc).toContain("compileFixStopRetry");
-    expect(routeSrc).toContain("buildMissingCompilerPackageUserMessage");
+    expect(routeSrc).toContain("buildCompileFixStopUserMessage");
 
     const sidebarSrc = readSrc("components/ai-sidebar.tsx");
     expect(sidebarSrc).toContain("compileFixStopRetry");

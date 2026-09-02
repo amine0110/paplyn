@@ -63,8 +63,7 @@ describe("analyzeCompileMissingPackage", () => {
         errors: [{ message: "Undefined control sequence. \\customMacro" }],
       })
     ).toEqual({
-      kind: "missing_compiler_package",
-      package: "customMacro",
+      kind: "unknown_command",
       command: "customMacro",
     });
   });

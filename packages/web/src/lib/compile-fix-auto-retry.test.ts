@@ -24,6 +24,17 @@ describe("compile-fix auto-retry session", () => {
     expect(session.autoRetryCount).toBe(1);
   });
 
+  it("stops on unknown_command", () => {
+    const session = createCompileFixRetrySession();
+    session.active = true;
+    session.awaitingPostFixCompile = true;
+    expect(
+      decideCompileFixAutoRetry(session, 1, "fp", {
+        errors: [{ message: "Undefined control sequence. \\customMacro" }],
+      })
+    ).toEqual({ shouldRetry: false, reason: "unknown_command" });
+  });
+
   it("stops on missing_compiler_package", () => {
     const session = createCompileFixRetrySession();
     session.active = true;

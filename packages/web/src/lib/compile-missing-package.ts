@@ -17,10 +17,17 @@ export type MissingCompilerPackageOutcome = {
   command?: string;
 };
 
+export type UnknownCommandOutcome = {
+  kind: "unknown_command";
+  command: string;
+};
+
+export type CompileFixStopOutcome = MissingCompilerPackageOutcome | UnknownCommandOutcome;
+
 export type CompileMissingPackageAnalysis =
   | { kind: "none" }
   | { kind: "available"; packages: string[] }
-  | MissingCompilerPackageOutcome;
+  | CompileFixStopOutcome;
 
 function styNameToPackage(styFile: string): string {
   return normalizeLatexPackageName(styFile.replace(/\.sty$/i, ""));
@@ -147,8 +154,7 @@ export function analyzeCompileMissingPackage(options: {
   const unknownCommand = findUnknownUndefinedCommand(errors);
   if (unknownCommand) {
     return {
-      kind: "missing_compiler_package",
-      package: unknownCommand,
+      kind: "unknown_command",
       command: unknownCommand,
     };
   }
@@ -165,4 +171,16 @@ export function isMissingCompilerPackageOutcome(
   analysis: CompileMissingPackageAnalysis
 ): analysis is MissingCompilerPackageOutcome {
   return analysis.kind === "missing_compiler_package";
+}
+
+export function isUnknownCommandOutcome(
+  analysis: CompileMissingPackageAnalysis
+): analysis is UnknownCommandOutcome {
+  return analysis.kind === "unknown_command";
+}
+
+export function isCompileFixStopOutcome(
+  analysis: CompileMissingPackageAnalysis
+): analysis is CompileFixStopOutcome {
+  return analysis.kind === "missing_compiler_package" || analysis.kind === "unknown_command";
 }

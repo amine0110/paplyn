@@ -2,7 +2,6 @@
 
 import {
   analyzeCompileMissingPackage,
-  isMissingCompilerPackageOutcome,
 } from "@/lib/compile-missing-package";
 
 /** Total compile-fix rounds per user session (first manual turn + auto-retries). */
@@ -77,7 +76,8 @@ export interface CompileFixAutoRetryDecision {
     | "no_edits"
     | "retry_used"
     | "no_progress"
-    | "missing_compiler_package";
+    | "missing_compiler_package"
+    | "unknown_command";
 }
 
 export function decideCompileFixAutoRetry(
@@ -105,13 +105,17 @@ export function decideCompileFixAutoRetry(
   }
 
   if (options?.errors?.length) {
-    const missingPackage = analyzeCompileMissingPackage({
+    const analysis = analyzeCompileMissingPackage({
       errors: options.errors,
       log: options.log,
     });
-    if (isMissingCompilerPackageOutcome(missingPackage)) {
+    if (analysis.kind === "missing_compiler_package") {
       session.active = false;
       return { shouldRetry: false, reason: "missing_compiler_package" };
+    }
+    if (analysis.kind === "unknown_command") {
+      session.active = false;
+      return { shouldRetry: false, reason: "unknown_command" };
     }
   }
 

@@ -41,10 +41,10 @@ import { formatCompileFixLineChangeSummary } from "@/lib/ai-compile-fix-validati
 import { buildCompileFixNoEditMessage } from "@/lib/ai-compile-fix-failure";
 import {
   analyzeCompileMissingPackage,
-  isMissingCompilerPackageOutcome,
+  isCompileFixStopOutcome,
 } from "@/lib/compile-missing-package";
 import {
-  buildMissingCompilerPackageUserMessage,
+  buildCompileFixStopUserMessage,
   buildPackageAddedUserMessage,
   detectAddedPackagesFromEdit,
 } from "@/lib/compile-fix-missing-package-message";
@@ -407,13 +407,9 @@ async function resolveAssistantContent<TOOLS extends ToolSet>(options: {
   const actions = collectClientActionsFromToolResults(result);
 
   const missingBeforeFix = analyzeCompileMissingPackage({ errors: compileErrors, log: compileLog });
-  if (compileFixRequest && isMissingCompilerPackageOutcome(missingBeforeFix)) {
+  if (compileFixRequest && isCompileFixStopOutcome(missingBeforeFix)) {
     return {
-      content: buildMissingCompilerPackageUserMessage({
-        packageName: missingBeforeFix.package,
-        command: missingBeforeFix.command,
-        page: projectPage,
-      }),
+      content: buildCompileFixStopUserMessage(missingBeforeFix, projectPage),
       compileFixStopRetry: true,
     };
   }
@@ -897,15 +893,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       const emitMissingPackageStop = () => {
         const missing = analyzeCompileMissingPackage({ errors: compileErrors, log: compileLog });
-        if (!isMissingCompilerPackageOutcome(missing)) return false;
+        if (!isCompileFixStopOutcome(missing)) return false;
 
         const doneEvent: AiStreamDoneEvent = {
           type: "done",
-          content: buildMissingCompilerPackageUserMessage({
-            packageName: missing.package,
-            command: missing.command,
-            page: projectPage,
-          }),
+          content: buildCompileFixStopUserMessage(missing, projectPage),
           compileFixStopRetry: true,
         };
         emit(doneEvent);

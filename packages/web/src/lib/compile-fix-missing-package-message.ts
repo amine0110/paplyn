@@ -1,4 +1,5 @@
 import { buildReportIssueHref } from "@/lib/user-reports-url";
+import type { CompileFixStopOutcome } from "@/lib/compile-missing-package";
 
 export function buildMissingCompilerPackageUserMessage(options: {
   packageName: string;
@@ -21,6 +22,34 @@ export function buildMissingCompilerPackageUserMessage(options: {
     (command ? ` (missing command: \\${command.replace(/^\\/, "")})` : "") +
     ` [Request this package](${reportHref})`
   );
+}
+
+export function buildUnknownCommandUserMessage(options: {
+  command: string;
+  page?: string;
+}): string {
+  const command = options.command.replace(/^\\/, "");
+  const reportHref = buildReportIssueHref(options.page, "report", {
+    title: `Unknown LaTeX command: \\${command}`,
+    whatHappened: `LaTeX doesn't know the command \\${command} when compiling my paper.`,
+    steps: `Command: \\${command}`,
+  });
+
+  return `LaTeX doesn't know the command \\${command}. [Report this issue](${reportHref})`;
+}
+
+export function buildCompileFixStopUserMessage(
+  outcome: CompileFixStopOutcome,
+  page?: string
+): string {
+  if (outcome.kind === "unknown_command") {
+    return buildUnknownCommandUserMessage({ command: outcome.command, page });
+  }
+  return buildMissingCompilerPackageUserMessage({
+    packageName: outcome.package,
+    command: outcome.command,
+    page,
+  });
 }
 
 export function buildPackageAddedUserMessage(options: {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildMissingCompilerPackageUserMessage,
   buildPackageAddedUserMessage,
+  buildUnknownCommandUserMessage,
 } from "./compile-fix-missing-package-message";
 
 describe("compile-fix missing package user messages", () => {
@@ -23,5 +24,16 @@ describe("compile-fix missing package user messages", () => {
     expect(buildPackageAddedUserMessage({ packageName: "graphicx" })).toBe(
       "Added the graphicx package to fix the compile error."
     );
+  });
+
+  it("does not call an unknown command a LaTeX package", () => {
+    const message = buildUnknownCommandUserMessage({
+      command: "foo",
+      page: "/project/abc",
+    });
+    expect(message).toMatch(/doesn't know the command \\foo/i);
+    expect(message).not.toMatch(/needs the LaTeX package/i);
+    expect(message).not.toMatch(/package \*\*foo\*\*/i);
+    expect(message).toMatch(/\[Report this issue\]\(\/report\?/);
   });
 });
