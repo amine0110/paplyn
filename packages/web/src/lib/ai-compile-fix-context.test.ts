@@ -187,8 +187,7 @@ describe("buildCompileFixCiteCommandHint", () => {
     ]);
     expect(hint).toContain("\\citep");
     expect(hint).toContain("natbib");
-    expect(hint).toContain("allowlisted");
-    expect(hint).toMatch(/EVERY|every/i);
+    expect(hint).toMatch(/this turn/i);
   });
 
   it("returns undefined when error is unrelated", () => {

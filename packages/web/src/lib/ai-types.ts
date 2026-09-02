@@ -47,6 +47,8 @@ export interface AiChatResponse {
   appliedActions?: AiAppliedAction[];
   /** Small chips for get_file reads (not shown in the message bubble). */
   toolReads?: AiToolRead[];
+  /** When true, end the compile-fix auto-retry session (missing compiler package, etc.). */
+  compileFixStopRetry?: boolean;
 }
 
 export interface LiteratureToolPayload {

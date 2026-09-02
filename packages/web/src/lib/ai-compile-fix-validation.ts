@@ -1,5 +1,19 @@
 /** Server-side guards for compile-fix edits on real LaTeX manuscripts. */
 
+import {
+  getAllowedPackagesForCompileErrors,
+  detectUndefinedCommands,
+} from "@/lib/compile-missing-package";
+import { isPackageAvailableInCompiler } from "@/lib/latex-compiler-packages";
+
+export {
+  UNDEFINED_COMMAND_PACKAGE_MAP as UNDEFINED_COMMAND_PACKAGE_ALLOWLIST,
+} from "@/lib/latex-compiler-packages";
+export {
+  detectUndefinedCommands as detectUndefinedCitationCommands,
+  getAllowedPackagesForCompileErrors as getAllowlistedPackagesForCompileErrors,
+} from "@/lib/compile-missing-package";
+
 const DOCUMENTCLASS_RE = /^\s*\\documentclass\b/;
 const REQUIRE_PACKAGE_RE = /^\s*\\RequirePackage\b/;
 const BEGIN_DOCUMENT_MARKER_RE = /\\begin\{document/;
@@ -143,7 +157,7 @@ export function isValidLaTeXFirstLine(text: string): boolean {
 
 export type LaTeXPreambleValidation =
   | { ok: true }
-  | { ok: false; reason: string };
+  | { ok: false; reason: string; missingCompilerPackage?: string; unknownCommand?: string };
 
 /** Count non-comment \\documentclass lines before the first \\begin{document} (including broken). */
 export function countDocumentClassLinesBeforeBeginDocument(content: string): number {
@@ -251,70 +265,48 @@ function replacedLinesAreBareUsepackage(lines: string[]): boolean {
   return lines.some((line) => BARE_USEPACKAGE_RE.test(line.trim()));
 }
 
-/** Undefined LaTeX command → package allowlist for compile-fix (narrow; no cite.sty dumps). */
-export const UNDEFINED_COMMAND_PACKAGE_ALLOWLIST: Readonly<Record<string, string>> = {
-  citep: "natbib",
-  citet: "natbib",
-};
-
-const UNDEFINED_CONTROL_SEQUENCE_RE = /undefined control sequence/i;
-
-/** Detect \\citep / \\citet from compile error messages (structured or log text). */
-export function detectUndefinedCitationCommands(
-  errors: readonly { message: string }[]
-): string[] {
-  const commands = new Set<string>();
-  for (const error of errors) {
-    const message = error.message;
-    for (const match of message.matchAll(/\\(citep|citet)\b/g)) {
-      const cmd = match[1];
-      if (cmd) commands.add(cmd);
-    }
-    if (UNDEFINED_CONTROL_SEQUENCE_RE.test(message)) {
-      for (const cmd of Object.keys(UNDEFINED_COMMAND_PACKAGE_ALLOWLIST)) {
-        if (message.includes(`\\${cmd}`) || new RegExp(`\\b${cmd}\\b`).test(message)) {
-          commands.add(cmd);
-        }
-      }
-    }
-  }
-  return [...commands];
-}
-
-/** Packages that may be inserted when compile errors cite undefined commands from the allowlist. */
-export function getAllowlistedPackagesForCompileErrors(
-  errors: readonly { message: string }[]
-): string[] {
-  const packages = new Set<string>();
-  for (const cmd of detectUndefinedCitationCommands(errors)) {
-    const pkg = UNDEFINED_COMMAND_PACKAGE_ALLOWLIST[cmd];
-    if (pkg) packages.add(pkg);
-  }
-  return [...packages];
-}
-
-function buildInventedPackageRejectReason(pkg: string, allowedPackages: string[]): string {
+function buildInventedPackageRejectReason(
+  pkg: string,
+  allowedPackages: string[],
+  compileErrors?: readonly { message: string }[]
+): LaTeXPreambleValidation {
   const base =
     `Edit rejected: would add new package "${pkg}" via \\usepackage{${pkg}}. ` +
     `Do not invent packages that were not already present.`;
-  if (allowedPackages.includes(pkg)) {
-    return `${base} Package "${pkg}" is allowlisted for this compile error — retry the insert after an existing \\usepackage in the first document copy.`;
+
+  if (!isPackageAvailableInCompiler(pkg)) {
+    const commands = compileErrors ? detectUndefinedCommands(compileErrors) : [];
+    const relatedCommand = commands.find(
+      (cmd) => getAllowedPackagesForCompileErrors([{ message: `\\${cmd}` }])[0] === pkg
+    );
+    return {
+      ok: false,
+      reason: base,
+      missingCompilerPackage: pkg,
+      ...(relatedCommand ? { unknownCommand: relatedCommand } : {}),
+    };
   }
-  const citeAllowlist = Object.entries(UNDEFINED_COMMAND_PACKAGE_ALLOWLIST)
-    .map(([cmd, allowPkg]) => `\\${cmd} → ${allowPkg}`)
-    .join(", ");
-  return (
-    `${base} Allowed exceptions for undefined commands: ${citeAllowlist}. ` +
-    `For \\citep/\\citet errors, insert \\usepackage{natbib} after an existing \\usepackage in the first copy, ` +
-    `or replace ALL \\citep/\\citet with \\cite in one edit.`
-  );
+
+  if (allowedPackages.includes(pkg)) {
+    return {
+      ok: false,
+      reason:
+        `${base} Package "${pkg}" is available for this compile error — retry the insert after an existing \\usepackage in the first document copy.`,
+    };
+  }
+
+  return {
+    ok: false,
+    reason:
+      `${base} Only add packages cited by the compile error when they are installed on Paplyn.`,
+  };
 }
 
 /** Rule 2: do not invent \\usepackage{pkg} unless that exact line already existed. */
 export function validateNoInventedPackages(
   originalLines: string[],
   replace: string,
-  options?: { allowedPackages?: string[] }
+  options?: { allowedPackages?: string[]; compileErrors?: readonly { message: string }[] }
 ): LaTeXPreambleValidation {
   const originalBlock = originalLines.join("\n");
   const replaceNames = extractUsepackageNames(replace);
@@ -335,10 +327,7 @@ export function validateNoInventedPackages(
       if (allowedPackages.includes(pkg)) {
         continue;
       }
-      return {
-        ok: false,
-        reason: buildInventedPackageRejectReason(pkg, allowedPackages),
-      };
+      return buildInventedPackageRejectReason(pkg, allowedPackages, options?.compileErrors);
     }
   }
 
@@ -364,7 +353,7 @@ export function validateCompileFixEdit(
 ): LaTeXPreambleValidation {
   const { content, startLine, endLine, replace, search, previewContent, compileErrors } = options;
   const allowedPackages = compileErrors?.length
-    ? getAllowlistedPackagesForCompileErrors(compileErrors)
+    ? getAllowedPackagesForCompileErrors(compileErrors)
     : [];
 
   const firstCopyEnd = getFirstLaTeXCopyEndLine(content);
@@ -404,7 +393,10 @@ export function validateCompileFixEdit(
 
   if (startLine != null && endLine != null) {
     const originalLines = content.split("\n").slice(startLine - 1, endLine);
-    const packageCheck = validateNoInventedPackages(originalLines, replace, { allowedPackages });
+    const packageCheck = validateNoInventedPackages(originalLines, replace, {
+      allowedPackages,
+      compileErrors,
+    });
     if (!packageCheck.ok) return packageCheck;
   }
 

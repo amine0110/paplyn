@@ -1,6 +1,8 @@
 import type { StepResult, ToolSet } from "ai";
 import { summarizeToolResult } from "@/lib/ai-response";
 import { getPrimaryCompileErrorLocation, type AiCompileError } from "@/lib/ai-compile-fix-context";
+import { buildMissingCompilerPackageUserMessage } from "@/lib/compile-fix-missing-package-message";
+import { isMissingCompilerPackageOutcome, analyzeCompileMissingPackage } from "@/lib/compile-missing-package";
 
 type GetFileCall = { path: string; startLine: number; endLine: number };
 
@@ -30,7 +32,21 @@ export function buildCompileFixNoEditMessage(options: {
   errors: AiCompileError[];
   getFileCalls: GetFileCall[];
   steps: StepResult<ToolSet>[];
+  log?: string;
+  page?: string;
 }): string {
+  const missingPackage = analyzeCompileMissingPackage({
+    errors: options.errors,
+    log: options.log,
+  });
+  if (isMissingCompilerPackageOutcome(missingPackage)) {
+    return buildMissingCompilerPackageUserMessage({
+      packageName: missingPackage.package,
+      command: missingPackage.command,
+      page: options.page,
+    });
+  }
+
   const location = getPrimaryCompileErrorLocation(options.errors);
   const editAttempts = collectAttemptedEdits(options.steps);
 

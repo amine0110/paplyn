@@ -39,6 +39,16 @@ import {
 import { mergeCompileDiagnostics } from "@/lib/compile-log-diagnostics";
 import { formatCompileFixLineChangeSummary } from "@/lib/ai-compile-fix-validation";
 import { buildCompileFixNoEditMessage } from "@/lib/ai-compile-fix-failure";
+import {
+  analyzeCompileMissingPackage,
+  isMissingCompilerPackageOutcome,
+} from "@/lib/compile-missing-package";
+import {
+  buildMissingCompilerPackageUserMessage,
+  buildPackageAddedUserMessage,
+  detectAddedPackagesFromEdit,
+} from "@/lib/compile-fix-missing-package-message";
+import { detectUndefinedCommands } from "@/lib/compile-missing-package";
 import { classifyCompileDiagnosticsReview } from "@/lib/ai-compile-diagnostics-intent";
 import { resolveCompileRouting } from "@/lib/ai-compile-fix-intent";
 import {
@@ -387,17 +397,58 @@ async function resolveAssistantContent<TOOLS extends ToolSet>(options: {
   compileFixRequest: boolean;
   compileErrors: AiCompileError[];
   getFileCalls: GetFileCall[];
-}): Promise<string> {
-  const { result, compileFixRequest, compileErrors, getFileCalls } = options;
+  compileLog?: string;
+  projectPage?: string;
+  texFiles?: Map<string, string>;
+}): Promise<{ content: string; compileFixStopRetry?: boolean }> {
+  const { result, compileFixRequest, compileErrors, getFileCalls, compileLog, projectPage, texFiles } =
+    options;
   const trimmed = result.text.trim();
   const actions = collectClientActionsFromToolResults(result);
 
+  const missingBeforeFix = analyzeCompileMissingPackage({ errors: compileErrors, log: compileLog });
+  if (compileFixRequest && isMissingCompilerPackageOutcome(missingBeforeFix)) {
+    return {
+      content: buildMissingCompilerPackageUserMessage({
+        packageName: missingBeforeFix.package,
+        command: missingBeforeFix.command,
+        page: projectPage,
+      }),
+      compileFixStopRetry: true,
+    };
+  }
+
   if (compileFixRequest && !usedClientEditTools(result)) {
-    return buildCompileFixNoEditMessage({
-      errors: compileErrors,
-      getFileCalls,
-      steps: result.steps as StepResult<ToolSet>[],
-    });
+    return {
+      content: buildCompileFixNoEditMessage({
+        errors: compileErrors,
+        getFileCalls,
+        steps: result.steps as StepResult<ToolSet>[],
+        log: compileLog,
+        page: projectPage,
+      }),
+    };
+  }
+
+  const packageAddedSummaries: string[] = [];
+  if (compileFixRequest && texFiles) {
+    const commands = detectUndefinedCommands(compileErrors);
+    for (const action of actions) {
+      if (action.type === "replace_lines") {
+        const before = texFiles.get(action.file) ?? "";
+        const lines = before.split("\n");
+        const preview = [
+          ...lines.slice(0, action.startLine - 1),
+          ...action.replace.split("\n"),
+          ...lines.slice(action.endLine),
+        ].join("\n");
+        for (const pkg of detectAddedPackagesFromEdit(before, preview)) {
+          packageAddedSummaries.push(
+            buildPackageAddedUserMessage({ packageName: pkg, commands })
+          );
+        }
+      }
+    }
   }
 
   const lineSummaries = actions
@@ -415,48 +466,56 @@ async function resolveAssistantContent<TOOLS extends ToolSet>(options: {
     })
     .filter((summary, index, all) => all.indexOf(summary) === index);
 
-  if (compileFixRequest && lineSummaries.length > 0) {
-    const changeBlock = lineSummaries.join(" ");
+  if (compileFixRequest && (packageAddedSummaries.length > 0 || lineSummaries.length > 0)) {
+    const changeBlock = [...new Set([...packageAddedSummaries, ...lineSummaries])].join(" ");
     if (trimmed) {
-      const hasLineRef = lineSummaries.some((summary) => trimmed.includes(summary));
-      return hasLineRef ? result.text : `${changeBlock}\n\n${result.text}`;
+      const hasLineRef =
+        lineSummaries.some((summary) => trimmed.includes(summary)) ||
+        packageAddedSummaries.some((summary) => trimmed.includes(summary));
+      return { content: hasLineRef ? result.text : `${changeBlock}\n\n${result.text}` };
     }
-    return changeBlock;
+    return { content: changeBlock };
   }
 
-  if (trimmed) return result.text;
+  if (trimmed) return { content: result.text };
 
   if (!compileFixRequest) {
-    return resolveEmptyAssistantFallback({ result, actions });
+    return { content: resolveEmptyAssistantFallback({ result, actions }) };
   }
 
   if (!hadToolActivity(result)) {
-    return "I couldn't generate a response. Please try again.";
+    return { content: "I couldn't generate a response. Please try again." };
   }
 
   const appliedSummary = formatAppliedActionsAsAssistantMessage(actions);
-  if (appliedSummary) return appliedSummary;
+  if (appliedSummary) return { content: appliedSummary };
 
   if (compileFixRequest && usedClientEditTools(result) && actions.length === 0) {
-    return buildCompileFixNoEditMessage({
-      errors: compileErrors,
-      getFileCalls,
-      steps: result.steps as StepResult<ToolSet>[],
-    });
+    return {
+      content: buildCompileFixNoEditMessage({
+        errors: compileErrors,
+        getFileCalls,
+        steps: result.steps as StepResult<ToolSet>[],
+        log: compileLog,
+        page: projectPage,
+      }),
+    };
   }
 
   const fallback = formatToolResultsAsAssistantMessage(result);
-  if (fallback) return fallback;
+  if (fallback) return { content: fallback };
 
   if (usedClientEditTools(result)) {
-    return "I applied the suggested edits. Recompile to check whether the errors are resolved.";
+    return {
+      content: "I applied the suggested edits. Recompile to check whether the errors are resolved.",
+    };
   }
 
   if (hadReadOnlyToolActivity(result)) {
-    return NO_EDIT_FALLBACK_MESSAGE;
+    return { content: NO_EDIT_FALLBACK_MESSAGE };
   }
 
-  return "I searched but couldn't format the results. Please try asking again.";
+  return { content: "I searched but couldn't format the results. Please try asking again." };
 }
 
 async function getAiConfig() {
@@ -590,6 +649,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     : null;
   const compileErrors = compileFixErrorPrep?.errors ?? compileErrorsRaw;
   const primaryErrorLocation = compileFixErrorPrep?.primaryLocation ?? null;
+  const projectPage = `/project/${id}`;
   const hasSelection = Boolean(requestData.selectedText?.trim());
   const getFileCalls: GetFileCall[] = [];
 
@@ -799,11 +859,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         }
 
         const result = await toGenerateTextResult(streamResult);
-        const content = await resolveAssistantContent({
+        const resolved = await resolveAssistantContent({
           result,
           compileFixRequest,
           compileErrors,
           getFileCalls,
+          compileLog,
+          projectPage,
+          texFiles: texFileMap,
         });
 
         const usedPlugins = collectUsedPlugins(result, plugins);
@@ -819,7 +882,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
         const doneEvent: AiStreamDoneEvent = {
           type: "done",
-          content,
+          content: resolved.content,
+          ...(resolved.compileFixStopRetry ? { compileFixStopRetry: true } : {}),
           ...(usedPlugins.length > 0 ? { usedPlugins } : {}),
           ...(papers.length > 0 ? { papers } : {}),
           ...(doiCitations.length > 0 ? { doiCitations } : {}),
@@ -831,7 +895,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         emit(doneEvent);
       };
 
+      const emitMissingPackageStop = () => {
+        const missing = analyzeCompileMissingPackage({ errors: compileErrors, log: compileLog });
+        if (!isMissingCompilerPackageOutcome(missing)) return false;
+
+        const doneEvent: AiStreamDoneEvent = {
+          type: "done",
+          content: buildMissingCompilerPackageUserMessage({
+            packageName: missing.package,
+            command: missing.command,
+            page: projectPage,
+          }),
+          compileFixStopRetry: true,
+        };
+        emit(doneEvent);
+        return true;
+      };
+
       try {
+        if (compileFixRequest && emitMissingPackageStop()) {
+          close();
+          return;
+        }
         await runOnce();
       } catch (error) {
         const compileFixMetrics = compileFixMetricsRef.current;

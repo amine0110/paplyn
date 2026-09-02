@@ -1,9 +1,9 @@
 import { type TexFileInput } from "@/lib/ai-file-context";
 import {
-  detectUndefinedCitationCommands,
-  getAllowlistedPackagesForCompileErrors,
-  getFirstLaTeXCopyEndLine,
-} from "@/lib/ai-compile-fix-validation";
+  detectUndefinedCommands,
+  getAllowedPackagesForCompileErrors,
+} from "@/lib/compile-missing-package";
+import { getFirstLaTeXCopyEndLine } from "@/lib/ai-compile-fix-validation";
 
 const DOCUMENTCLASS_LINE_RE = /^\s*\\documentclass\b/;
 
@@ -315,25 +315,35 @@ export function buildCompileFixTargetHint(location: {
     `Then call replace_lines on that exact line in the FIRST document copy (line ${location.line} — ` +
     `if it is a broken \\begin{document without a closing brace, fix that line first before adding \\documentclass). ` +
     `Do not read overlapping windows past line ${endLine} before attempting an edit. ` +
-    `Do not prepend a preamble. Only \\usepackage{natbib} may be added when the error is undefined \\citep or \\citet.`
+    `Do not prepend a preamble. You may add \\usepackage{pkg} when the compile error cites a missing package or undefined command and that package is installed on Paplyn (e.g. natbib for \\citep, graphicx for \\includegraphics, siunitx for \\SI).`
   );
 }
 
-/** Hint for fixing undefined \\citep/\\citet in one compile-fix turn. */
-export function buildCompileFixCiteCommandHint(errors: AiCompileError[]): string | undefined {
-  const commands = detectUndefinedCitationCommands(errors);
-  if (commands.length === 0) return undefined;
+/** Hint for fixing undefined commands that map to an in-image package. */
+export function buildCompileFixPackageHint(errors: AiCompileError[]): string | undefined {
+  const commands = detectUndefinedCommands(errors);
+  const packages = getAllowedPackagesForCompileErrors(errors);
+  if (commands.length === 0 && packages.length === 0) return undefined;
 
-  const commandList = commands.map((cmd) => `\\${cmd}`).join(", ");
-  const allowedPkg = getAllowlistedPackagesForCompileErrors(errors)[0] ?? "natbib";
+  const parts: string[] = [];
+  if (commands.length > 0) {
+    const commandList = commands.map((cmd) => `\\${cmd}`).join(", ");
+    parts.push(`Undefined ${commandList} in compile output`);
+  }
+  if (packages.length > 0) {
+    parts.push(
+      `insert \\usepackage{${packages.join("}, \\usepackage{")}} after the last existing \\usepackage in the FIRST document copy`
+    );
+  }
 
   return (
-    `Undefined ${commandList} in compile output — fix completely in this turn. ` +
-    `Preferred: insert \\usepackage{${allowedPkg}} on the line immediately after the last existing ` +
-    `\\usepackage in the FIRST document copy (${allowedPkg} is allowlisted for this error). ` +
-    `Alternative: replace EVERY ${commandList} in the first copy with \\cite in a single ` +
-    `fix_compile_errors batch or one replace_lines/apply_edit — not one occurrence per round.`
+    `${parts.join(" — ")}. Fix completely in this turn with one replace_lines or fix_compile_errors batch.`
   );
+}
+
+/** @deprecated Use buildCompileFixPackageHint — kept for deploy-gate tests. */
+export function buildCompileFixCiteCommandHint(errors: AiCompileError[]): string | undefined {
+  return buildCompileFixPackageHint(errors);
 }
 
 /** Hint for fixing multiple cited errors in one turn (rule 3). */

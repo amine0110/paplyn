@@ -82,6 +82,39 @@ export function parseCompileDiagnosticsFromLog(
       continue;
     }
 
+    const styNotFound = trimmed.match(/File `([^']+\.sty)' not found/i);
+    if (styNotFound) {
+      diagnostics.push({
+        message: trimmed,
+        severity: "error",
+      });
+      continue;
+    }
+
+    const latexStyError = trimmed.match(/LaTeX Error: File `([^']+\.sty)' not found/i);
+    if (latexStyError) {
+      diagnostics.push({
+        message: trimmed,
+        severity: "error",
+      });
+      continue;
+    }
+
+    if (/^! Undefined control sequence\.?$/i.test(trimmed)) {
+      const nextLine = lines[i + 1]?.trim() ?? "";
+      const commandMatch = nextLine.match(/\\([a-zA-Z@]+)/);
+      diagnostics.push({
+        message: commandMatch
+          ? `Undefined control sequence. ${commandMatch[0]}`
+          : trimmed,
+        severity: "error",
+        ...(lines[i + 1]?.match(/\bl\.(\d+)/)
+          ? { line: Number.parseInt(lines[i + 1]!.match(/\bl\.(\d+)/)![1]!, 10) }
+          : {}),
+      });
+      continue;
+    }
+
     const citeUndefined = trimmed.match(/^Citation `([^']+)' on page \d+ undefined/i);
     if (citeUndefined) {
       diagnostics.push({

@@ -374,6 +374,10 @@ export function AiSidebar({
         return;
       }
 
+      if (data.compileFixStopRetry) {
+        onCompileFixRetryNoOp?.();
+      }
+
       const usedPlugins = Array.isArray(data.usedPlugins) ? (data.usedPlugins as AiUsedPlugin[]) : undefined;
       const papers = Array.isArray(data.papers) ? (data.papers as AiPaper[]) : undefined;
       const arxivPapers = Array.isArray(data.arxivPapers)

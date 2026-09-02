@@ -388,6 +388,7 @@ export default function ProjectPage() {
     const hadPdfBeforeCompile = pdfData !== null;
     let compileErrorCount = 0;
     let compileErrorsSnapshot: CompileError[] = [];
+    let compileLogSnapshot = "";
     setCompiling(true);
     setCompileErrors([]);
     openProof();
@@ -400,11 +401,13 @@ export default function ProjectPage() {
         const errors: CompileError[] = [{ message: result.error, severity: "error" }];
         compileErrorCount = errors.length;
         compileErrorsSnapshot = errors;
+        compileLogSnapshot = "";
         setCompileErrors(errors);
         const stale = deriveProofStaleAfterCompile(hadPdfBeforeCompile, { success: false }, errors);
         setProofIsStale(stale.isStale);
       } else {
         setCompileLog(result.log || "");
+        compileLogSnapshot = result.log || "";
         let errors: CompileError[] = mergeCompileDiagnostics(result.errors || [], result.log, {
           mainFile: project?.mainFile,
         }).map((entry) => ({
@@ -442,6 +445,7 @@ export default function ProjectPage() {
       const errors: CompileError[] = [{ message: "Failed to compile", severity: "error" }];
       compileErrorCount = errors.length;
       compileErrorsSnapshot = errors;
+      compileLogSnapshot = "";
       setCompileErrors(errors);
       const stale = deriveProofStaleAfterCompile(hadPdfBeforeCompile, { success: false }, errors);
       setProofIsStale(stale.isStale);
@@ -451,7 +455,8 @@ export default function ProjectPage() {
       const retryDecision = decideCompileFixAutoRetry(
         compileFixRetryRef.current,
         compileErrorCount,
-        fingerprintCompileErrors(compileErrorsSnapshot)
+        fingerprintCompileErrors(compileErrorsSnapshot),
+        { errors: compileErrorsSnapshot, log: compileLogSnapshot }
       );
       if (retryDecision.shouldRetry) {
         setAiPendingRequest(buildCompileFixAutoRetryRequest());
