@@ -51,11 +51,24 @@ export function createChatImageId(): string {
 }
 
 export function parseChatImageDataUrl(dataUrl: string): { mimeType: string; base64: string } {
-  const match = /^data:([^;]+);base64,(.+)$/s.exec(dataUrl.trim());
-  if (!match) {
+  const trimmed = dataUrl.trim();
+  if (!trimmed.startsWith("data:")) {
     throw new Error("Invalid image data.");
   }
-  return { mimeType: match[1]!, base64: match[2]! };
+
+  const base64Marker = ";base64,";
+  const markerIndex = trimmed.indexOf(base64Marker);
+  if (markerIndex < 0) {
+    throw new Error("Invalid image data.");
+  }
+
+  const mimeType = trimmed.slice("data:".length, markerIndex);
+  const base64 = trimmed.slice(markerIndex + base64Marker.length);
+  if (!mimeType || !base64) {
+    throw new Error("Invalid image data.");
+  }
+
+  return { mimeType, base64 };
 }
 
 export function estimateDataUrlBytes(dataUrl: string): number {

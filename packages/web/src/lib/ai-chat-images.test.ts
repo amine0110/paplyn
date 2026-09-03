@@ -25,6 +25,13 @@ describe("ai-chat-images", () => {
     expect(() => validateChatImageDataUrl(PNG_1X1, "image/png")).not.toThrow();
   });
 
+  it("parses trimmed data URLs and rejects invalid payloads", () => {
+    const padded = `  ${PNG_1X1}  `;
+    expect(parseChatImageDataUrl(padded)).toEqual(parseChatImageDataUrl(PNG_1X1));
+    expect(() => parseChatImageDataUrl("data:image/png;base64,")).toThrow(/invalid image data/i);
+    expect(() => parseChatImageDataUrl("not-a-data-url")).toThrow(/invalid image data/i);
+  });
+
   it("rejects oversized images", () => {
     const hugeBase64 = "A".repeat(Math.ceil((AI_CHAT_MAX_IMAGE_BYTES * 4) / 3) + 8);
     const hugeDataUrl = `data:image/png;base64,${hugeBase64}`;
