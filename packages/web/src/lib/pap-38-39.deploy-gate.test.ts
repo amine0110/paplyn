@@ -98,10 +98,10 @@ describe("PAP-39 no dummy manuscript content on compile/warning fix", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("enables manuscriptGuards on compile-fix and diagnostics-review server paths", () => {
+  it("enables manuscriptGuards on compile-fix and general workspace server paths", () => {
     const routeSrc = readSrc("app/api/projects/[id]/ai/route.ts");
     expect(routeSrc).toMatch(/compileFix:\s*true[\s\S]*manuscriptGuards:\s*true/);
-    expect(routeSrc).toContain("manuscriptGuards: compileDiagnosticsReviewTurn");
+    expect(routeSrc).toContain("manuscriptGuards: true");
   });
 
   it("classifies can-we-fix follow-ups as diagnostics review", () => {

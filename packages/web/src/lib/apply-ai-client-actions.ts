@@ -7,6 +7,11 @@ import {
 } from "@/lib/ai-client-actions";
 import { validateCompileFixEdit } from "@/lib/ai-compile-fix-validation";
 import { validateNoSiblingCommandStacking } from "@/lib/ai-edit-guards";
+import {
+  buildBodyContentInsertPlan,
+  containsBodyManuscriptContent,
+  isCursorInPreamble,
+} from "@/lib/ai-manuscript-guards";
 
 export interface ApplyAiActionsContext {
   activeFile: string | null;
@@ -224,9 +229,43 @@ export async function applyAiClientActions(
           const { from, to } = resolveEditorRange(view, ctx);
           const doc = view.state.doc.toString();
           const hasSpan = from !== to || ctx.hasSelection;
-          const text = hasSpan
+          let text = hasSpan
             ? action.text
             : normalizeInsertAtCursorText(action.text, doc, from);
+
+          if (
+            !hasSpan &&
+            ctx.activeFile &&
+            containsBodyManuscriptContent(text) &&
+            isCursorInPreamble(doc, view.state.doc.lineAt(from).number)
+          ) {
+            const insertPlan = buildBodyContentInsertPlan(doc, text);
+            if (insertPlan) {
+              const updated = applyReplaceLinesToFileContent(doc, {
+                type: "replace_lines",
+                file: ctx.activeFile,
+                startLine: insertPlan.startLine,
+                endLine: insertPlan.endLine,
+                replace: insertPlan.replace,
+                label: "",
+              });
+              if (updated != null) {
+                const range = lineRangeToOffsets(doc, insertPlan.startLine, insertPlan.endLine);
+                if (range) {
+                  applyToActiveEditor(view, range.from, range.to, insertPlan.replace);
+                }
+                ctx.fileContents[ctx.activeFile] = updated;
+                applied.push(action);
+                break;
+              }
+            }
+            skipped.push({
+              action,
+              reason: "Cannot insert body content in the preamble — place after \\end{abstract}.",
+            });
+            break;
+          }
+
           applyToActiveEditor(view, from, to, text);
           applied.push(action);
           break;

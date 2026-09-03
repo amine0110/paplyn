@@ -122,6 +122,9 @@ export async function runInlineSelectionAi(
       body: JSON.stringify({
         messages: [userMsg],
         activeFile: request.activeFile,
+        cursorLine: ctx.applyActionsContext.editorView
+          ? ctx.applyActionsContext.editorView.state.doc.lineAt(request.selectionRange.from).number
+          : undefined,
         selectedText: hasSelection ? request.selectedText : undefined,
         action: request.action,
         inlineSelection: hasSelection,

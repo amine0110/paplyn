@@ -1,5 +1,6 @@
 "use client";
 
+import type { EditorView } from "@codemirror/view";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Send, X, Mic, MicOff, Square } from "lucide-react";
@@ -119,6 +120,12 @@ function TypingIndicator() {
       <span className="ai-typing-dot" />
     </span>
   );
+}
+
+function getEditorCursorLine(editorView: EditorView | null | undefined): number | undefined {
+  if (!editorView) return undefined;
+  const pos = editorView.state.selection.main.from;
+  return editorView.state.doc.lineAt(pos).number;
 }
 
 export function AiSidebar({
@@ -329,6 +336,7 @@ export function AiSidebar({
         body: JSON.stringify({
           messages: [...messagesRef.current, userMsg],
           activeFile,
+          cursorLine: getEditorCursorLine(applyActionsContext?.editorView),
           selectedText: selectedText || undefined,
           action: effectiveAction,
           forcedTool,
