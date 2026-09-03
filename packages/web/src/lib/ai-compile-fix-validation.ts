@@ -45,6 +45,18 @@ function countPatternMatches(text: string, pattern: RegExp): number {
   return [...text.matchAll(pattern)].length;
 }
 
+function countBibliographyOutputBlocks(text: string): number {
+  const sectionHeadings = countPatternMatches(
+    text,
+    /\\section\*?\{(?:References|Bibliography)\}/gi
+  );
+  const commands = countPatternMatches(
+    text,
+    /\\(?:bibliography\{|printbibliography|begin\{thebibliography\})/g
+  );
+  return sectionHeadings + commands;
+}
+
 export type NoDummyManuscriptValidation =
   | { ok: true }
   | { ok: false; reason: string };
@@ -56,8 +68,12 @@ export type NoDummyManuscriptValidation =
 export function validateNoDummyManuscriptContent(options: {
   replace: string;
   originalLines?: string[];
+  /** Full file before edit — enables bibliography relocation without counting as invention. */
+  originalContent?: string;
+  /** Full file after edit. */
+  previewContent?: string;
 }): NoDummyManuscriptValidation {
-  const { replace, originalLines } = options;
+  const { replace, originalLines, originalContent, previewContent } = options;
   const originalBlock = originalLines?.join("\n") ?? "";
 
   const floatAdds = countPatternMatches(replace, FLOAT_BEGIN_RE) - countPatternMatches(originalBlock, FLOAT_BEGIN_RE);
@@ -74,24 +90,38 @@ export function validateNoDummyManuscriptContent(options: {
   const bibAdds =
     countPatternMatches(replace, BIBLIOGRAPHY_RE) - countPatternMatches(originalBlock, BIBLIOGRAPHY_RE);
   if (bibAdds > 0) {
-    return {
-      ok: false,
-      reason:
-        "Edit would add bibliography or \\bibitem entries to silence undefined citations. " +
-        "Fix \\cite/\\bibliography/natbib wiring from the project .bib when keys exist, " +
-        "or tell the user which citation keys are missing — do not invent bib entries or stub bibliographies.",
-    };
+    const movingExistingBibliography =
+      originalContent != null &&
+      previewContent != null &&
+      countBibliographyOutputBlocks(previewContent) <=
+        countBibliographyOutputBlocks(originalContent);
+    if (!movingExistingBibliography) {
+      return {
+        ok: false,
+        reason:
+          "Edit would add bibliography or \\bibitem entries to silence undefined citations. " +
+          "Fix \\cite/\\bibliography/natbib wiring from the project .bib when keys exist, " +
+          "or tell the user which citation keys are missing — do not invent bib entries or stub bibliographies.",
+      };
+    }
   }
 
   const sectionAdds =
     countPatternMatches(replace, NEW_SECTION_RE) - countPatternMatches(originalBlock, NEW_SECTION_RE);
   if (sectionAdds > 0) {
-    return {
-      ok: false,
-      reason:
-        "Edit would add a new section to silence compile warnings. " +
-        "Explain which labels or citations are missing instead of inventing manuscript sections.",
-    };
+    const movingExistingSections =
+      originalContent != null &&
+      previewContent != null &&
+      countPatternMatches(previewContent, NEW_SECTION_RE) <=
+        countPatternMatches(originalContent, NEW_SECTION_RE);
+    if (!movingExistingSections) {
+      return {
+        ok: false,
+        reason:
+          "Edit would add a new section to silence compile warnings. " +
+          "Explain which labels or citations are missing instead of inventing manuscript sections.",
+      };
+    }
   }
 
   return { ok: true };
@@ -422,8 +452,16 @@ export function validateCompileFixEdit(
       : search
         ? search.split("\n")
         : [];
-  const dummyCheck = validateNoDummyManuscriptContent({ replace, originalLines });
+  const dummyCheck = validateNoDummyManuscriptContent({
+    replace,
+    originalLines,
+    originalContent: content,
+    previewContent,
+  });
   if (!dummyCheck.ok) return dummyCheck;
+
+  const relocationCheck = validateNoNewBibliographySites(content, previewContent);
+  if (!relocationCheck.ok) return relocationCheck;
 
   const documentClassLine = getDocumentClassLine(content);
   if (
@@ -507,6 +545,7 @@ export type BibliographyStructureValidation =
 
 interface BibliographySite {
   startLine: number;
+  endLine: number;
 }
 
 function isBibliographySiteLine(line: string): boolean {
@@ -551,11 +590,37 @@ export function findBibliographySites(content: string): BibliographySite[] {
       break;
     }
 
-    sites.push({ startLine });
+    sites.push({ startLine, endLine: j });
     i = j;
   }
 
   return sites;
+}
+
+export type BibliographySiteRange = BibliographySite;
+
+/** Inclusive 1-based bibliography site ranges in the first document copy. */
+export function findBibliographySiteRanges(content: string): BibliographySiteRange[] {
+  return findBibliographySites(content);
+}
+
+/** Reject edits that add bibliography sites beyond what already exists (allows relocation). */
+export function validateNoNewBibliographySites(
+  originalContent: string,
+  previewContent: string
+): NoDummyManuscriptValidation {
+  const originalSites = countBibliographyOutputBlocks(originalContent);
+  const previewSites = countBibliographyOutputBlocks(previewContent);
+  if (previewSites > originalSites) {
+    return {
+      ok: false,
+      reason:
+        "Edit would add bibliography or \\bibitem entries to silence undefined citations. " +
+        "Fix \\cite/\\bibliography/natbib wiring from the project .bib when keys exist, " +
+        "or tell the user which citation keys are missing — do not invent bib entries or stub bibliographies.",
+    };
+  }
+  return { ok: true };
 }
 
 /**

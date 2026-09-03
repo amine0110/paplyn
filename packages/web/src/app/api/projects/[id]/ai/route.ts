@@ -39,6 +39,7 @@ import {
 import { mergeCompileDiagnostics } from "@/lib/compile-log-diagnostics";
 import { formatCompileFixLineChangeSummary } from "@/lib/ai-compile-fix-validation";
 import { buildCompileFixNoEditMessage } from "@/lib/ai-compile-fix-failure";
+import { tryBibliographyRecovery } from "@/lib/ai-compile-fix-bibliography-recovery";
 import { sanitizeCompileFixSuccessClaims } from "@/lib/ai-compile-fix-success-gating";
 import {
   analyzeCompileMissingPackage,
@@ -860,6 +861,34 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const emitProgress = (message: string) => {
         emit({ type: "progress", message });
       };
+
+      const bibliographyRecovery = tryBibliographyRecovery({
+        file: mainFile,
+        content: mainFileContent,
+        compileFixRequest,
+        userMessage: lastUserMessage,
+      });
+
+      if (bibliographyRecovery) {
+        emitProgress("Relocating misplaced references…");
+        await incrementAiUsage(session.user.id);
+        const appliedActions = toAppliedActionSummaries(bibliographyRecovery.actions);
+        const doneEvent: AiStreamDoneEvent = {
+          type: "done",
+          content: sanitizeCompileFixSuccessClaims(bibliographyRecovery.message, {
+            compileFixRequest,
+            appliedEditCount: bibliographyRecovery.actions.length,
+            compileErrorCount: compileErrors.filter((entry) => entry.severity !== "warning")
+              .length,
+            postEditCompileKnown: requestData.autoCompileFixRetry === true,
+          }),
+          actions: bibliographyRecovery.actions,
+          appliedActions,
+        };
+        emit(doneEvent);
+        close();
+        return;
+      }
 
       const runOnce = async (retryHint?: string) => {
         const { streamResult } = await runStreamText(initialMode, { retryHint });

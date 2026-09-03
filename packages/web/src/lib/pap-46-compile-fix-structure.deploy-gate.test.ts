@@ -1,7 +1,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { validateCompileFixEdit, validateBibliographyStructure } from "@/lib/ai-compile-fix-validation";
+import {
+  validateCompileFixEdit,
+  validateBibliographyStructure,
+} from "@/lib/ai-compile-fix-validation";
+import { tryBibliographyRecovery } from "@/lib/ai-compile-fix-bibliography-recovery";
 import { sanitizeCompileFixSuccessClaims } from "@/lib/ai-compile-fix-success-gating";
 import { COMPILE_FIX_WORKSPACE_SUFFIX } from "@/lib/ai-plugins/workspace-tools";
 import { validateNoDummyManuscriptContent } from "@/lib/ai-compile-fix-validation";
@@ -90,6 +94,7 @@ describe("PAP-46 compile-fix structure guard and success gating", () => {
     expect(routeSrc).toContain("sanitizeCompileFixSuccessClaims");
     expect(routeSrc).toContain("postEditCompileKnown");
     expect(routeSrc).toContain("autoCompileFixRetry");
+    expect(routeSrc).toContain("tryBibliographyRecovery");
   });
 
   it("steers references fixes to the document end in compile-fix prompt", () => {
@@ -103,5 +108,30 @@ describe("PAP-46 compile-fix structure guard and success gating", () => {
       originalLines: [""],
     });
     expect(result.ok).toBe(false);
+  });
+
+  it("relocates damaged DISSTANCE-shaped manuscripts before calling the model", () => {
+    const damaged = [
+      "\\documentclass[preprint]{article}",
+      "\\begin{document}",
+      "\\maketitle",
+      "\\section{References}",
+      "\\bibliography{refs}",
+      "\\begin{abstract}",
+      "Abstract.",
+      "\\end{abstract}",
+      "\\section{Introduction}",
+      "Body.",
+      "\\end{document}",
+    ].join("\n");
+    const recovery = tryBibliographyRecovery({
+      file: "main.tex",
+      content: damaged,
+      compileFixRequest: true,
+      userMessage: "fix the references",
+    });
+    expect(recovery?.actions).toHaveLength(1);
+    expect(recovery?.message).toMatch(/Moved the references block/i);
+    expect(validateBibliographyStructure(recovery?.previewContent ?? "").ok).toBe(true);
   });
 });
