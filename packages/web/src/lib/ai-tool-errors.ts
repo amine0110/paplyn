@@ -39,8 +39,20 @@ const UNKNOWN_TOOL_PATTERNS = [
 
 const TOOL_CHOICE_NONE_PATTERNS = ["tool choice is none"] as const;
 
+const VISION_UNSUPPORTED_PATTERNS = [
+  "image_url",
+  "vision",
+  "multimodal",
+  "does not support image",
+  "unsupported image",
+  "invalid image",
+] as const;
+
 export const TOOL_CHOICE_NONE_MESSAGE =
   "The assistant hit a tool-handling glitch. Please try again — your edits should apply on retry.";
+
+export const VISION_UNSUPPORTED_MESSAGE =
+  "This AI model does not accept images. Try a vision-capable model in your organization settings, or describe the image in text.";
 
 function messageIncludesAny(message: string, patterns: readonly string[]): boolean {
   return patterns.some((pattern) => message.includes(pattern));
@@ -145,6 +157,11 @@ export function isToolChoiceNoneViolationError(error: unknown): boolean {
   return TOOL_CHOICE_NONE_PATTERNS.some((pattern) => msg.includes(pattern));
 }
 
+export function isVisionUnsupportedError(error: unknown): boolean {
+  const msg = errorMessage(error).toLowerCase();
+  return VISION_UNSUPPORTED_PATTERNS.some((pattern) => msg.includes(pattern));
+}
+
 export function formatAiRequestError(error: unknown): string {
   if (isUnknownToolCallError(error)) {
     return "The assistant tried to use an unavailable tool. Please try again — edits should apply on retry.";
@@ -184,6 +201,9 @@ export function formatAiStreamError(error: unknown): { error: string; status: nu
   }
   if (isToolChoiceNoneViolationError(error)) {
     return { error: TOOL_CHOICE_NONE_MESSAGE, status: 502 };
+  }
+  if (isVisionUnsupportedError(error)) {
+    return { error: VISION_UNSUPPORTED_MESSAGE, status: 400 };
   }
   if (isTimeoutLikeError(error)) {
     return { error: "AI request timed out. Please try again.", status: 504 };

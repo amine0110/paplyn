@@ -106,6 +106,10 @@
     @apply inline-flex cursor-pointer items-center justify-center rounded-md bg-accent text-white transition-colors hover:bg-accent-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-paper disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50;
   }
 
+  .chrome-stop-btn {
+    @apply inline-flex cursor-pointer items-center justify-center gap-1 rounded-full border border-error/35 bg-paper px-2.5 text-xs font-medium text-error transition-colors hover:bg-error/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error/30 focus-visible:ring-offset-1 focus-visible:ring-offset-paper;
+  }
+
   .chrome-menu-item {
     @apply w-full cursor-pointer text-left transition-colors hover:bg-accent/15 dark:hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-inset;
   }
