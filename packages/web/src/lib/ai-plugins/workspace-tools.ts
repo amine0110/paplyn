@@ -313,6 +313,7 @@ Rules:
 3. When several errors cite line numbers, plan ALL replace_lines against the ORIGINAL file (before any edits) and apply from the highest line number downward so line numbers stay valid. Attempt every cited error in the first copy in one turn when possible.
 4. Your FIRST get_file must be a small window around the cited error line (see Primary error location) — not overlapping lines 1–100. After at most ${COMPILE_FIX_GET_FILE_BEFORE_EDIT} get_file calls you must call replace_lines, apply_edit, or fix_compile_errors.
 5. In your reply, state exactly which lines you changed (e.g. "Changed main.tex line 3."). If an edit is rejected, quote the rejection reason — never claim a fix after a rejected or unsafe edit.
+6. For citation or bibliography errors: keep a single \\bibliography or References section at the END of the document (after abstract and body sections, near \\\\end{document}). If references were misplaced near the top, REMOVE or MOVE that block back to the end — do not insert a second bibliography at the cursor.
 
 Use fix_compile_errors or apply_edit only when search text matches exactly once. Keep edits minimal.`;
 

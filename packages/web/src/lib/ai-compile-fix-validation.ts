@@ -25,8 +25,36 @@ const FLOAT_BEGIN_RE = /\\begin\{(?:table\*?|figure\*?|tabular\*?)\}/g;
 const BIBLIOGRAPHY_RE = /\\(?:bibliography\{|begin\{thebibliography\})|\\bibitem\b/g;
 const NEW_SECTION_RE = /\\(?:section|subsection)\{/g;
 
+/** Body bibliography output commands (not preamble \\addbibresource or \\bibliographystyle). */
+const BODY_BIBLIOGRAPHY_COMMAND_RE =
+  /\\(?:bibliography\{|printbibliography|begin\{thebibliography\})/;
+const BODY_ADDBIBRESOURCE_RE = /\\addbibresource\b/;
+const REFERENCES_SECTION_HEADING_RE = /\\section\*?\{(?:References|Bibliography)\}/i;
+const ABSTRACT_BEGIN_RE = /\\begin\{abstract\}/;
+const ABSTRACT_CMD_RE = /\\abstract\b/;
+const MAKETITLE_RE = /\\maketitle\b/;
+const SECTION_HEADING_RE = /\\section\*?\{([^}]*)\}/;
+
+const FRONT_MATTER_SECTION_TITLES = new Set(
+  ["abstract", "references", "bibliography", "acknowledgments", "acknowledgements"].map((s) =>
+    s.toLowerCase()
+  )
+);
+
 function countPatternMatches(text: string, pattern: RegExp): number {
   return [...text.matchAll(pattern)].length;
+}
+
+function countBibliographyOutputBlocks(text: string): number {
+  const sectionHeadings = countPatternMatches(
+    text,
+    /\\section\*?\{(?:References|Bibliography)\}/gi
+  );
+  const commands = countPatternMatches(
+    text,
+    /\\(?:bibliography\{|printbibliography|begin\{thebibliography\})/g
+  );
+  return sectionHeadings + commands;
 }
 
 export type NoDummyManuscriptValidation =
@@ -40,8 +68,12 @@ export type NoDummyManuscriptValidation =
 export function validateNoDummyManuscriptContent(options: {
   replace: string;
   originalLines?: string[];
+  /** Full file before edit — enables bibliography relocation without counting as invention. */
+  originalContent?: string;
+  /** Full file after edit. */
+  previewContent?: string;
 }): NoDummyManuscriptValidation {
-  const { replace, originalLines } = options;
+  const { replace, originalLines, originalContent, previewContent } = options;
   const originalBlock = originalLines?.join("\n") ?? "";
 
   const floatAdds = countPatternMatches(replace, FLOAT_BEGIN_RE) - countPatternMatches(originalBlock, FLOAT_BEGIN_RE);
@@ -58,24 +90,38 @@ export function validateNoDummyManuscriptContent(options: {
   const bibAdds =
     countPatternMatches(replace, BIBLIOGRAPHY_RE) - countPatternMatches(originalBlock, BIBLIOGRAPHY_RE);
   if (bibAdds > 0) {
-    return {
-      ok: false,
-      reason:
-        "Edit would add bibliography or \\bibitem entries to silence undefined citations. " +
-        "Fix \\cite/\\bibliography/natbib wiring from the project .bib when keys exist, " +
-        "or tell the user which citation keys are missing — do not invent bib entries or stub bibliographies.",
-    };
+    const movingExistingBibliography =
+      originalContent != null &&
+      previewContent != null &&
+      countBibliographyOutputBlocks(previewContent) <=
+        countBibliographyOutputBlocks(originalContent);
+    if (!movingExistingBibliography) {
+      return {
+        ok: false,
+        reason:
+          "Edit would add bibliography or \\bibitem entries to silence undefined citations. " +
+          "Fix \\cite/\\bibliography/natbib wiring from the project .bib when keys exist, " +
+          "or tell the user which citation keys are missing — do not invent bib entries or stub bibliographies.",
+      };
+    }
   }
 
   const sectionAdds =
     countPatternMatches(replace, NEW_SECTION_RE) - countPatternMatches(originalBlock, NEW_SECTION_RE);
   if (sectionAdds > 0) {
-    return {
-      ok: false,
-      reason:
-        "Edit would add a new section to silence compile warnings. " +
-        "Explain which labels or citations are missing instead of inventing manuscript sections.",
-    };
+    const movingExistingSections =
+      originalContent != null &&
+      previewContent != null &&
+      countPatternMatches(previewContent, NEW_SECTION_RE) <=
+        countPatternMatches(originalContent, NEW_SECTION_RE);
+    if (!movingExistingSections) {
+      return {
+        ok: false,
+        reason:
+          "Edit would add a new section to silence compile warnings. " +
+          "Explain which labels or citations are missing instead of inventing manuscript sections.",
+      };
+    }
   }
 
   return { ok: true };
@@ -406,8 +452,16 @@ export function validateCompileFixEdit(
       : search
         ? search.split("\n")
         : [];
-  const dummyCheck = validateNoDummyManuscriptContent({ replace, originalLines });
+  const dummyCheck = validateNoDummyManuscriptContent({
+    replace,
+    originalLines,
+    originalContent: content,
+    previewContent,
+  });
   if (!dummyCheck.ok) return dummyCheck;
+
+  const relocationCheck = validateNoNewBibliographySites(content, previewContent);
+  if (!relocationCheck.ok) return relocationCheck;
 
   const documentClassLine = getDocumentClassLine(content);
   if (
@@ -423,6 +477,198 @@ export function validateCompileFixEdit(
         reason:
           `Edit would insert content before \\documentclass (line ${documentClassLine}). ` +
           `Repair the cited error line — do not prepend a new preamble.`,
+      };
+    }
+  }
+
+  const structureCheck = validateBibliographyStructure(previewContent);
+  if (!structureCheck.ok) return structureCheck;
+
+  return { ok: true };
+}
+
+function isCommentOrBlankLine(line: string): boolean {
+  const trimmed = line.trim();
+  return !trimmed || trimmed.startsWith("%");
+}
+
+/** First non-comment line index (0-based) of \\begin{document} in the first copy, or null. */
+export function getBeginDocumentLineIndex(content: string): number | null {
+  const lines = content.split("\n");
+  const limit = Math.min(getFirstLaTeXCopyEndLine(content), lines.length);
+
+  for (let i = 0; i < limit; i += 1) {
+    if (isBeginDocumentLine(lines[i] ?? "")) return i;
+  }
+  return null;
+}
+
+function isFrontMatterSectionTitle(title: string): boolean {
+  return FRONT_MATTER_SECTION_TITLES.has(title.trim().toLowerCase());
+}
+
+function isBodySectionLine(line: string): boolean {
+  const match = line.match(SECTION_HEADING_RE);
+  if (!match) return false;
+  return !isFrontMatterSectionTitle(match[1] ?? "");
+}
+
+/** Line numbers (1-based) of structural anchors bibliography must not precede. */
+export function findBibliographyAnchorLineNumbers(content: string): number[] {
+  const lines = content.split("\n");
+  const firstCopyEnd = getFirstLaTeXCopyEndLine(content);
+  const bodyStart = getBeginDocumentLineIndex(content);
+  const start = bodyStart != null ? bodyStart + 1 : 0;
+  const anchors: number[] = [];
+
+  for (let i = start; i < firstCopyEnd; i += 1) {
+    const line = lines[i] ?? "";
+    if (isCommentOrBlankLine(line)) continue;
+
+    if (ABSTRACT_BEGIN_RE.test(line) || ABSTRACT_CMD_RE.test(line) || MAKETITLE_RE.test(line)) {
+      anchors.push(i + 1);
+      continue;
+    }
+
+    if (isBodySectionLine(line)) {
+      anchors.push(i + 1);
+      break;
+    }
+  }
+
+  return anchors;
+}
+
+export type BibliographyStructureValidation =
+  | { ok: true }
+  | { ok: false; reason: string };
+
+interface BibliographySite {
+  startLine: number;
+  endLine: number;
+}
+
+function isBibliographySiteLine(line: string): boolean {
+  if (isCommentOrBlankLine(line)) return false;
+  if (REFERENCES_SECTION_HEADING_RE.test(line)) return true;
+  if (BODY_BIBLIOGRAPHY_COMMAND_RE.test(line)) return true;
+  if (BODY_ADDBIBRESOURCE_RE.test(line)) return true;
+  if (/\\bibitem\b/.test(line)) return true;
+  if (/\\begin\{thebibliography\}/.test(line) || /\\end\{thebibliography\}/.test(line)) return true;
+  return false;
+}
+
+/** Group adjacent bibliography lines into sites (section heading + \\bibliography counts as one). */
+export function findBibliographySites(content: string): BibliographySite[] {
+  const lines = content.split("\n");
+  const firstCopyEnd = getFirstLaTeXCopyEndLine(content);
+  const bodyStart = getBeginDocumentLineIndex(content);
+  if (bodyStart == null) return [];
+
+  const sites: BibliographySite[] = [];
+  let i = bodyStart + 1;
+
+  while (i < firstCopyEnd) {
+    const line = lines[i] ?? "";
+    if (!isBibliographySiteLine(line)) {
+      i += 1;
+      continue;
+    }
+
+    const startLine = i + 1;
+    let j = i + 1;
+    while (j < firstCopyEnd) {
+      const next = lines[j] ?? "";
+      if (isCommentOrBlankLine(next)) {
+        j += 1;
+        continue;
+      }
+      if (isBibliographySiteLine(next)) {
+        j += 1;
+        continue;
+      }
+      break;
+    }
+
+    sites.push({ startLine, endLine: j });
+    i = j;
+  }
+
+  return sites;
+}
+
+export type BibliographySiteRange = BibliographySite;
+
+/** Inclusive 1-based bibliography site ranges in the first document copy. */
+export function findBibliographySiteRanges(content: string): BibliographySiteRange[] {
+  return findBibliographySites(content);
+}
+
+/** Reject edits that add bibliography sites beyond what already exists (allows relocation). */
+export function validateNoNewBibliographySites(
+  originalContent: string,
+  previewContent: string
+): NoDummyManuscriptValidation {
+  const originalSites = countBibliographyOutputBlocks(originalContent);
+  const previewSites = countBibliographyOutputBlocks(previewContent);
+  if (previewSites > originalSites) {
+    return {
+      ok: false,
+      reason:
+        "Edit would add bibliography or \\bibitem entries to silence undefined citations. " +
+        "Fix \\cite/\\bibliography/natbib wiring from the project .bib when keys exist, " +
+        "or tell the user which citation keys are missing — do not invent bib entries or stub bibliographies.",
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * Reject edits that place bibliography output before abstract/maketitle/body,
+ * duplicate bibliography blocks, or move bibliography away from the document end.
+ */
+export function validateBibliographyStructure(content: string): BibliographyStructureValidation {
+  const lines = content.split("\n");
+  const firstCopyEnd = getFirstLaTeXCopyEndLine(content);
+  const sites = findBibliographySites(content);
+
+  if (sites.length === 0) return { ok: true };
+
+  if (sites.length > 1) {
+    return {
+      ok: false,
+      reason:
+        "Edit would duplicate the bibliography (multiple \\bibliography, \\printbibliography, or References sections). " +
+        "Keep a single bibliography near the end of the document — remove misplaced blocks instead of adding another.",
+    };
+  }
+
+  const bibliographyLine = sites[0]!.startLine;
+  const anchors = findBibliographyAnchorLineNumbers(content);
+
+  for (const anchorLine of anchors) {
+    if (bibliographyLine < anchorLine) {
+      const anchorText = (lines[anchorLine - 1] ?? "").trim().slice(0, 60);
+      return {
+        ok: false,
+        reason:
+          `Edit would put references or \\bibliography before the manuscript front matter ` +
+          `(line ${anchorLine}: "${anchorText}${anchorText.length >= 60 ? "…" : ""}"). ` +
+          `Keep the bibliography after the abstract and body sections, near \\end{document} — ` +
+          `remove any misplaced References block instead of inserting a new one at the top.`,
+      };
+    }
+  }
+
+  for (let i = bibliographyLine; i < firstCopyEnd; i += 1) {
+    const line = lines[i - 1] ?? "";
+    if (isCommentOrBlankLine(line)) continue;
+    if (isBodySectionLine(line)) {
+      return {
+        ok: false,
+        reason:
+          "Edit would place the bibliography before later body sections. " +
+          "Move \\bibliography or the References section to the end of the document, after the last section.",
       };
     }
   }

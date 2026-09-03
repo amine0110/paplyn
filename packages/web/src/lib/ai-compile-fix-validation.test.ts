@@ -12,6 +12,7 @@ import {
   isBeginDocumentLine,
   validateCompileFixEdit,
   validateLaTeXPreambleOrder,
+  validateBibliographyStructure,
   validateNoDuplicateBeginDocument,
   validateNoDuplicateDocumentClass,
   validateNoDummyManuscriptContent,
@@ -350,6 +351,141 @@ describe("validateCompileFixEdit", () => {
         ],
       })
     ).toEqual({ ok: true });
+  });
+});
+
+/** DISSTANCE preprint shape: maketitle, abstract, intro, bibliography at end. */
+function buildDistancePreprintFixture(): string {
+  return [
+    "\\documentclass[preprint]{article}",
+    "\\usepackage{natbib}",
+    "\\title{DISSTANCE: A Dataset for Title-Level Similarity and Stance Relations in Disinformation Detection}",
+    "\\author{Mohammed El Amine Mokhtari\\\\",
+    "University of Mons (UMONS)\\\\",
+    "ISIA Lab}",
+    "\\begin{document}",
+    "\\maketitle",
+    "\\begin{abstract}",
+    "We present DISSTANCE.",
+    "\\end{abstract}",
+    "\\section{Introduction}",
+    "Intro text with \\citep{smith2020}.",
+    "\\bibliography{refs}",
+    "\\end{document}",
+  ].join("\n");
+}
+
+describe("validateBibliographyStructure (PAP-46)", () => {
+  const content = buildDistancePreprintFixture();
+
+  it("allows end-of-file \\bibliography{refs}", () => {
+    expect(validateBibliographyStructure(content)).toEqual({ ok: true });
+    expect(
+      validateCompileFixEdit({
+        content,
+        startLine: 2,
+        endLine: 2,
+        replace: "\\usepackage{natbib}",
+        previewContent: content,
+      })
+    ).toEqual({ ok: true });
+  });
+
+  it("rejects References section inserted after maketitle and before abstract (DISSTANCE-shaped)", () => {
+    const preview = [
+      "\\documentclass[preprint]{article}",
+      "\\usepackage{natbib}",
+      "\\title{DISSTANCE: A Dataset for Title-Level Similarity and Stance Relations in Disinformation Detection}",
+      "\\author{Mohammed El Amine Mokhtari\\\\",
+      "University of Mons (UMONS)\\\\",
+      "ISIA Lab}",
+      "\\begin{document}",
+      "\\maketitle",
+      "\\section{References}",
+      "\\bibliography{refs}",
+      "\\begin{abstract}",
+      "We present DISSTANCE.",
+      "\\end{abstract}",
+      "\\section{Introduction}",
+      "Intro text with \\citep{smith2020}.",
+      "\\end{document}",
+    ].join("\n");
+
+    const result = validateBibliographyStructure(preview);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toMatch(/references|bibliography|duplicate/i);
+    }
+
+    const editResult = validateCompileFixEdit({
+      content,
+      startLine: 8,
+      endLine: 8,
+      replace: "\\maketitle\n\\section{References}\n\\bibliography{refs}",
+      previewContent: preview,
+    });
+    expect(editResult.ok).toBe(false);
+  });
+
+  it("rejects a lone bibliography block before abstract (no duplicate at end)", () => {
+    const preview = [
+      "\\documentclass[preprint]{article}",
+      "\\usepackage{natbib}",
+      "\\title{DISSTANCE}",
+      "\\author{Author}",
+      "\\begin{document}",
+      "\\maketitle",
+      "\\section{References}",
+      "\\bibliography{refs}",
+      "\\begin{abstract}",
+      "Abstract.",
+      "\\end{abstract}",
+      "\\section{Introduction}",
+      "Body.",
+      "\\end{document}",
+    ].join("\n");
+
+    const result = validateBibliographyStructure(preview);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toMatch(/before|front matter|abstract/i);
+    }
+  });
+
+  it("rejects duplicate bibliography blocks", () => {
+    const preview = content.replace(
+      "\\maketitle",
+      "\\maketitle\n\\bibliography{refs}"
+    );
+    const result = validateBibliographyStructure(preview);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toMatch(/duplicate/i);
+    }
+  });
+
+  it("rejects bibliography moved before Introduction", () => {
+    const preview = [
+      "\\documentclass[preprint]{article}",
+      "\\usepackage{natbib}",
+      "\\title{DISSTANCE}",
+      "\\author{Author}",
+      "\\begin{document}",
+      "\\maketitle",
+      "\\begin{abstract}",
+      "Abstract.",
+      "\\end{abstract}",
+      "\\bibliography{refs}",
+      "\\section{Introduction}",
+      "Body.",
+      "\\end{document}",
+    ].join("\n");
+
+    const result = validateBibliographyStructure(preview);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toMatch(/before later body sections|front matter|Introduction/i);
+    }
   });
 });
 

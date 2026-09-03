@@ -39,6 +39,8 @@ import {
 import { mergeCompileDiagnostics } from "@/lib/compile-log-diagnostics";
 import { formatCompileFixLineChangeSummary } from "@/lib/ai-compile-fix-validation";
 import { buildCompileFixNoEditMessage } from "@/lib/ai-compile-fix-failure";
+import { tryBibliographyRecovery } from "@/lib/ai-compile-fix-bibliography-recovery";
+import { sanitizeCompileFixSuccessClaims } from "@/lib/ai-compile-fix-success-gating";
 import {
   analyzeCompileMissingPackage,
   isCompileFixStopOutcome,
@@ -161,6 +163,8 @@ const chatSchema = z.object({
     )
     .optional(),
   compileLog: z.string().optional(),
+  /** Client auto-retry after a post-fix compile still failed. */
+  autoCompileFixRetry: z.boolean().optional(),
 });
 
 type ChatRequest = z.infer<typeof chatSchema>;
@@ -400,30 +404,53 @@ async function resolveAssistantContent<TOOLS extends ToolSet>(options: {
   compileLog?: string;
   projectPage?: string;
   texFiles?: Map<string, string>;
+  postEditCompileKnown?: boolean;
 }): Promise<{ content: string; compileFixStopRetry?: boolean }> {
-  const { result, compileFixRequest, compileErrors, getFileCalls, compileLog, projectPage, texFiles } =
-    options;
+  const {
+    result,
+    compileFixRequest,
+    compileErrors,
+    getFileCalls,
+    compileLog,
+    projectPage,
+    texFiles,
+    postEditCompileKnown,
+  } = options;
   const trimmed = result.text.trim();
   const actions = collectClientActionsFromToolResults(result);
 
+  const compileErrorCount = compileErrors.filter((entry) => entry.severity !== "warning").length;
+
+  const finalize = (content: string, extra?: { compileFixStopRetry?: boolean }) => {
+    if (!compileFixRequest) return { content, ...extra };
+    return {
+      content: sanitizeCompileFixSuccessClaims(content, {
+        compileFixRequest: true,
+        appliedEditCount: actions.length,
+        compileErrorCount,
+        postEditCompileKnown,
+      }),
+      ...extra,
+    };
+  };
+
   const missingBeforeFix = analyzeCompileMissingPackage({ errors: compileErrors, log: compileLog });
   if (compileFixRequest && isCompileFixStopOutcome(missingBeforeFix)) {
-    return {
-      content: buildCompileFixStopUserMessage(missingBeforeFix, projectPage),
+    return finalize(buildCompileFixStopUserMessage(missingBeforeFix, projectPage), {
       compileFixStopRetry: true,
-    };
+    });
   }
 
   if (compileFixRequest && !usedClientEditTools(result)) {
-    return {
-      content: buildCompileFixNoEditMessage({
+    return finalize(
+      buildCompileFixNoEditMessage({
         errors: compileErrors,
         getFileCalls,
         steps: result.steps as StepResult<ToolSet>[],
         log: compileLog,
         page: projectPage,
-      }),
-    };
+      })
+    );
   }
 
   const packageAddedSummaries: string[] = [];
@@ -468,50 +495,50 @@ async function resolveAssistantContent<TOOLS extends ToolSet>(options: {
       const hasLineRef =
         lineSummaries.some((summary) => trimmed.includes(summary)) ||
         packageAddedSummaries.some((summary) => trimmed.includes(summary));
-      return { content: hasLineRef ? result.text : `${changeBlock}\n\n${result.text}` };
+      return finalize(hasLineRef ? result.text : `${changeBlock}\n\n${result.text}`);
     }
-    return { content: changeBlock };
+    return finalize(changeBlock);
   }
 
-  if (trimmed) return { content: result.text };
+  if (trimmed) return finalize(result.text);
 
   if (!compileFixRequest) {
     return { content: resolveEmptyAssistantFallback({ result, actions }) };
   }
 
   if (!hadToolActivity(result)) {
-    return { content: "I couldn't generate a response. Please try again." };
+    return finalize("I couldn't generate a response. Please try again.");
   }
 
   const appliedSummary = formatAppliedActionsAsAssistantMessage(actions);
-  if (appliedSummary) return { content: appliedSummary };
+  if (appliedSummary) return finalize(appliedSummary);
 
   if (compileFixRequest && usedClientEditTools(result) && actions.length === 0) {
-    return {
-      content: buildCompileFixNoEditMessage({
+    return finalize(
+      buildCompileFixNoEditMessage({
         errors: compileErrors,
         getFileCalls,
         steps: result.steps as StepResult<ToolSet>[],
         log: compileLog,
         page: projectPage,
-      }),
-    };
+      })
+    );
   }
 
   const fallback = formatToolResultsAsAssistantMessage(result);
-  if (fallback) return { content: fallback };
+  if (fallback) return finalize(fallback);
 
   if (usedClientEditTools(result)) {
-    return {
-      content: "I applied the suggested edits. Recompile to check whether the errors are resolved.",
-    };
+    return finalize(
+      "I applied the suggested edits. Recompile to check whether the errors are resolved."
+    );
   }
 
   if (hadReadOnlyToolActivity(result)) {
-    return { content: NO_EDIT_FALLBACK_MESSAGE };
+    return finalize(NO_EDIT_FALLBACK_MESSAGE);
   }
 
-  return { content: "I searched but couldn't format the results. Please try asking again." };
+  return finalize("I searched but couldn't format the results. Please try asking again.");
 }
 
 async function getAiConfig() {
@@ -835,6 +862,34 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         emit({ type: "progress", message });
       };
 
+      const bibliographyRecovery = tryBibliographyRecovery({
+        file: mainFile,
+        content: mainFileContent,
+        compileFixRequest,
+        userMessage: lastUserMessage,
+      });
+
+      if (bibliographyRecovery) {
+        emitProgress("Relocating misplaced references…");
+        await incrementAiUsage(session.user.id);
+        const appliedActions = toAppliedActionSummaries(bibliographyRecovery.actions);
+        const doneEvent: AiStreamDoneEvent = {
+          type: "done",
+          content: sanitizeCompileFixSuccessClaims(bibliographyRecovery.message, {
+            compileFixRequest,
+            appliedEditCount: bibliographyRecovery.actions.length,
+            compileErrorCount: compileErrors.filter((entry) => entry.severity !== "warning")
+              .length,
+            postEditCompileKnown: requestData.autoCompileFixRetry === true,
+          }),
+          actions: bibliographyRecovery.actions,
+          appliedActions,
+        };
+        emit(doneEvent);
+        close();
+        return;
+      }
+
       const runOnce = async (retryHint?: string) => {
         const { streamResult } = await runStreamText(initialMode, { retryHint });
 
@@ -863,6 +918,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           compileLog,
           projectPage,
           texFiles: texFileMap,
+          postEditCompileKnown: requestData.autoCompileFixRetry === true,
         });
 
         const usedPlugins = collectUsedPlugins(result, plugins);
