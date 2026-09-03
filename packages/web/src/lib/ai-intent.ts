@@ -11,6 +11,7 @@ import {
   WORKSPACE_READ_TOOL_NAMES,
   WORKSPACE_TOOL_NAMES,
 } from "@/lib/ai-plugins/workspace-tools";
+import { classifyAbortSignal, shouldSkipLlmClassify } from "@/lib/ai-classify-config";
 import { classifyCompileDiagnosticsReviewFallback } from "@/lib/ai-compile-diagnostics-intent";
 
 export const aiIntentSchema = z.enum([
@@ -328,8 +329,9 @@ export async function classifyAiIntent(options: {
   compileFix?: boolean;
   compileDiagnostics?: boolean;
   model?: LanguageModel;
+  modelId?: string;
 }): Promise<AiIntent> {
-  const { message, forcedTool, action, compileFix, compileDiagnostics, model } = options;
+  const { message, forcedTool, action, compileFix, compileDiagnostics, model, modelId } = options;
 
   if (compileFix || compileDiagnostics) return "edit";
 
@@ -339,7 +341,7 @@ export async function classifyAiIntent(options: {
   const fromAction = intentFromAction(action);
   if (fromAction) return fromAction;
 
-  if (!model) {
+  if (!model || shouldSkipLlmClassify(modelId)) {
     return classifyAiIntentFallback({ message, forcedTool, action, compileFix, compileDiagnostics });
   }
 
@@ -348,6 +350,7 @@ export async function classifyAiIntent(options: {
       model,
       schema: intentClassificationSchema,
       maxRetries: 0,
+      abortSignal: classifyAbortSignal(),
       prompt: `Classify the user's message for a LaTeX writing assistant.
 
 Choose exactly one intent:

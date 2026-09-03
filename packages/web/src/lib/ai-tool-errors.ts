@@ -153,9 +153,53 @@ export function formatAiRequestError(error: unknown): string {
     return TOOL_CHOICE_NONE_MESSAGE;
   }
   if (APICallError.isInstance(error) && error.message) {
-    return error.message;
+    return redactAiErrorMessage(error.message);
   }
   return "AI request failed. Please try again.";
+}
+
+function isTimeoutLikeError(error: unknown): boolean {
+  if (error instanceof Error) {
+    if (error.name === "TimeoutError" || error.name === "AbortError") return true;
+    const msg = error.message.toLowerCase();
+    return msg.includes("timeout") || msg.includes("timed out") || msg.includes("aborted");
+  }
+  return false;
+}
+
+/** Plain-English stream error for chat UI — status + short reason, no stack or secrets. */
+export function formatAiStreamError(error: unknown): { error: string; status: number } {
+  if (isAiRateLimitError(error)) {
+    return { error: AI_RATE_LIMIT_MESSAGE, status: 429 };
+  }
+  if (isAiPromptTooLargeError(error)) {
+    return { error: PROMPT_TOO_LARGE_MESSAGE, status: 429 };
+  }
+  if (isUnknownToolCallError(error)) {
+    return {
+      error:
+        "The assistant tried to use an unavailable tool. Please try again — edits should apply on retry.",
+      status: 502,
+    };
+  }
+  if (isToolChoiceNoneViolationError(error)) {
+    return { error: TOOL_CHOICE_NONE_MESSAGE, status: 502 };
+  }
+  if (isTimeoutLikeError(error)) {
+    return { error: "AI request timed out. Please try again.", status: 504 };
+  }
+  if (APICallError.isInstance(error)) {
+    const status = error.statusCode ?? 502;
+    const reason = redactAiErrorMessage(error.message).split("\n")[0]?.trim().slice(0, 200);
+    const safeStatus = status >= 400 && status < 600 ? status : 502;
+    return {
+      error: reason
+        ? `AI provider returned ${safeStatus}: ${reason}`
+        : `AI provider returned ${safeStatus}. Please check your AI settings and try again.`,
+      status: safeStatus,
+    };
+  }
+  return { error: formatAiRequestError(error), status: 502 };
 }
 
 export const UNKNOWN_TOOL_RETRY_HINT = `Important: only call workspace tools that are explicitly listed for this request (list_files, get_file, fix_compile_errors, apply_edit, replace_lines, insert_at_cursor, replace_selection, and any plugin tools shown above). Do not call any other tool names.`;
