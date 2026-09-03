@@ -5,7 +5,6 @@ import type { AiClientAction } from "@/lib/ai-client-actions";
 import { applyLinesReplace } from "@/lib/ai-client-actions";
 import {
   buildBodyContentInsertPlan,
-  detectInsertAnchorIntent,
   findMisplacedBodyBlock,
   isPreambleMissing,
   type MisplacedBodyBlockRange,
