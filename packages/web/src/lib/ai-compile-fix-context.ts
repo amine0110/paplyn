@@ -448,6 +448,7 @@ export function buildAiCompileFixContext(
 export interface AiChatMessage {
   role: "user" | "assistant";
   content: string;
+  images?: import("@/lib/ai-chat-images").AiChatImage[];
 }
 
 /** Compile-fix: send only the latest user turn so prior failed retries do not blow TPM. */

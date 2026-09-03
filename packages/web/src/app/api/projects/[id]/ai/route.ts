@@ -124,12 +124,28 @@ import { PRODUCT } from "@/lib/product";
 import { getUserZoteroCredentials } from "@/lib/user-zotero";
 import { checkAiLimit, incrementAiUsage } from "@/lib/usage";
 import { z } from "zod";
+import {
+  estimateApiMessagesChars,
+  requestHasImages,
+  toCoreMessages,
+  validateApiChatImages,
+  VISION_IMAGE_SUFFIX,
+  type ApiChatMessage,
+} from "@/lib/ai-chat-messages";
+import { AI_CHAT_ACCEPTED_IMAGE_MIME_TYPES } from "@/lib/ai-chat-images";
+
+const aiChatImageSchema = z.object({
+  dataUrl: z.string().min(1),
+  mimeType: z.enum(AI_CHAT_ACCEPTED_IMAGE_MIME_TYPES),
+  name: z.string().optional(),
+});
 
 const chatSchema = z.object({
   messages: z.array(
     z.object({
       role: z.enum(["user", "assistant"]),
       content: z.string(),
+      images: z.array(aiChatImageSchema).optional(),
     })
   ),
   activeFile: z.string().optional(),
@@ -361,6 +377,10 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
 
   if (retryHint) {
     systemPrompt += `\n\n${retryHint}`;
+  }
+
+  if (requestHasImages(data.messages)) {
+    systemPrompt += `\n\n${VISION_IMAGE_SUFFIX}`;
   }
 
   return systemPrompt;
@@ -614,6 +634,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
   const requestData = parsed.data;
+  const imageValidationError = validateApiChatImages(requestData.messages);
+  if (imageValidationError) {
+    return NextResponse.json({ error: imageValidationError }, { status: 400 });
+  }
   const lastUserMessage = getLastUserMessage(requestData.messages);
 
   const openai = createOpenAI({
@@ -782,9 +806,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 errorsOnly: mode === "compile-fix-minimal",
               });
 
-        const messages = compileFixRequest
-          ? selectCompileFixMessages(requestData.messages)
+        const rawMessages = compileFixRequest
+          ? selectCompileFixMessages(requestData.messages as ApiChatMessage[])
           : requestData.messages;
+        const messages = toCoreMessages(rawMessages as ApiChatMessage[]);
 
         const compileFixTargetHint =
           compileFixRequest && primaryErrorLocation
@@ -820,7 +845,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         });
 
         if (compileFixRequest) {
-          const messagesChars = messages.reduce((sum, message) => sum + message.content.length, 0);
+          const messagesChars = estimateApiMessagesChars(rawMessages as ApiChatMessage[]);
           compileFixMetricsRef.current = {
             mode,
             systemPromptChars: systemPrompt.length,
