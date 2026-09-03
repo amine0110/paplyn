@@ -91,6 +91,8 @@ export interface BibliographyRelocationPlan {
   removeEnd: number;
   blockLines: string[];
   endDocumentLine: number;
+  /** When true, relocate before \\end{document}; otherwise append at EOF. */
+  hasEndDocument: boolean;
   /** When true, a bibliography already exists after the body — only remove the top block. */
   removeOnly: boolean;
   previewContent: string;
@@ -103,10 +105,11 @@ export function buildBibliographyRelocationPlan(
   const misplaced = getMisplacedBibliographySite(content);
   if (!misplaced) return null;
 
-  const endDocumentLine = findEndDocumentLine(content);
-  if (endDocumentLine == null) return null;
-
   const lines = content.split("\n");
+  const endDocumentLine = findEndDocumentLine(content);
+  const hasEndDocument = endDocumentLine != null;
+  const insertionLine = hasEndDocument ? endDocumentLine! : lines.length;
+
   const blockLines = lines.slice(misplaced.startLine - 1, misplaced.endLine);
   const withoutMisplaced = [
     ...lines.slice(0, misplaced.startLine - 1),
@@ -118,8 +121,8 @@ export function buildBibliographyRelocationPlan(
   let previewContent: string;
   if (removeOnly) {
     previewContent = withoutMisplaced.join("\n");
-  } else {
-    const endIdx = endDocumentLine - 1;
+  } else if (hasEndDocument) {
+    const endIdx = insertionLine - 1;
     const removedLineCount = misplaced.endLine - misplaced.startLine;
     const adjustedEndIdx =
       endIdx >= misplaced.startLine ? endIdx - removedLineCount : endIdx;
@@ -130,6 +133,8 @@ export function buildBibliographyRelocationPlan(
       endLine,
       ...withoutMisplaced.slice(adjustedEndIdx + 1),
     ].join("\n");
+  } else {
+    previewContent = [...withoutMisplaced, ...blockLines].join("\n");
   }
 
   if (!validateBibliographyStructure(previewContent).ok) return null;
@@ -139,7 +144,8 @@ export function buildBibliographyRelocationPlan(
     removeStart: misplaced.startLine,
     removeEnd: misplaced.endLine,
     blockLines,
-    endDocumentLine,
+    endDocumentLine: insertionLine,
+    hasEndDocument,
     removeOnly,
     previewContent,
   };
@@ -164,18 +170,33 @@ export function buildBibliographyRelocationActions(
     ];
   }
 
-  const replace = [
-    ...lines.slice(plan.removeEnd, plan.endDocumentLine - 1),
-    ...plan.blockLines,
-    lines[plan.endDocumentLine - 1] ?? "\\end{document}",
-  ].join("\n");
+  if (plan.hasEndDocument) {
+    const replace = [
+      ...lines.slice(plan.removeEnd, plan.endDocumentLine - 1),
+      ...plan.blockLines,
+      lines[plan.endDocumentLine - 1] ?? "\\end{document}",
+    ].join("\n");
+
+    return [
+      {
+        type: "replace_lines",
+        file: plan.file,
+        startLine: plan.removeStart,
+        endLine: plan.endDocumentLine,
+        replace,
+        label: `Moved references to end of ${plan.file}`,
+      },
+    ];
+  }
+
+  const replace = [...lines.slice(plan.removeEnd), ...plan.blockLines].join("\n");
 
   return [
     {
       type: "replace_lines",
       file: plan.file,
       startLine: plan.removeStart,
-      endLine: plan.endDocumentLine,
+      endLine: lines.length,
       replace,
       label: `Moved references to end of ${plan.file}`,
     },
@@ -201,28 +222,54 @@ export function buildBibliographyRecoveryMessage(plan: BibliographyRelocationPla
     );
   }
 
+  if (plan.hasEndDocument) {
+    return (
+      `${changeSummary} Moved the references block from ${removedRange} to the end of the document, ` +
+      `before \\end{document}. Recompile to verify the PDF.`
+    );
+  }
+
   return (
-    `${changeSummary} Moved the references block from ${removedRange} to the end of the document, ` +
-    `before \\end{document}. Recompile to verify the PDF.`
+    `${changeSummary} Moved the references block from ${removedRange} to the end of ${plan.file}. ` +
+    `Recompile to verify the PDF.`
   );
 }
 
+export function buildBibliographyRecoveryNotFoundMessage(texFiles: Iterable<string>): string {
+  const paths = [...texFiles].sort();
+  const fileList = paths.length > 0 ? paths.join(", ") : "project .tex files";
+  return `Checked ${fileList} for a misplaced references block but did not find one to move.`;
+}
+
 export function tryBibliographyRecovery(options: {
-  file: string;
-  content: string;
+  texFiles: Map<string, string>;
+  mainFile: string;
   compileFixRequest: boolean;
   userMessage: string;
-}): { actions: AiClientAction[]; message: string; previewContent: string } | null {
+}): { actions: AiClientAction[]; message: string; previewContent: string; file: string } | null {
   const shouldRecover =
     options.compileFixRequest || detectReferencesRecoveryIntent(options.userMessage);
   if (!shouldRecover) return null;
 
-  const plan = buildBibliographyRelocationPlan(options.file, options.content);
-  if (!plan) return null;
+  const orderedPaths = [
+    options.mainFile,
+    ...[...options.texFiles.keys()].filter((path) => path !== options.mainFile).sort(),
+  ];
 
-  return {
-    actions: buildBibliographyRelocationActions(plan, options.content),
-    message: buildBibliographyRecoveryMessage(plan),
-    previewContent: plan.previewContent,
-  };
+  for (const file of orderedPaths) {
+    const content = options.texFiles.get(file);
+    if (content == null) continue;
+
+    const plan = buildBibliographyRelocationPlan(file, content);
+    if (!plan) continue;
+
+    return {
+      actions: buildBibliographyRelocationActions(plan, content),
+      message: buildBibliographyRecoveryMessage(plan),
+      previewContent: plan.previewContent,
+      file,
+    };
+  }
+
+  return null;
 }

@@ -39,7 +39,11 @@ import {
 import { mergeCompileDiagnostics } from "@/lib/compile-log-diagnostics";
 import { formatCompileFixLineChangeSummary } from "@/lib/ai-compile-fix-validation";
 import { buildCompileFixNoEditMessage } from "@/lib/ai-compile-fix-failure";
-import { tryBibliographyRecovery } from "@/lib/ai-compile-fix-bibliography-recovery";
+import {
+  buildBibliographyRecoveryNotFoundMessage,
+  detectReferencesRecoveryIntent,
+  tryBibliographyRecovery,
+} from "@/lib/ai-compile-fix-bibliography-recovery";
 import { sanitizeCompileFixSuccessClaims } from "@/lib/ai-compile-fix-success-gating";
 import {
   analyzeCompileMissingPackage,
@@ -405,6 +409,7 @@ async function resolveAssistantContent<TOOLS extends ToolSet>(options: {
   projectPage?: string;
   texFiles?: Map<string, string>;
   postEditCompileKnown?: boolean;
+  referencesRecoveryIntent?: boolean;
 }): Promise<{ content: string; compileFixStopRetry?: boolean }> {
   const {
     result,
@@ -415,6 +420,7 @@ async function resolveAssistantContent<TOOLS extends ToolSet>(options: {
     projectPage,
     texFiles,
     postEditCompileKnown,
+    referencesRecoveryIntent = false,
   } = options;
   const trimmed = result.text.trim();
   const actions = collectClientActionsFromToolResults(result);
@@ -503,7 +509,14 @@ async function resolveAssistantContent<TOOLS extends ToolSet>(options: {
   if (trimmed) return finalize(result.text);
 
   if (!compileFixRequest) {
-    return { content: resolveEmptyAssistantFallback({ result, actions }) };
+    return {
+      content: resolveEmptyAssistantFallback({
+        result,
+        actions,
+        referencesRecoveryIntent,
+        checkedTexFiles: texFiles ? [...texFiles.keys()] : [],
+      }),
+    };
   }
 
   if (!hadToolActivity(result)) {
@@ -535,6 +548,11 @@ async function resolveAssistantContent<TOOLS extends ToolSet>(options: {
   }
 
   if (hadReadOnlyToolActivity(result)) {
+    if (referencesRecoveryIntent) {
+      return finalize(
+        buildBibliographyRecoveryNotFoundMessage(texFiles ? [...texFiles.keys()] : [])
+      );
+    }
     return finalize(NO_EDIT_FALLBACK_MESSAGE);
   }
 
@@ -863,8 +881,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       };
 
       const bibliographyRecovery = tryBibliographyRecovery({
-        file: mainFile,
-        content: mainFileContent,
+        texFiles: texFileMap,
+        mainFile,
         compileFixRequest,
         userMessage: lastUserMessage,
       });
@@ -884,6 +902,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           }),
           actions: bibliographyRecovery.actions,
           appliedActions,
+        };
+        emit(doneEvent);
+        close();
+        return;
+      }
+
+      const referencesRecoveryIntent =
+        !compileFixRequest && detectReferencesRecoveryIntent(lastUserMessage);
+      if (referencesRecoveryIntent) {
+        emitProgress("Checking for misplaced references…");
+        await incrementAiUsage(session.user.id);
+        const doneEvent: AiStreamDoneEvent = {
+          type: "done",
+          content: buildBibliographyRecoveryNotFoundMessage(texFileMap.keys()),
+          actions: [],
+          appliedActions: [],
         };
         emit(doneEvent);
         close();
@@ -919,6 +953,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           projectPage,
           texFiles: texFileMap,
           postEditCompileKnown: requestData.autoCompileFixRetry === true,
+          referencesRecoveryIntent: detectReferencesRecoveryIntent(lastUserMessage),
         });
 
         const usedPlugins = collectUsedPlugins(result, plugins);

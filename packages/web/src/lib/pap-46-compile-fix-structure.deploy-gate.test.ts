@@ -125,8 +125,8 @@ describe("PAP-46 compile-fix structure guard and success gating", () => {
       "\\end{document}",
     ].join("\n");
     const recovery = tryBibliographyRecovery({
-      file: "main.tex",
-      content: damaged,
+      texFiles: new Map([["main.tex", damaged]]),
+      mainFile: "main.tex",
       compileFixRequest: true,
       userMessage: "fix the references",
     });

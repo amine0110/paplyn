@@ -55,6 +55,12 @@ describe("detectReferencesRecoveryIntent", () => {
     expect(detectReferencesRecoveryIntent("fix it")).toBe(true);
     expect(detectReferencesRecoveryIntent("Find the error that stopping the compiler")).toBe(false);
   });
+
+  it("detects references-at-the-beginning phrasing (live 0.5.33 user message)", () => {
+    const message =
+      "the references are put at the beginning of the paper, can you fix this";
+    expect(detectReferencesRecoveryIntent(message)).toBe(true);
+  });
 });
 
 describe("bibliography relocation recovery", () => {
@@ -83,8 +89,8 @@ describe("bibliography relocation recovery", () => {
 
   it("returns relocation actions for compile-fix on damaged manuscripts", () => {
     const recovery = tryBibliographyRecovery({
-      file: "main.tex",
-      content: damaged,
+      texFiles: new Map([["main.tex", damaged]]),
+      mainFile: "main.tex",
       compileFixRequest: true,
       userMessage: "Find the error that stopping the compiler",
     });
@@ -100,8 +106,8 @@ describe("bibliography relocation recovery", () => {
 
   it("returns relocation for fix-the-references requests on damaged manuscripts", () => {
     const recovery = tryBibliographyRecovery({
-      file: "main.tex",
-      content: damaged,
+      texFiles: new Map([["main.tex", damaged]]),
+      mainFile: "main.tex",
       compileFixRequest: false,
       userMessage: "fix the references",
     });
@@ -111,8 +117,8 @@ describe("bibliography relocation recovery", () => {
   it("no-ops on healthy manuscripts", () => {
     const healthy = buildHealthyDistanceFixture();
     expect(tryBibliographyRecovery({
-      file: "main.tex",
-      content: healthy,
+      texFiles: new Map([["main.tex", healthy]]),
+      mainFile: "main.tex",
       compileFixRequest: true,
       userMessage: "fix compile errors",
     })).toBeNull();
@@ -161,5 +167,64 @@ describe("bibliography relocation recovery", () => {
     });
     expect(check.ok).toBe(true);
     expect(validateBibliographyStructure(previewContent).ok).toBe(true);
+  });
+});
+
+function buildTemplateInputFixture(): { mainTex: string; templateTex: string } {
+  const templateTex = [
+    "\\section{References}",
+    "\\bibliography{refs}",
+    "\\section{Introduction}",
+    "We present DISSTANCE.",
+    "\\section{Methods}",
+    "Methods text with \\citep{smith2020}.",
+  ].join("\n");
+
+  const mainTex = [
+    "\\documentclass[preprint]{article}",
+    "\\usepackage{natbib}",
+    "\\begin{document}",
+    "\\input{template}",
+    "\\end{document}",
+  ].join("\n");
+
+  return { mainTex, templateTex };
+}
+
+describe("included-file bibliography recovery (PAP-47)", () => {
+  const AMINE_MESSAGE =
+    "the references are put at the beginning of the paper, can you fix this";
+
+  it("relocates misplaced references in template.tex when main only inputs it", () => {
+    const { mainTex, templateTex } = buildTemplateInputFixture();
+    const recovery = tryBibliographyRecovery({
+      texFiles: new Map([
+        ["main.tex", mainTex],
+        ["template.tex", templateTex],
+      ]),
+      mainFile: "main.tex",
+      compileFixRequest: false,
+      userMessage: AMINE_MESSAGE,
+    });
+
+    expect(recovery).not.toBeNull();
+    if (!recovery) return;
+
+    expect(recovery.file).toBe("template.tex");
+    expect(recovery.actions).toHaveLength(1);
+    expect(recovery.actions[0]?.type).toBe("replace_lines");
+    expect(recovery.actions[0]?.file).toBe("template.tex");
+    expect(recovery.message).toMatch(/Moved the references block/i);
+    expect(validateBibliographyStructure(recovery.previewContent).ok).toBe(true);
+    expect(recovery.previewContent).toMatch(
+      /\\section\{Introduction\}[\s\S]*\\section\{References\}[\s\S]*\\bibliography\{refs\}/
+    );
+    expect(recovery.previewContent).not.toMatch(
+      /\\section\{References\}[\s\S]*\\section\{Introduction\}/
+    );
+  });
+
+  it("matches the live user message for recovery intent", () => {
+    expect(detectReferencesRecoveryIntent(AMINE_MESSAGE)).toBe(true);
   });
 });

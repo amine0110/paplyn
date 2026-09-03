@@ -563,10 +563,10 @@ export function findBibliographySites(content: string): BibliographySite[] {
   const lines = content.split("\n");
   const firstCopyEnd = getFirstLaTeXCopyEndLine(content);
   const bodyStart = getBeginDocumentLineIndex(content);
-  if (bodyStart == null) return [];
+  const scanStart = bodyStart != null ? bodyStart + 1 : 0;
 
   const sites: BibliographySite[] = [];
-  let i = bodyStart + 1;
+  let i = scanStart;
 
   while (i < firstCopyEnd) {
     const line = lines[i] ?? "";
