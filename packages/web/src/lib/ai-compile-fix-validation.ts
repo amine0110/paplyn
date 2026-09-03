@@ -25,6 +25,22 @@ const FLOAT_BEGIN_RE = /\\begin\{(?:table\*?|figure\*?|tabular\*?)\}/g;
 const BIBLIOGRAPHY_RE = /\\(?:bibliography\{|begin\{thebibliography\})|\\bibitem\b/g;
 const NEW_SECTION_RE = /\\(?:section|subsection)\{/g;
 
+/** Body bibliography output commands (not preamble \\addbibresource or \\bibliographystyle). */
+const BODY_BIBLIOGRAPHY_COMMAND_RE =
+  /\\(?:bibliography\{|printbibliography|begin\{thebibliography\})/;
+const BODY_ADDBIBRESOURCE_RE = /\\addbibresource\b/;
+const REFERENCES_SECTION_HEADING_RE = /\\section\*?\{(?:References|Bibliography)\}/i;
+const ABSTRACT_BEGIN_RE = /\\begin\{abstract\}/;
+const ABSTRACT_CMD_RE = /\\abstract\b/;
+const MAKETITLE_RE = /\\maketitle\b/;
+const SECTION_HEADING_RE = /\\section\*?\{([^}]*)\}/;
+
+const FRONT_MATTER_SECTION_TITLES = new Set(
+  ["abstract", "references", "bibliography", "acknowledgments", "acknowledgements"].map((s) =>
+    s.toLowerCase()
+  )
+);
+
 function countPatternMatches(text: string, pattern: RegExp): number {
   return [...text.matchAll(pattern)].length;
 }
@@ -423,6 +439,171 @@ export function validateCompileFixEdit(
         reason:
           `Edit would insert content before \\documentclass (line ${documentClassLine}). ` +
           `Repair the cited error line — do not prepend a new preamble.`,
+      };
+    }
+  }
+
+  const structureCheck = validateBibliographyStructure(previewContent);
+  if (!structureCheck.ok) return structureCheck;
+
+  return { ok: true };
+}
+
+function isCommentOrBlankLine(line: string): boolean {
+  const trimmed = line.trim();
+  return !trimmed || trimmed.startsWith("%");
+}
+
+/** First non-comment line index (0-based) of \\begin{document} in the first copy, or null. */
+export function getBeginDocumentLineIndex(content: string): number | null {
+  const lines = content.split("\n");
+  const limit = Math.min(getFirstLaTeXCopyEndLine(content), lines.length);
+
+  for (let i = 0; i < limit; i += 1) {
+    if (isBeginDocumentLine(lines[i] ?? "")) return i;
+  }
+  return null;
+}
+
+function isFrontMatterSectionTitle(title: string): boolean {
+  return FRONT_MATTER_SECTION_TITLES.has(title.trim().toLowerCase());
+}
+
+function isBodySectionLine(line: string): boolean {
+  const match = line.match(SECTION_HEADING_RE);
+  if (!match) return false;
+  return !isFrontMatterSectionTitle(match[1] ?? "");
+}
+
+/** Line numbers (1-based) of structural anchors bibliography must not precede. */
+export function findBibliographyAnchorLineNumbers(content: string): number[] {
+  const lines = content.split("\n");
+  const firstCopyEnd = getFirstLaTeXCopyEndLine(content);
+  const bodyStart = getBeginDocumentLineIndex(content);
+  const start = bodyStart != null ? bodyStart + 1 : 0;
+  const anchors: number[] = [];
+
+  for (let i = start; i < firstCopyEnd; i += 1) {
+    const line = lines[i] ?? "";
+    if (isCommentOrBlankLine(line)) continue;
+
+    if (ABSTRACT_BEGIN_RE.test(line) || ABSTRACT_CMD_RE.test(line) || MAKETITLE_RE.test(line)) {
+      anchors.push(i + 1);
+      continue;
+    }
+
+    if (isBodySectionLine(line)) {
+      anchors.push(i + 1);
+      break;
+    }
+  }
+
+  return anchors;
+}
+
+export type BibliographyStructureValidation =
+  | { ok: true }
+  | { ok: false; reason: string };
+
+interface BibliographySite {
+  startLine: number;
+}
+
+function isBibliographySiteLine(line: string): boolean {
+  if (isCommentOrBlankLine(line)) return false;
+  if (REFERENCES_SECTION_HEADING_RE.test(line)) return true;
+  if (BODY_BIBLIOGRAPHY_COMMAND_RE.test(line)) return true;
+  if (BODY_ADDBIBRESOURCE_RE.test(line)) return true;
+  if (/\\bibitem\b/.test(line)) return true;
+  if (/\\begin\{thebibliography\}/.test(line) || /\\end\{thebibliography\}/.test(line)) return true;
+  return false;
+}
+
+/** Group adjacent bibliography lines into sites (section heading + \\bibliography counts as one). */
+export function findBibliographySites(content: string): BibliographySite[] {
+  const lines = content.split("\n");
+  const firstCopyEnd = getFirstLaTeXCopyEndLine(content);
+  const bodyStart = getBeginDocumentLineIndex(content);
+  if (bodyStart == null) return [];
+
+  const sites: BibliographySite[] = [];
+  let i = bodyStart + 1;
+
+  while (i < firstCopyEnd) {
+    const line = lines[i] ?? "";
+    if (!isBibliographySiteLine(line)) {
+      i += 1;
+      continue;
+    }
+
+    const startLine = i + 1;
+    let j = i + 1;
+    while (j < firstCopyEnd) {
+      const next = lines[j] ?? "";
+      if (isCommentOrBlankLine(next)) {
+        j += 1;
+        continue;
+      }
+      if (isBibliographySiteLine(next)) {
+        j += 1;
+        continue;
+      }
+      break;
+    }
+
+    sites.push({ startLine });
+    i = j;
+  }
+
+  return sites;
+}
+
+/**
+ * Reject edits that place bibliography output before abstract/maketitle/body,
+ * duplicate bibliography blocks, or move bibliography away from the document end.
+ */
+export function validateBibliographyStructure(content: string): BibliographyStructureValidation {
+  const lines = content.split("\n");
+  const firstCopyEnd = getFirstLaTeXCopyEndLine(content);
+  const sites = findBibliographySites(content);
+
+  if (sites.length === 0) return { ok: true };
+
+  if (sites.length > 1) {
+    return {
+      ok: false,
+      reason:
+        "Edit would duplicate the bibliography (multiple \\bibliography, \\printbibliography, or References sections). " +
+        "Keep a single bibliography near the end of the document — remove misplaced blocks instead of adding another.",
+    };
+  }
+
+  const bibliographyLine = sites[0]!.startLine;
+  const anchors = findBibliographyAnchorLineNumbers(content);
+
+  for (const anchorLine of anchors) {
+    if (bibliographyLine < anchorLine) {
+      const anchorText = (lines[anchorLine - 1] ?? "").trim().slice(0, 60);
+      return {
+        ok: false,
+        reason:
+          `Edit would put references or \\bibliography before the manuscript front matter ` +
+          `(line ${anchorLine}: "${anchorText}${anchorText.length >= 60 ? "…" : ""}"). ` +
+          `Keep the bibliography after the abstract and body sections, near \\end{document} — ` +
+          `remove any misplaced References block instead of inserting a new one at the top.`,
+      };
+    }
+  }
+
+  for (let i = bibliographyLine; i < firstCopyEnd; i += 1) {
+    const line = lines[i - 1] ?? "";
+    if (isCommentOrBlankLine(line)) continue;
+    if (isBodySectionLine(line)) {
+      return {
+        ok: false,
+        reason:
+          "Edit would place the bibliography before later body sections. " +
+          "Move \\bibliography or the References section to the end of the document, after the last section.",
       };
     }
   }

@@ -334,6 +334,7 @@ export function AiSidebar({
           forcedTool,
           compileErrors: hasDiagnostics ? compileErrors : undefined,
           compileLog: compileLog.trim() ? compileLog : undefined,
+          autoCompileFixRetry: options?.autoCompileFixRetry || undefined,
         }),
       });
 
