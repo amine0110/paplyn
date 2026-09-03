@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isMuseSparkModel } from "@/lib/ai-classify-config";
 import { classifyCompileDiagnosticsReview } from "@/lib/ai-compile-diagnostics-intent";
 import { detectReferencesRecoveryIntent } from "@/lib/ai-compile-fix-bibliography-recovery";
-import { classifyAiIntent } from "@/lib/ai-intent";
+import { classifyAiIntent, classifyAiIntentFallback, toolsForIntent } from "@/lib/ai-intent";
+import { CLIENT_ACTION_TOOL_NAMES } from "@/lib/ai-plugins/workspace-tools";
 import { formatAiStreamError } from "@/lib/ai-tool-errors";
 
 const ROOT = join(import.meta.dirname, "..");
@@ -105,6 +106,38 @@ describe("PAP-48 muse-spark classify guards", () => {
     expect(detectReferencesRecoveryIntent("fix the references")).toBe(true);
   });
 
+  it("classifies PAP-48 references why-questions as edit on muse-spark regex path", async () => {
+    const phrases = [
+      "why does the references section is at the beginning of the article",
+      "the references are at the beginning",
+      "can you fix this",
+      "do the fix and recompile after that",
+    ];
+    for (const message of phrases) {
+      await expect(
+        classifyAiIntent({
+          message,
+          model: mockModel,
+          modelId: "muse-spark-1.3",
+        })
+      ).resolves.toBe("edit");
+      expect(classifyAiIntentFallback({ message })).toBe("edit");
+    }
+    expect(generateObject).not.toHaveBeenCalled();
+  });
+
+  it("mounts write tools for muse-spark references recovery intent", () => {
+    const allWorkspaceTools = Object.fromEntries(
+      ["list_files", "get_file", "replace_lines", "apply_edit"].map((name) => [name, {}])
+    );
+    const tools = toolsForIntent("edit", {}, allWorkspaceTools);
+    for (const name of CLIENT_ACTION_TOOL_NAMES) {
+      if (name in allWorkspaceTools) {
+        expect(name in tools).toBe(true);
+      }
+    }
+  });
+
   it("formats provider errors without leaking secrets", () => {
     const error = new APICallError({
       message: "Invalid API key sk-supersecretkey123456789",
@@ -138,6 +171,22 @@ describe("PAP-48 ai route streaming", () => {
     expect(responseIndex).toBeGreaterThan(streamIndex);
     expect(routeSrc).toContain("modelId");
     expect(routeSrc).toContain("formatAiStreamError");
+  });
+
+  it("does not hard-stop when references recovery intent finds no structural fix", () => {
+    const routeSrc = readSrc("app/api/projects/[id]/ai/route.ts");
+    expect(routeSrc).not.toContain("Checking for misplaced references…");
+    expect(routeSrc).toContain("referencesRecoveryIntent");
+    expect(routeSrc).toContain('aiIntent = "edit"');
+    expect(routeSrc).toContain("REFERENCES_RECOVERY_SUFFIX");
+  });
+
+  it("bans edit-unavailable and permission-ask copy in prompts", () => {
+    const workspaceSrc = readSrc("lib/ai-plugins/workspace-tools.ts");
+    expect(workspaceSrc).toMatch(/do not ask.*do you want me to move it/i);
+    expect(workspaceSrc).toMatch(/edit tool is unavailable/i);
+    const routeSrc = readSrc("app/api/projects/[id]/ai/route.ts");
+    expect(routeSrc).not.toMatch(/edit tool isn't available in this session/i);
   });
 
   it("still streams via streamText for non-muse models (groq/ollama)", () => {
