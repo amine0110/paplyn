@@ -92,6 +92,7 @@ import {
   createWorkspaceTools,
   WORKSPACE_SYSTEM_PROMPT,
   WORKSPACE_CHAT_SUFFIX,
+  REFERENCES_RECOVERY_SUFFIX,
   COMPILE_FIX_WORKSPACE_SUFFIX,
   COMPILE_DIAGNOSTICS_WORKSPACE_SUFFIX,
   COMPILE_DIAGNOSTICS_REVIEW_SUFFIX,
@@ -124,12 +125,28 @@ import { PRODUCT } from "@/lib/product";
 import { getUserZoteroCredentials } from "@/lib/user-zotero";
 import { checkAiLimit, incrementAiUsage } from "@/lib/usage";
 import { z } from "zod";
+import {
+  estimateApiMessagesChars,
+  requestHasImages,
+  toCoreMessages,
+  validateApiChatImages,
+  VISION_IMAGE_SUFFIX,
+  type ApiChatMessage,
+} from "@/lib/ai-chat-messages";
+import { AI_CHAT_ACCEPTED_IMAGE_MIME_TYPES } from "@/lib/ai-chat-images";
+
+const aiChatImageSchema = z.object({
+  dataUrl: z.string().min(1),
+  mimeType: z.enum(AI_CHAT_ACCEPTED_IMAGE_MIME_TYPES),
+  name: z.string().optional(),
+});
 
 const chatSchema = z.object({
   messages: z.array(
     z.object({
       role: z.enum(["user", "assistant"]),
       content: z.string(),
+      images: z.array(aiChatImageSchema).optional(),
     })
   ),
   activeFile: z.string().optional(),
@@ -248,6 +265,7 @@ function buildSystemPrompt(options: {
   compileFixTargetHint?: string;
   compileFixMultiErrorHint?: string;
   compileFixCiteCommandHint?: string;
+  referencesRecoveryIntent?: boolean;
 }): string {
   const {
     data,
@@ -265,6 +283,7 @@ function buildSystemPrompt(options: {
     compileFixTargetHint,
     compileFixMultiErrorHint,
     compileFixCiteCommandHint,
+    referencesRecoveryIntent = false,
   } = options;
   const compileFix = mode !== "full";
 
@@ -294,6 +313,10 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
 
   if (!compileFix && compileDiagnosticsReview) {
     systemPrompt += `\n\n${COMPILE_DIAGNOSTICS_REVIEW_SUFFIX}`;
+  }
+
+  if (!compileFix && referencesRecoveryIntent) {
+    systemPrompt += `\n\n${REFERENCES_RECOVERY_SUFFIX}`;
   }
 
   const includeFileContext = Boolean(fileContext) && !(compileDiagnosticsReview && compileDiagnosticsAware);
@@ -361,6 +384,10 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
 
   if (retryHint) {
     systemPrompt += `\n\n${retryHint}`;
+  }
+
+  if (requestHasImages(data.messages)) {
+    systemPrompt += `\n\n${VISION_IMAGE_SUFFIX}`;
   }
 
   return systemPrompt;
@@ -614,6 +641,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
   const requestData = parsed.data;
+  const imageValidationError = validateApiChatImages(requestData.messages);
+  if (imageValidationError) {
+    return NextResponse.json({ error: imageValidationError }, { status: 400 });
+  }
   const lastUserMessage = getLastUserMessage(requestData.messages);
 
   const openai = createOpenAI({
@@ -657,8 +688,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         return;
       }
       const compileFixRequest = isCompileFixRequest(requestData, compileDiagnosticsReview);
+      const referencesRecoveryIntent =
+        !compileFixRequest && detectReferencesRecoveryIntent(lastUserMessage);
 
-      const aiIntent: AiIntent = await classifyAiIntent({
+      let aiIntent: AiIntent = await classifyAiIntent({
         message: lastUserMessage,
         forcedTool: requestData.forcedTool,
         action: requestData.action,
@@ -670,6 +703,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (req.signal.aborted) {
         close();
         return;
+      }
+
+      if (referencesRecoveryIntent) {
+        aiIntent = "edit";
       }
 
       const { tools: pluginTools, plugins } = resolveAiPlugins({
@@ -793,9 +830,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 errorsOnly: mode === "compile-fix-minimal",
               });
 
-        const messages = compileFixRequest
-          ? selectCompileFixMessages(requestData.messages)
+        const rawMessages = compileFixRequest
+          ? selectCompileFixMessages(requestData.messages as ApiChatMessage[])
           : requestData.messages;
+        const messages = toCoreMessages(rawMessages as ApiChatMessage[]);
 
         const compileFixTargetHint =
           compileFixRequest && primaryErrorLocation
@@ -828,10 +866,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           compileFixTargetHint,
           compileFixMultiErrorHint,
           compileFixCiteCommandHint,
+          referencesRecoveryIntent,
         });
 
         if (compileFixRequest) {
-          const messagesChars = messages.reduce((sum, message) => sum + message.content.length, 0);
+          const messagesChars = estimateApiMessagesChars(rawMessages as ApiChatMessage[]);
           compileFixMetricsRef.current = {
             mode,
             systemPromptChars: systemPrompt.length,
@@ -922,22 +961,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           }),
           actions: bibliographyRecovery.actions,
           appliedActions,
-        };
-        emit(doneEvent);
-        close();
-        return;
-      }
-
-      const referencesRecoveryIntent =
-        !compileFixRequest && detectReferencesRecoveryIntent(lastUserMessage);
-      if (referencesRecoveryIntent) {
-        emitProgress("Checking for misplaced references…");
-        await incrementAiUsage(session.user.id);
-        const doneEvent: AiStreamDoneEvent = {
-          type: "done",
-          content: buildBibliographyRecoveryNotFoundMessage(texFileMap.keys()),
-          actions: [],
-          appliedActions: [],
         };
         emit(doneEvent);
         close();

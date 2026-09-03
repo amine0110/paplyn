@@ -254,6 +254,8 @@ export const WORKSPACE_SYSTEM_PROMPT = `You are a workspace agent for this LaTeX
 
 When the user states a fact about the paper or asks you to change something (affiliation, university, institution, author, title, abstract, adding/removing/rewording text, etc.), you MUST apply the change with apply_edit or replace_lines after locating the relevant span. Answer questions in prose; change requests get edits — do not only describe changes.
 
+When the user asks why a structural element is wrong (references at the top, duplicate \\bibliography, sections out of order, etc.), treat it as a fix request: locate the issue in the project .tex files, apply replace_lines immediately, then confirm briefly. Do not ask "do you want me to move it" or say the edit tool is unavailable — you have replace_lines and must use it.
+
 Add vs fill intent (every field, every paper):
 - ADD / insert / append something new → insert a new line or span where it belongs.
 - FILL / replace / update / change, or the user states a fact about existing content ("the X is Y", "set X to Y", typos included) → overwrite the existing value IN PLACE. Replace the line or unique substring that already holds the old value. Do not duplicate. Do not leave the old value on the line above or beside the new one.
@@ -270,7 +272,11 @@ If apply_edit is rejected (0 or multiple matches), use replace_lines for the cit
 After applying edits, reply with a short human sentence about what changed. Never put raw tool logs in your reply.`;
 
 /** Extra guidance for general chat (non compile-fix) turns. */
-export const WORKSPACE_CHAT_SUFFIX = `Treat user messages that state or request a change to the paper as edit requests: locate the field in the project .tex files, apply_edit or replace_lines, then confirm briefly in your reply. Distinguish add (insert new) from fill/replace (overwrite the existing value in place — never stack a new line next to an unreplaced old value).`;
+export const WORKSPACE_CHAT_SUFFIX = `Treat user messages that state or request a change to the paper as edit requests: locate the field in the project .tex files, apply_edit or replace_lines, then confirm briefly in your reply. Distinguish add (insert new) from fill/replace (overwrite the existing value in place — never stack a new line next to an unreplaced old value).
+
+Why-questions about broken paper structure (e.g. references at the beginning, duplicate bibliography) are fix requests — apply the fix on the first turn without asking permission. Never say the edit tool is unavailable or ask "do you want me to move it".`;
+
+export const REFERENCES_RECOVERY_SUFFIX = `The user is asking about misplaced references or bibliography. If \\bibliography or a References section appears before the abstract or body, remove the duplicate at the top or move the block to just before \\end{document} using replace_lines — then tell them to recompile. Act immediately; do not ask permission.`;
 
 export const NO_DUMMY_MANUSCRIPT_CONTENT_SUFFIX = `Never invent placeholder manuscript content to silence undefined references or citations.
 

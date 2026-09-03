@@ -13,6 +13,7 @@ import {
 } from "@/lib/ai-plugins/workspace-tools";
 import { classifyAbortSignal, shouldSkipLlmClassify } from "@/lib/ai-classify-config";
 import { classifyCompileDiagnosticsReviewFallback } from "@/lib/ai-compile-diagnostics-intent";
+import { detectReferencesRecoveryIntent } from "@/lib/ai-compile-fix-bibliography-recovery-patterns";
 
 export const aiIntentSchema = z.enum([
   "chat",
@@ -70,7 +71,11 @@ const EDIT_FALLBACK_PATTERNS: RegExp[] = [
   /\bmention\b/i,
   /\binsert\b/i,
   /\breplace\b/i,
-  /\bfix\b.+\b(text|wording|grammar|typo|abstract|introduction|conclusion|section|paragraph)\b/i,
+  /\bfix\b.+\b(text|wording|grammar|typo|abstract|introduction|conclusion|section|paragraph|references?|bibliograph(?:y|ies))\b/i,
+  /\bfix\b.+\b(references?|bibliograph(?:y|ies)|citations?)\b/i,
+  /\b(references?|bibliograph(?:y|ies)|citations?)\b.+\bfix\b/i,
+  /\bdo\s+the\s+fix\b/i,
+  /\bcan\s+you\s+fix\b/i,
   /\bimprove\b/i,
   /\btighten\b/i,
   /\bshorten\b/i,
@@ -308,6 +313,10 @@ export function classifyAiIntentFallback(options: {
   }
 
   if (classifyCompileDiagnosticsReviewFallback(trimmed)) {
+    return "edit";
+  }
+
+  if (detectReferencesRecoveryIntent(trimmed)) {
     return "edit";
   }
 

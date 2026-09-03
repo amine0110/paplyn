@@ -103,6 +103,29 @@ describe("classifyAiIntentFallback", () => {
       })
     ).toBe("edit");
   });
+
+  it("classifies PAP-48 references why-questions as edit, not read-only chat", () => {
+    expect(
+      classifyAiIntentFallback({
+        message: "why does the references section is at the beginning of the article",
+      })
+    ).toBe("edit");
+    expect(
+      classifyAiIntentFallback({
+        message: "the references are at the beginning",
+      })
+    ).toBe("edit");
+    expect(
+      classifyAiIntentFallback({
+        message: "can you fix this",
+      })
+    ).toBe("edit");
+    expect(
+      classifyAiIntentFallback({
+        message: "do the fix and recompile after that",
+      })
+    ).toBe("edit");
+  });
 });
 
 describe("classifyAiIntent", () => {

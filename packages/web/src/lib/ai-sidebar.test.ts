@@ -80,6 +80,14 @@ describe("AI sidebar chat UX", () => {
     expect(src).not.toMatch(/>\s*TeX\s*</);
   });
 
+  it("supports image attach via picker and clipboard paste in the composer", () => {
+    const src = readSource("components/ai-sidebar.tsx");
+    expect(src).toContain('aria-label="Attach image"');
+    expect(src).toContain("handleComposerPaste");
+    expect(src).toContain("removePendingImage");
+    expect(src).toContain("pendingImages.length > 0");
+  });
+
   it("shows Stop during in-flight turns and wires AbortController to fetch", () => {
     const src = readSource("components/ai-sidebar.tsx");
     expect(src).toContain("abortControllerRef");

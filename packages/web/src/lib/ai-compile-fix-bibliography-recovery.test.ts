@@ -61,6 +61,17 @@ describe("detectReferencesRecoveryIntent", () => {
       "the references are put at the beginning of the paper, can you fix this";
     expect(detectReferencesRecoveryIntent(message)).toBe(true);
   });
+
+  it("detects PAP-48 live user phrases (why-questions and follow-ups)", () => {
+    expect(
+      detectReferencesRecoveryIntent(
+        "why does the references section is at the beginning of the article"
+      )
+    ).toBe(true);
+    expect(detectReferencesRecoveryIntent("the references are at the beginning")).toBe(true);
+    expect(detectReferencesRecoveryIntent("can you fix this")).toBe(true);
+    expect(detectReferencesRecoveryIntent("do the fix and recompile after that")).toBe(true);
+  });
 });
 
 describe("bibliography relocation recovery", () => {
@@ -226,5 +237,75 @@ describe("included-file bibliography recovery (PAP-47)", () => {
 
   it("matches the live user message for recovery intent", () => {
     expect(detectReferencesRecoveryIntent(AMINE_MESSAGE)).toBe(true);
+  });
+});
+
+function buildDuplicateBibliographyTemplateFixture(): string {
+  return [
+    "\\documentclass{article}",
+    "\\usepackage{natbib}",
+    "\\title{Example}",
+    "\\author{Author}",
+    "\\begin{document}",
+    "\\maketitle",
+    "\\bibliographystyle{plainnat}",
+    "\\bibliography{references}",
+    "\\begin{abstract}",
+    "Abstract text.",
+    "\\end{abstract}",
+    "\\section{Introduction}",
+    "Body text.",
+    "\\FloatBarrier",
+    "\\bibliographystyle{plainnat}",
+    "\\bibliography{references}",
+    "\\end{document}",
+  ].join("\n");
+}
+
+describe("PAP-48 bibliography recovery short-circuit", () => {
+  const duplicateTemplate = buildDuplicateBibliographyTemplateFixture();
+
+  it("short-circuits on why-question when duplicate bibliography is at top", () => {
+    const recovery = tryBibliographyRecovery({
+      texFiles: new Map([["template.tex", duplicateTemplate]]),
+      mainFile: "template.tex",
+      compileFixRequest: false,
+      userMessage: "why does the references section is at the beginning of the article",
+    });
+    expect(recovery).not.toBeNull();
+    expect(recovery?.actions[0]?.type).toBe("replace_lines");
+    expect(recovery?.message).toMatch(/duplicate references|Removed/i);
+    expect(validateBibliographyStructure(recovery?.previewContent ?? "").ok).toBe(true);
+  });
+
+  it("short-circuits on 'the references are at the beginning'", () => {
+    const recovery = tryBibliographyRecovery({
+      texFiles: new Map([["template.tex", duplicateTemplate]]),
+      mainFile: "template.tex",
+      compileFixRequest: false,
+      userMessage: "the references are at the beginning",
+    });
+    expect(recovery?.actions.length).toBeGreaterThan(0);
+  });
+
+  it("short-circuits on 'can you fix this' when bibliography is misplaced", () => {
+    const recovery = tryBibliographyRecovery({
+      texFiles: new Map([["template.tex", duplicateTemplate]]),
+      mainFile: "template.tex",
+      compileFixRequest: false,
+      userMessage: "can you fix this",
+    });
+    expect(recovery?.actions.length).toBeGreaterThan(0);
+  });
+
+  it("short-circuits on 'do the fix and recompile after that'", () => {
+    const recovery = tryBibliographyRecovery({
+      texFiles: new Map([["template.tex", duplicateTemplate]]),
+      mainFile: "template.tex",
+      compileFixRequest: false,
+      userMessage: "do the fix and recompile after that",
+    });
+    expect(recovery?.actions.length).toBeGreaterThan(0);
+    expect(recovery?.message).toMatch(/Recompile/i);
   });
 });

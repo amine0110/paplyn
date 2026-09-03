@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Send, X, Mic, MicOff, Square } from "lucide-react";
+import { Sparkles, Send, X, Mic, MicOff, Square, ImagePlus } from "lucide-react";
 import { aiUnavailableBannerMessage, isClientSelfHosted } from "@/lib/ai-config";
 import { extractInsertableContent, hasInsertableContent } from "@/lib/ai-insert-content";
 import { classifyCompileDiagnosticsReviewFallback } from "@/lib/ai-compile-diagnostics-intent";
@@ -27,10 +27,20 @@ import {
 import { resolveComposerForcedTool } from "@/lib/ai-composer-forced-tool";
 import { reportDetectedError } from "@/lib/report-detected-error";
 import { cn } from "@/components/ui/cn";
+import {
+  AI_CHAT_IMAGE_ACCEPT,
+  AI_CHAT_MAX_IMAGES_PER_MESSAGE,
+  createChatImageId,
+  getClipboardImageFiles,
+  prepareChatImageFromFile,
+  type AiChatDraftImage,
+  type AiChatImage,
+} from "@/lib/ai-chat-images";
 
 export interface AiChatMessage {
   role: "user" | "assistant";
   content: string;
+  images?: AiChatImage[];
   isFailure?: boolean;
   autoReportSent?: boolean;
   usedPlugins?: AiUsedPlugin[];
@@ -112,6 +122,47 @@ function ToolReadChip({ read }: { read: AiToolRead }) {
   );
 }
 
+function ChatImageThumbnails({
+  images,
+  onRemove,
+  disabled,
+}: {
+  images: AiChatDraftImage[];
+  onRemove?: (id: string) => void;
+  disabled?: boolean;
+}) {
+  if (images.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-2 px-3 pt-2">
+      {images.map((image) => (
+        <div
+          key={image.id}
+          className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border/80 bg-canvas-dark/40"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={image.dataUrl}
+            alt={image.name ?? "Attached image"}
+            className="h-full w-full object-cover"
+          />
+          {onRemove ? (
+            <button
+              type="button"
+              onClick={() => onRemove(image.id)}
+              disabled={disabled}
+              className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed"
+              aria-label="Remove image"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function TypingIndicator() {
   return (
     <span className="inline-flex items-center gap-1" aria-hidden="true">
@@ -155,17 +206,22 @@ export function AiSidebar({
   const [citingZoteroKey, setCitingZoteroKey] = useState<string | null>(null);
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
   const [toolInputPlaceholder, setToolInputPlaceholder] = useState<string | null>(null);
+  const [pendingImages, setPendingImages] = useState<AiChatDraftImage[]>([]);
+  const [composerError, setComposerError] = useState<string | null>(null);
   const [voiceNote, setVoiceNote] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const userScrolledUpRef = useRef(false);
   const messagesRef = useRef(messages);
   const inputBeforeVoiceRef = useRef("");
   const selectedToolRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const pendingImagesRef = useRef(pendingImages);
   messagesRef.current = messages;
   selectedToolRef.current = selectedTool;
+  pendingImagesRef.current = pendingImages;
 
   const adjustTextareaHeight = useCallback(() => {
     const el = textareaRef.current;
@@ -273,7 +329,12 @@ export function AiSidebar({
     action?: string,
     options?: { autoCompileFixRetry?: boolean; forcedTool?: string }
   ) {
-    if (!content.trim() && !action) return;
+    const imagesToSend = pendingImagesRef.current.map(({ dataUrl, mimeType, name }) => ({
+      dataUrl,
+      mimeType,
+      name,
+    }));
+    if (!content.trim() && !action && imagesToSend.length === 0) return;
 
     const forcedTool = resolveComposerForcedTool(
       options?.forcedTool,
@@ -281,6 +342,8 @@ export function AiSidebar({
     );
     setSelectedTool(null);
     setToolInputPlaceholder(null);
+    setPendingImages([]);
+    setComposerError(null);
 
     const diagnosticsIntent = classifyCompileDiagnosticsReviewFallback(content, action);
     const { compileFix: fixIntent, diagnosticsReview } = resolveCompileRouting({
@@ -299,7 +362,11 @@ export function AiSidebar({
     }
 
     if ((fixIntent || diagnosticsReview) && !hasDiagnostics) {
-      const userMsg: AiChatMessage = { role: "user", content: content || action || "" };
+      const userMsg: AiChatMessage = {
+        role: "user",
+        content: content || action || "",
+        ...(imagesToSend.length ? { images: imagesToSend } : {}),
+      };
       const compileFirstMessage = diagnosticsReview
         ? "Please compile your project first so I can review the warnings and log."
         : "Please compile your project first so I can see the current errors.";
@@ -325,7 +392,11 @@ export function AiSidebar({
     setHasStreamProgress(false);
     setLoadingMessage(loadingLabelForAction(effectiveAction, content, forcedTool));
 
-    const userMsg: AiChatMessage = { role: "user", content: content || action || "" };
+    const userMsg: AiChatMessage = {
+      role: "user",
+      content: content || action || "",
+      ...(imagesToSend.length ? { images: imagesToSend } : {}),
+    };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
 
@@ -496,6 +567,56 @@ export function AiSidebar({
     textareaRef.current?.focus();
   }
 
+  async function addPendingImagesFromFiles(files: File[]) {
+    if (files.length === 0) return;
+    setComposerError(null);
+
+    const availableSlots = AI_CHAT_MAX_IMAGES_PER_MESSAGE - pendingImagesRef.current.length;
+    if (availableSlots <= 0) {
+      setComposerError(`You can attach up to ${AI_CHAT_MAX_IMAGES_PER_MESSAGE} images per message.`);
+      return;
+    }
+
+    const nextImages: AiChatDraftImage[] = [];
+    for (const file of files.slice(0, availableSlots)) {
+      try {
+        const image = await prepareChatImageFromFile(file);
+        nextImages.push({ ...image, id: createChatImageId() });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Could not attach that image.";
+        setComposerError(message);
+        break;
+      }
+    }
+
+    if (nextImages.length > 0) {
+      setPendingImages((prev) => [...prev, ...nextImages]);
+    }
+  }
+
+  function removePendingImage(id: string) {
+    setPendingImages((prev) => prev.filter((image) => image.id !== id));
+    setComposerError(null);
+  }
+
+  function handleImageAttachClick() {
+    fileInputRef.current?.click();
+  }
+
+  async function handleImageFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = event.target.files ? [...event.target.files] : [];
+    event.target.value = "";
+    await addPendingImagesFromFiles(files);
+  }
+
+  async function handleComposerPaste(event: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const imageFiles = getClipboardImageFiles(event.clipboardData);
+    if (imageFiles.length === 0) return;
+    event.preventDefault();
+    await addPendingImagesFromFiles(imageFiles);
+  }
+
   function handleSelectTool(toolName: string, meta: AiPluginClientMeta) {
     selectedToolRef.current = toolName;
     setSelectedTool(toolName);
@@ -534,7 +655,7 @@ export function AiSidebar({
   function handleComposerKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (!loading && input.trim()) {
+      if (!loading && (input.trim() || pendingImages.length > 0)) {
         if (speech.isListening) speech.stop();
         submitComposer();
       }
@@ -566,7 +687,7 @@ export function AiSidebar({
 
   const canReplace = Boolean(selectedText && onReplace);
   const micDisabled = !speech.isSupported || speech.status === "denied" || loading;
-  const canSend = Boolean(input.trim()) && !loading;
+  const canSend = Boolean(input.trim() || pendingImages.length > 0) && !loading;
   const toolsDisabled = loading;
   const selectedToolMeta = selectedTool ? getComposerToolMeta(selectedTool) : undefined;
   const composerPlaceholder = speech.isListening
@@ -602,6 +723,12 @@ export function AiSidebar({
 
       {voiceNote && (
         <div className="shrink-0 px-3 pb-1.5 text-[11px] text-ink-muted">{voiceNote}</div>
+      )}
+
+      {composerError && (
+        <div className="shrink-0 px-3 pb-1.5 text-[11px] text-red-600 dark:text-red-400">
+          {composerError}
+        </div>
       )}
 
       {selectedText && (
@@ -668,7 +795,28 @@ export function AiSidebar({
                   </div>
                 )}
               {msg.role === "user" ? (
-                <div className="whitespace-pre-wrap text-sm leading-snug">{msg.content}</div>
+                <div className="space-y-2">
+                  {msg.images && msg.images.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {msg.images.map((image, imageIndex) => (
+                        <div
+                          key={`${image.dataUrl.slice(0, 24)}-${imageIndex}`}
+                          className="h-20 w-20 overflow-hidden rounded-lg border border-white/20"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={image.dataUrl}
+                            alt={image.name ?? "Attached image"}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {msg.content ? (
+                    <div className="whitespace-pre-wrap text-sm leading-snug">{msg.content}</div>
+                  ) : null}
+                </div>
               ) : (
                 <AiMarkdown content={msg.content} />
               )}
@@ -857,6 +1005,14 @@ export function AiSidebar({
         )}
       >
         <form onSubmit={handleComposerSubmit}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={AI_CHAT_IMAGE_ACCEPT}
+            multiple
+            className="hidden"
+            onChange={(event) => void handleImageFileChange(event)}
+          />
           <div
             className={cn(
               "rounded-2xl border border-border bg-paper shadow-sm transition-shadow",
@@ -868,6 +1024,7 @@ export function AiSidebar({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleComposerKeyDown}
+              onPaste={(event) => void handleComposerPaste(event)}
               placeholder={composerPlaceholder}
               disabled={loading}
               rows={1}
@@ -877,6 +1034,11 @@ export function AiSidebar({
                 "disabled:cursor-not-allowed disabled:opacity-50",
                 variant === "sheet" ? "min-h-[44px] text-base" : "min-h-[36px]"
               )}
+            />
+            <ChatImageThumbnails
+              images={pendingImages}
+              onRemove={removePendingImage}
+              disabled={loading}
             />
             {selectedToolMeta ? (
               <AiComposerToolChip
@@ -893,6 +1055,21 @@ export function AiSidebar({
                   variant={variant}
                   onFocusInput={focusComposerInput}
                 />
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className={cn(
+                    "shrink-0 rounded-lg text-ink-muted",
+                    variant === "sheet" ? "h-11 w-11" : "h-8 w-8"
+                  )}
+                  disabled={toolsDisabled}
+                  onClick={handleImageAttachClick}
+                  aria-label="Attach image"
+                  title="Attach image"
+                >
+                  <ImagePlus className="h-4 w-4" />
+                </Button>
                 <Button
                   type="button"
                   size="icon"

@@ -13,10 +13,12 @@ import type { AiClientAction } from "@/lib/ai-client-actions";
 import {
   ABSTRACT_BEGIN_RE,
   ABSTRACT_CMD_RE,
+  detectManuscriptStructureConcern,
   detectReferencesRecoveryIntent,
 } from "./ai-compile-fix-bibliography-recovery-patterns";
 
 export {
+  detectManuscriptStructureConcern,
   detectReferencesRecoveryIntent,
   isMisplacedBibliographyStructure,
 } from "./ai-compile-fix-bibliography-recovery-patterns";
@@ -241,14 +243,24 @@ export function buildBibliographyRecoveryNotFoundMessage(texFiles: Iterable<stri
   return `Checked ${fileList} for a misplaced references block but did not find one to move.`;
 }
 
+function hasMisplacedBibliographyInTexFiles(texFiles: Map<string, string>): boolean {
+  for (const content of texFiles.values()) {
+    if (getMisplacedBibliographySite(content)) return true;
+  }
+  return false;
+}
+
 export function tryBibliographyRecovery(options: {
   texFiles: Map<string, string>;
   mainFile: string;
   compileFixRequest: boolean;
   userMessage: string;
 }): { actions: AiClientAction[]; message: string; previewContent: string; file: string } | null {
+  const misplacedBibliography = hasMisplacedBibliographyInTexFiles(options.texFiles);
   const shouldRecover =
-    options.compileFixRequest || detectReferencesRecoveryIntent(options.userMessage);
+    options.compileFixRequest ||
+    detectReferencesRecoveryIntent(options.userMessage) ||
+    (misplacedBibliography && detectManuscriptStructureConcern(options.userMessage));
   if (!shouldRecover) return null;
 
   const orderedPaths = [
