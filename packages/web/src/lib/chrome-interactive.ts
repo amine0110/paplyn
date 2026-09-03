@@ -18,6 +18,8 @@ export const CHROME_TOOLBAR_BTN = "chrome-toolbar-btn";
 
 export const CHROME_SEND_BTN = "chrome-send-btn";
 
+export const CHROME_STOP_BTN = "chrome-stop-btn";
+
 export const CHROME_MENU_ITEM = "chrome-menu-item";
 
 export const CHROME_SEGMENT = "chrome-segment";
