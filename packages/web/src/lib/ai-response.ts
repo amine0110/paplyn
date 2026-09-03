@@ -18,8 +18,8 @@ import {
   type ClientActionToolPayload,
 } from "@/lib/ai-client-actions";
 import { CLIENT_ACTION_TOOL_NAMES } from "@/lib/ai-plugins/workspace-tools";
-import type { ReadTexFileResult } from "@/lib/ai-plugins/workspace-tools";
-import { isGetFileLimitError } from "@/lib/ai-plugins/workspace-tools";
+import { buildBibliographyRecoveryNotFoundMessage } from "@/lib/ai-compile-fix-bibliography-recovery";
+import { isGetFileLimitError, type ReadTexFileResult } from "@/lib/ai-plugins/workspace-tools";
 import { getPluginByToolName, pluginDisplayName } from "@/lib/ai-plugins";
 import type { AiPlugin } from "@/lib/ai-plugins/types";
 
@@ -324,8 +324,10 @@ export function hadReadOnlyToolActivity<TOOLS extends ToolSet>(
 export function resolveEmptyAssistantFallback<TOOLS extends ToolSet>(options: {
   result: GenerateTextResult<TOOLS, unknown>;
   actions: AiClientAction[];
+  referencesRecoveryIntent?: boolean;
+  checkedTexFiles?: string[];
 }): string {
-  const { result, actions } = options;
+  const { result, actions, referencesRecoveryIntent = false, checkedTexFiles = [] } = options;
 
   if (!hadToolActivity(result)) {
     return "I couldn't generate a response. Please try again.";
@@ -342,6 +344,9 @@ export function resolveEmptyAssistantFallback<TOOLS extends ToolSet>(options: {
   }
 
   if (hadReadOnlyToolActivity(result)) {
+    if (referencesRecoveryIntent) {
+      return buildBibliographyRecoveryNotFoundMessage(checkedTexFiles);
+    }
     return NO_EDIT_FALLBACK_MESSAGE;
   }
 

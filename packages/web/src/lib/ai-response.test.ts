@@ -124,6 +124,34 @@ describe("ai-response helpers", () => {
     expect(resolveEmptyAssistantFallback({ result, actions: [] })).toBe(NO_EDIT_FALLBACK_MESSAGE);
   });
 
+  it("uses bibliography not-found message instead of no-edit fallback for references recovery", () => {
+    const result = mockResult({
+      toolResults: [
+        {
+          toolName: "get_file",
+          result: {
+            path: "template.tex",
+            content: "\\section{Intro}",
+            startLine: 1,
+            endLine: 100,
+            totalLines: 200,
+            note: "",
+            error: "",
+          },
+        },
+      ],
+    });
+    const fallback = resolveEmptyAssistantFallback({
+      result,
+      actions: [],
+      referencesRecoveryIntent: true,
+      checkedTexFiles: ["main.tex", "template.tex"],
+    });
+    expect(fallback).not.toBe(NO_EDIT_FALLBACK_MESSAGE);
+    expect(fallback).toMatch(/Checked main\.tex, template\.tex/);
+    expect(fallback).toMatch(/did not find one to move/i);
+  });
+
   it("formats rejected edits with only the last rejection in fallback assistant text", () => {
     const result = mockResult({
       toolResults: [

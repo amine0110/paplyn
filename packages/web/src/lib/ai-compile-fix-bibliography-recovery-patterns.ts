@@ -12,7 +12,9 @@ const REFERENCES_RECOVERY_INTENT_PATTERNS: RegExp[] = [
   /\bput\b.+\b(references?|bibliograph(?:y|ies))\b.+\b(back|end)\b/i,
   /\bmove\b.+\b(references?|bibliograph(?:y|ies))\b.+\b(end|back)\b/i,
   /\brestore\b.+\b(references?|bibliograph(?:y|ies))\b/i,
-  /\breferences?\s+(?:are|were)\s+(?:at\s+the\s+)?(?:top|wrong)\b/i,
+  /\breferences?\s+(?:are|were)\s+(?:at\s+the\s+)?(?:top|wrong|beginning|start)\b/i,
+  /\b(?:beginning|start)\s+of\s+(?:the\s+)?(?:paper|document|manuscript)\b.+\b(?:references?|bibliograph(?:y|ies))\b/i,
+  /\b(?:references?|bibliograph(?:y|ies))\b.+\b(?:beginning|start)\s+of\s+(?:the\s+)?(?:paper|document|manuscript)\b/i,
   /\bfix\s+it\b/i,
 ];
 
