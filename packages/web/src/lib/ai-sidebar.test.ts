@@ -79,4 +79,12 @@ describe("AI sidebar chat UX", () => {
     expect(src).not.toContain("importSource");
     expect(src).not.toMatch(/>\s*TeX\s*</);
   });
+
+  it("supports image attach via picker and clipboard paste in the composer", () => {
+    const src = readSource("components/ai-sidebar.tsx");
+    expect(src).toContain('aria-label="Attach image"');
+    expect(src).toContain("handleComposerPaste");
+    expect(src).toContain("removePendingImage");
+    expect(src).toContain("pendingImages.length > 0");
+  });
 });
