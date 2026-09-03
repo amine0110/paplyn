@@ -87,4 +87,18 @@ describe("AI sidebar chat UX", () => {
     expect(src).toContain("removePendingImage");
     expect(src).toContain("pendingImages.length > 0");
   });
+
+  it("shows Stop during in-flight turns and wires AbortController to fetch", () => {
+    const src = readSource("components/ai-sidebar.tsx");
+    expect(src).toContain("abortControllerRef");
+    expect(src).toContain("new AbortController()");
+    expect(src).toContain("handleStopGeneration");
+    expect(src).toContain('aria-label="Stop generation"');
+    expect(src).toContain("CHROME_STOP_BTN");
+    expect(src).toMatch(/loading \? \([\s\S]*Stop generation[\s\S]*\) : \([\s\S]*CHROME_SEND_BTN/s);
+    expect(src).toContain("signal,");
+    expect(src).toContain('error.name === "AbortError"');
+    expect(src).toContain('"Stopped."');
+    expect(src).toContain("consumeAiStream");
+  });
 });

@@ -22,6 +22,7 @@ import {
   CHROME_CHIP,
   CHROME_ICON_BTN_MD,
   CHROME_SEND_BTN,
+  CHROME_STOP_BTN,
 } from "@/lib/chrome-interactive";
 import { resolveComposerForcedTool } from "@/lib/ai-composer-forced-tool";
 import { reportDetectedError } from "@/lib/report-detected-error";
@@ -216,6 +217,7 @@ export function AiSidebar({
   const messagesRef = useRef(messages);
   const inputBeforeVoiceRef = useRef("");
   const selectedToolRef = useRef<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const pendingImagesRef = useRef(pendingImages);
   messagesRef.current = messages;
   selectedToolRef.current = selectedTool;
@@ -381,6 +383,11 @@ export function AiSidebar({
     }
 
     userScrolledUpRef.current = false;
+    abortControllerRef.current?.abort();
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+    const { signal } = abortController;
+
     setLoading(true);
     setHasStreamProgress(false);
     setLoadingMessage(loadingLabelForAction(effectiveAction, content, forcedTool));
@@ -397,6 +404,7 @@ export function AiSidebar({
       const res = await fetch(`/api/projects/${projectId}/ai`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal,
         body: JSON.stringify({
           messages: [...messagesRef.current, userMsg],
           activeFile,
@@ -434,10 +442,14 @@ export function AiSidebar({
         return;
       }
 
-      const data = await consumeAiStream(res, (message) => {
-        setHasStreamProgress(true);
-        setLoadingMessage(message);
-      });
+      const data = await consumeAiStream(
+        res,
+        (message) => {
+          setHasStreamProgress(true);
+          setLoadingMessage(message);
+        },
+        signal
+      );
       const assistantContent = typeof data.content === "string" ? data.content.trim() : "";
       if (!assistantContent) {
         await appendAiFailureMessage(
@@ -494,12 +506,23 @@ export function AiSidebar({
         },
       ]);
     } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: "Stopped." },
+        ]);
+        if (fixIntent) {
+          onCompileFixRetryNoOp?.();
+        }
+        return;
+      }
       const message =
         error instanceof Error && error.message
           ? error.message
           : "Failed to connect to AI service.";
       await appendAiFailureMessage(message);
     } finally {
+      abortControllerRef.current = null;
       setLoading(false);
       setHasStreamProgress(false);
     }
@@ -604,6 +627,10 @@ export function AiSidebar({
     selectedToolRef.current = null;
     setSelectedTool(null);
     setToolInputPlaceholder(null);
+  }
+
+  function handleStopGeneration() {
+    abortControllerRef.current?.abort();
   }
 
   function submitComposer() {
@@ -1065,19 +1092,36 @@ export function AiSidebar({
                   )}
                 </Button>
               </div>
-              <button
-                type="submit"
-                className={cn(
-                  CHROME_SEND_BTN,
-                  "shrink-0 rounded-full transition-opacity",
-                  variant === "sheet" ? "h-11 w-11" : "h-8 w-8",
-                  !canSend && "opacity-40"
+              <div className="flex shrink-0 items-end">
+                {loading ? (
+                  <button
+                    type="button"
+                    onClick={handleStopGeneration}
+                    className={cn(
+                      CHROME_STOP_BTN,
+                      variant === "sheet" ? "h-11 min-w-[4.5rem] px-3" : "h-8 min-w-[4rem] px-2.5"
+                    )}
+                    aria-label="Stop generation"
+                  >
+                    <Square className="h-3 w-3 fill-current" aria-hidden="true" />
+                    <span>Stop</span>
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    className={cn(
+                      CHROME_SEND_BTN,
+                      "shrink-0 rounded-full transition-opacity",
+                      variant === "sheet" ? "h-11 w-11" : "h-8 w-8",
+                      !canSend && "opacity-40"
+                    )}
+                    disabled={!canSend}
+                    aria-label="Send message"
+                  >
+                    <Send className="h-4 w-4" />
+                  </button>
                 )}
-                disabled={!canSend}
-                aria-label="Send message"
-              >
-                <Send className="h-4 w-4" />
-              </button>
+              </div>
             </div>
           </div>
         </form>

@@ -664,7 +664,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         controller.close();
       };
 
+      req.signal.addEventListener("abort", close, { once: true });
+
       const emit = (event: Parameters<typeof encodeAiStreamEvent>[0]) => {
+        if (req.signal.aborted) return;
         controller.enqueue(encodeAiStreamEvent(event));
       };
 
@@ -680,6 +683,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         model,
         modelId,
       });
+      if (req.signal.aborted) {
+        close();
+        return;
+      }
       const compileFixRequest = isCompileFixRequest(requestData, compileDiagnosticsReview);
       const referencesRecoveryIntent =
         !compileFixRequest && detectReferencesRecoveryIntent(lastUserMessage);
@@ -693,6 +700,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         model: compileFixRequest ? undefined : model,
         modelId,
       });
+      if (req.signal.aborted) {
+        close();
+        return;
+      }
 
       if (referencesRecoveryIntent) {
         aiIntent = "edit";
@@ -892,6 +903,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               maxRetries: 0,
               maxSteps: COMPILE_FIX_MAX_STEPS,
               tools: workspaceTools,
+              abortSignal: req.signal,
             })
           : forcedToolName
             ? streamText({
@@ -905,6 +917,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                   allowedPluginTools
                 ),
                 toolChoice: { type: "tool", toolName: forcedToolName },
+                abortSignal: req.signal,
               })
             : streamText({
                 model,
@@ -918,6 +931,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                   }),
                   allowedPluginTools
                 ),
+                abortSignal: req.signal,
               });
 
         return { streamResult, systemPrompt };
@@ -957,6 +971,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const { streamResult } = await runStreamText(initialMode, { retryHint });
 
         for await (const part of streamResult.fullStream) {
+          if (req.signal.aborted) return;
           if (part.type === "tool-call") {
             const args =
               typeof part.args === "object" && part.args !== null
@@ -971,6 +986,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             if (doneMessage) emitProgress(doneMessage);
           }
         }
+
+        if (req.signal.aborted) return;
 
         const result = await toGenerateTextResult(streamResult);
         const resolved = await resolveAssistantContent({
