@@ -92,6 +92,7 @@ import {
   createWorkspaceTools,
   WORKSPACE_SYSTEM_PROMPT,
   WORKSPACE_CHAT_SUFFIX,
+  REFERENCES_RECOVERY_SUFFIX,
   COMPILE_FIX_WORKSPACE_SUFFIX,
   COMPILE_DIAGNOSTICS_WORKSPACE_SUFFIX,
   COMPILE_DIAGNOSTICS_REVIEW_SUFFIX,
@@ -248,6 +249,7 @@ function buildSystemPrompt(options: {
   compileFixTargetHint?: string;
   compileFixMultiErrorHint?: string;
   compileFixCiteCommandHint?: string;
+  referencesRecoveryIntent?: boolean;
 }): string {
   const {
     data,
@@ -265,6 +267,7 @@ function buildSystemPrompt(options: {
     compileFixTargetHint,
     compileFixMultiErrorHint,
     compileFixCiteCommandHint,
+    referencesRecoveryIntent = false,
   } = options;
   const compileFix = mode !== "full";
 
@@ -294,6 +297,10 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
 
   if (!compileFix && compileDiagnosticsReview) {
     systemPrompt += `\n\n${COMPILE_DIAGNOSTICS_REVIEW_SUFFIX}`;
+  }
+
+  if (!compileFix && referencesRecoveryIntent) {
+    systemPrompt += `\n\n${REFERENCES_RECOVERY_SUFFIX}`;
   }
 
   const includeFileContext = Boolean(fileContext) && !(compileDiagnosticsReview && compileDiagnosticsAware);
@@ -650,8 +657,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         modelId,
       });
       const compileFixRequest = isCompileFixRequest(requestData, compileDiagnosticsReview);
+      const referencesRecoveryIntent =
+        !compileFixRequest && detectReferencesRecoveryIntent(lastUserMessage);
 
-      const aiIntent: AiIntent = await classifyAiIntent({
+      let aiIntent: AiIntent = await classifyAiIntent({
         message: lastUserMessage,
         forcedTool: requestData.forcedTool,
         action: requestData.action,
@@ -660,6 +669,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         model: compileFixRequest ? undefined : model,
         modelId,
       });
+
+      if (referencesRecoveryIntent) {
+        aiIntent = "edit";
+      }
 
       const { tools: pluginTools, plugins } = resolveAiPlugins({
         zoteroCredentials: await getUserZoteroCredentials(session.user.id),
@@ -817,6 +830,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           compileFixTargetHint,
           compileFixMultiErrorHint,
           compileFixCiteCommandHint,
+          referencesRecoveryIntent,
         });
 
         if (compileFixRequest) {
@@ -908,22 +922,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           }),
           actions: bibliographyRecovery.actions,
           appliedActions,
-        };
-        emit(doneEvent);
-        close();
-        return;
-      }
-
-      const referencesRecoveryIntent =
-        !compileFixRequest && detectReferencesRecoveryIntent(lastUserMessage);
-      if (referencesRecoveryIntent) {
-        emitProgress("Checking for misplaced references…");
-        await incrementAiUsage(session.user.id);
-        const doneEvent: AiStreamDoneEvent = {
-          type: "done",
-          content: buildBibliographyRecoveryNotFoundMessage(texFileMap.keys()),
-          actions: [],
-          appliedActions: [],
         };
         emit(doneEvent);
         close();
