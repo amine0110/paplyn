@@ -1,5 +1,6 @@
 import { generateObject, type LanguageModel } from "ai";
 import { z } from "zod";
+import { classifyAbortSignal, shouldSkipLlmClassify } from "@/lib/ai-classify-config";
 
 const compileDiagnosticsReviewSchema = z.object({
   reviewCompileDiagnostics: z.boolean(),
@@ -98,14 +99,15 @@ export async function classifyCompileDiagnosticsReview(options: {
   message: string;
   action?: string;
   model?: LanguageModel;
+  modelId?: string;
 }): Promise<boolean> {
-  const { message, action, model } = options;
+  const { message, action, model, modelId } = options;
   if (action === "explain-errors") return false;
 
   const trimmed = message.trim();
   if (!trimmed) return false;
 
-  if (!model) {
+  if (!model || shouldSkipLlmClassify(modelId)) {
     return classifyCompileDiagnosticsReviewFallback(trimmed, action);
   }
 
@@ -114,6 +116,7 @@ export async function classifyCompileDiagnosticsReview(options: {
       model,
       schema: compileDiagnosticsReviewSchema,
       maxRetries: 0,
+      abortSignal: classifyAbortSignal(),
       prompt: `${COMPILE_DIAGNOSTICS_REVIEW_LLM_PROMPT}${trimmed}`,
     });
     return object.reviewCompileDiagnostics;

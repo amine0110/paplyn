@@ -98,7 +98,7 @@ import {
 } from "@/lib/ai-plugins/workspace-tools";
 import {
   AI_RATE_LIMIT_MESSAGE,
-  formatAiRequestError,
+  formatAiStreamError,
   getRetryAfterSeconds,
   isAiPromptTooLargeError,
   isAiRateLimitError,
@@ -622,246 +622,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   });
 
   const model = openai(aiConfig.model);
-  const compileDiagnosticsReview = await classifyCompileDiagnosticsReview({
-    message: lastUserMessage,
-    action: requestData.action,
-    model,
-  });
-  const compileFixRequest = isCompileFixRequest(requestData, compileDiagnosticsReview);
-
-  const aiIntent: AiIntent = await classifyAiIntent({
-    message: lastUserMessage,
-    forcedTool: requestData.forcedTool,
-    action: requestData.action,
-    compileFix: compileFixRequest,
-    compileDiagnostics: compileDiagnosticsReview,
-    model: compileFixRequest ? undefined : model,
-  });
-
-  const { tools: pluginTools, plugins } = resolveAiPlugins({
-    zoteroCredentials: await getUserZoteroCredentials(session.user.id),
-  });
-
-  const files = await db.select().from(projectFile).where(eq(projectFile.projectId, id));
-  const texFiles = files
-    .filter((f) => !f.isBinary && f.path.endsWith(".tex"))
-    .map((f) => ({ path: f.path, content: f.content }));
-
-  const compileErrorsRaw = normalizeAiCompileErrors(requestData.compileErrors);
-  const compileLog = truncateCompileLogExcerpt(requestData.compileLog);
-  const mainFile = access.project.mainFile;
-  const mergedCompileDiagnostics = mergeCompileDiagnostics(
-    normalizeAiCompileDiagnostics(requestData.compileErrors),
-    compileLog,
-    { mainFile }
-  );
-  const hasCompileDiagnostics = hasCompileDiagnosticsPayload({
-    errors: mergedCompileDiagnostics,
-    log: compileLog,
-  });
-  const compileDiagnosticsAware = hasCompileDiagnostics || compileDiagnosticsReview;
-  const compileDiagnosticsReviewTurn = compileDiagnosticsReview;
-
-  const forcedToolName = !compileFixRequest
-    ? resolveForcedToolChoice({
-        forcedTool: requestData.forcedTool,
-        userMessage: lastUserMessage,
-        pluginTools,
-      })
-    : undefined;
-
-  const mountedTools = mountedPluginToolNames({
-    intent: aiIntent,
-    forcedToolName,
-    compileFix: compileFixRequest,
-  });
-  const scopedPluginSystemPrompt = compileFixRequest
-    ? ""
-    : pluginSystemPromptForMountedTools(mountedTools, plugins);
-
-  const texFileMap = new Map(texFiles.map((f) => [f.path, f.content]));
-  const mainFileContent = texFileMap.get(mainFile) ?? "";
-
-  const compileFixErrorPrep = compileFixRequest
-    ? prepareCompileErrorsForCompileFix(compileErrorsRaw, {
-        mainFile,
-        mainFileContent,
-      })
-    : null;
-  const compileErrors = compileFixErrorPrep?.errors ?? compileErrorsRaw;
-  const primaryErrorLocation = compileFixErrorPrep?.primaryLocation ?? null;
-  const projectPage = `/project/${id}`;
-  const hasSelection = Boolean(requestData.selectedText?.trim());
-  const getFileCalls: GetFileCall[] = [];
-
-  const workspaceCtx = {
-    texFiles: texFileMap,
-    activeFile: requestData.activeFile,
-    hasSelection,
-  };
-
-  async function refreshTexFilesFromDb(): Promise<Map<string, string>> {
-    const freshFiles = await db
-      .select()
-      .from(projectFile)
-      .where(eq(projectFile.projectId, id));
-    const freshTex = freshFiles
-      .filter((f) => !f.isBinary && f.path.endsWith(".tex"))
-      .map((f) => ({ path: f.path, content: f.content }));
-    texFileMap.clear();
-    for (const file of freshTex) {
-      texFileMap.set(file.path, file.content);
-    }
-    return texFileMap;
-  }
-
-  const workspaceTools = createWorkspaceTools(
-    workspaceCtx,
-    compileFixRequest
-      ? {
-          maxGetFileCalls: COMPILE_FIX_MAX_GET_FILE_CALLS,
-          compileFix: true,
-          manuscriptGuards: true,
-          citedErrorLocation: primaryErrorLocation,
-          refreshTexFiles: refreshTexFilesFromDb,
-          compileErrors,
-          onGetFileCall: (call) => {
-            getFileCalls.push(call);
-          },
-          compileDiagnostics: {
-            errors: mergedCompileDiagnostics,
-            log: compileLog,
-          },
-        }
-      : {
-          manuscriptGuards: compileDiagnosticsReviewTurn,
-          compileDiagnostics: hasCompileDiagnostics
-            ? {
-                errors: mergedCompileDiagnostics,
-                log: compileLog,
-              }
-            : undefined,
-        }
-  );
-
-  const compileFixMetricsRef: { current: CompileFixMetrics | null } = { current: null };
-
-  async function runStreamText(mode: AiContextMode, options?: { retryHint?: string }) {
-    const fileContext =
-      mode === "full"
-        ? buildAiFileContext(texFiles, {
-            activeFile: requestData.activeFile,
-          })
-        : buildAiCompileFixContext({
-            errors: compileErrors,
-            files: texFiles,
-            activeFile: requestData.activeFile,
-            errorsOnly: mode === "compile-fix-minimal",
-          });
-
-    const messages = compileFixRequest
-      ? selectCompileFixMessages(requestData.messages)
-      : requestData.messages;
-
-    const compileFixTargetHint =
-      compileFixRequest && primaryErrorLocation
-        ? buildCompileFixTargetHint(primaryErrorLocation)
-        : undefined;
-
-    const compileFixMultiErrorHint =
-      compileFixRequest && compileErrors.length > 1
-        ? buildCompileFixMultiErrorHint(compileErrors)
-        : undefined;
-
-    const compileFixCiteCommandHint =
-      compileFixRequest && compileErrors.length > 0
-        ? buildCompileFixCiteCommandHint(compileErrors)
-        : undefined;
-
-    const systemPrompt = buildSystemPrompt({
-      data: requestData,
-      compileErrors,
-      compileDiagnostics: mergedCompileDiagnostics,
-      compileLog,
-      compileDiagnosticsAware,
-      compileDiagnosticsReview: compileDiagnosticsReviewTurn,
-      fileContext,
-      pluginSystemPrompt: scopedPluginSystemPrompt,
-      plugins,
-      mountedPluginToolNames: mountedTools,
-      mode: compileFixRequest ? mode : "full",
-      retryHint: options?.retryHint,
-      compileFixTargetHint,
-      compileFixMultiErrorHint,
-      compileFixCiteCommandHint,
-    });
-
-    if (compileFixRequest) {
-      const messagesChars = messages.reduce((sum, message) => sum + message.content.length, 0);
-      compileFixMetricsRef.current = {
-        mode,
-        systemPromptChars: systemPrompt.length,
-        messagesChars,
-        errorCount: compileErrors.length,
-      };
-      console.info("[ai compile-fix]", {
-        mode,
-        systemPromptChars: systemPrompt.length,
-        messagesChars,
-        messageCount: messages.length,
-        errorCount: compileErrors.length,
-        fileContextLength: fileContext.length,
-        slim: isSlimCompileFixPrompt(systemPrompt.length, messagesChars),
-        primaryErrorLocation,
-      });
-    }
-
-    const allowedPluginTools = getAllowedPluginToolNames({
-      intent: aiIntent,
-      forcedToolName,
-      compileFix: compileFixRequest,
-    });
-
-    const streamResult = compileFixRequest
-      ? streamText({
-          model,
-          system: systemPrompt,
-          messages,
-          maxRetries: 0,
-          maxSteps: COMPILE_FIX_MAX_STEPS,
-          tools: workspaceTools,
-        })
-      : forcedToolName
-        ? streamText({
-            model,
-            system: systemPrompt,
-            messages,
-            maxRetries: 0,
-            maxSteps: CHAT_MAX_STEPS,
-            tools: wrapPluginToolsWithPolicy(
-              toolsForForcedPlugin(forcedToolName, pluginTools, workspaceTools),
-              allowedPluginTools
-            ),
-            toolChoice: { type: "tool", toolName: forcedToolName },
-          })
-        : streamText({
-            model,
-            system: systemPrompt,
-            messages,
-            maxRetries: 0,
-            maxSteps: CHAT_MAX_STEPS,
-            tools: wrapPluginToolsWithPolicy(
-              toolsForIntent(aiIntent, pluginTools, workspaceTools, {
-                includeCompileDiagnostics: hasCompileDiagnostics,
-              }),
-              allowedPluginTools
-            ),
-          });
-
-    return { streamResult, systemPrompt };
-  }
-
-  const initialMode: AiContextMode = compileFixRequest ? "compile-fix-minimal" : "full";
+  const modelId = aiConfig.model;
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -879,6 +640,251 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const emitProgress = (message: string) => {
         emit({ type: "progress", message });
       };
+
+      emitProgress("Starting…");
+
+      const compileDiagnosticsReview = await classifyCompileDiagnosticsReview({
+        message: lastUserMessage,
+        action: requestData.action,
+        model,
+        modelId,
+      });
+      const compileFixRequest = isCompileFixRequest(requestData, compileDiagnosticsReview);
+
+      const aiIntent: AiIntent = await classifyAiIntent({
+        message: lastUserMessage,
+        forcedTool: requestData.forcedTool,
+        action: requestData.action,
+        compileFix: compileFixRequest,
+        compileDiagnostics: compileDiagnosticsReview,
+        model: compileFixRequest ? undefined : model,
+        modelId,
+      });
+
+      const { tools: pluginTools, plugins } = resolveAiPlugins({
+        zoteroCredentials: await getUserZoteroCredentials(session.user.id),
+      });
+
+      const files = await db.select().from(projectFile).where(eq(projectFile.projectId, id));
+      const texFiles = files
+        .filter((f) => !f.isBinary && f.path.endsWith(".tex"))
+        .map((f) => ({ path: f.path, content: f.content }));
+
+      const compileErrorsRaw = normalizeAiCompileErrors(requestData.compileErrors);
+      const compileLog = truncateCompileLogExcerpt(requestData.compileLog);
+      const mainFile = access.project.mainFile;
+      const mergedCompileDiagnostics = mergeCompileDiagnostics(
+        normalizeAiCompileDiagnostics(requestData.compileErrors),
+        compileLog,
+        { mainFile }
+      );
+      const hasCompileDiagnostics = hasCompileDiagnosticsPayload({
+        errors: mergedCompileDiagnostics,
+        log: compileLog,
+      });
+      const compileDiagnosticsAware = hasCompileDiagnostics || compileDiagnosticsReview;
+      const compileDiagnosticsReviewTurn = compileDiagnosticsReview;
+
+      const forcedToolName = !compileFixRequest
+        ? resolveForcedToolChoice({
+            forcedTool: requestData.forcedTool,
+            userMessage: lastUserMessage,
+            pluginTools,
+          })
+        : undefined;
+
+      const mountedTools = mountedPluginToolNames({
+        intent: aiIntent,
+        forcedToolName,
+        compileFix: compileFixRequest,
+      });
+      const scopedPluginSystemPrompt = compileFixRequest
+        ? ""
+        : pluginSystemPromptForMountedTools(mountedTools, plugins);
+
+      const texFileMap = new Map(texFiles.map((f) => [f.path, f.content]));
+      const mainFileContent = texFileMap.get(mainFile) ?? "";
+
+      const compileFixErrorPrep = compileFixRequest
+        ? prepareCompileErrorsForCompileFix(compileErrorsRaw, {
+            mainFile,
+            mainFileContent,
+          })
+        : null;
+      const compileErrors = compileFixErrorPrep?.errors ?? compileErrorsRaw;
+      const primaryErrorLocation = compileFixErrorPrep?.primaryLocation ?? null;
+      const projectPage = `/project/${id}`;
+      const hasSelection = Boolean(requestData.selectedText?.trim());
+      const getFileCalls: GetFileCall[] = [];
+
+      const workspaceCtx = {
+        texFiles: texFileMap,
+        activeFile: requestData.activeFile,
+        hasSelection,
+      };
+
+      async function refreshTexFilesFromDb(): Promise<Map<string, string>> {
+        const freshFiles = await db
+          .select()
+          .from(projectFile)
+          .where(eq(projectFile.projectId, id));
+        const freshTex = freshFiles
+          .filter((f) => !f.isBinary && f.path.endsWith(".tex"))
+          .map((f) => ({ path: f.path, content: f.content }));
+        texFileMap.clear();
+        for (const file of freshTex) {
+          texFileMap.set(file.path, file.content);
+        }
+        return texFileMap;
+      }
+
+      const workspaceTools = createWorkspaceTools(
+        workspaceCtx,
+        compileFixRequest
+          ? {
+              maxGetFileCalls: COMPILE_FIX_MAX_GET_FILE_CALLS,
+              compileFix: true,
+              manuscriptGuards: true,
+              citedErrorLocation: primaryErrorLocation,
+              refreshTexFiles: refreshTexFilesFromDb,
+              compileErrors,
+              onGetFileCall: (call) => {
+                getFileCalls.push(call);
+              },
+              compileDiagnostics: {
+                errors: mergedCompileDiagnostics,
+                log: compileLog,
+              },
+            }
+          : {
+              manuscriptGuards: compileDiagnosticsReviewTurn,
+              compileDiagnostics: hasCompileDiagnostics
+                ? {
+                    errors: mergedCompileDiagnostics,
+                    log: compileLog,
+                  }
+                : undefined,
+            }
+      );
+
+      const compileFixMetricsRef: { current: CompileFixMetrics | null } = { current: null };
+
+      async function runStreamText(mode: AiContextMode, options?: { retryHint?: string }) {
+        const fileContext =
+          mode === "full"
+            ? buildAiFileContext(texFiles, {
+                activeFile: requestData.activeFile,
+              })
+            : buildAiCompileFixContext({
+                errors: compileErrors,
+                files: texFiles,
+                activeFile: requestData.activeFile,
+                errorsOnly: mode === "compile-fix-minimal",
+              });
+
+        const messages = compileFixRequest
+          ? selectCompileFixMessages(requestData.messages)
+          : requestData.messages;
+
+        const compileFixTargetHint =
+          compileFixRequest && primaryErrorLocation
+            ? buildCompileFixTargetHint(primaryErrorLocation)
+            : undefined;
+
+        const compileFixMultiErrorHint =
+          compileFixRequest && compileErrors.length > 1
+            ? buildCompileFixMultiErrorHint(compileErrors)
+            : undefined;
+
+        const compileFixCiteCommandHint =
+          compileFixRequest && compileErrors.length > 0
+            ? buildCompileFixCiteCommandHint(compileErrors)
+            : undefined;
+
+        const systemPrompt = buildSystemPrompt({
+          data: requestData,
+          compileErrors,
+          compileDiagnostics: mergedCompileDiagnostics,
+          compileLog,
+          compileDiagnosticsAware,
+          compileDiagnosticsReview: compileDiagnosticsReviewTurn,
+          fileContext,
+          pluginSystemPrompt: scopedPluginSystemPrompt,
+          plugins,
+          mountedPluginToolNames: mountedTools,
+          mode: compileFixRequest ? mode : "full",
+          retryHint: options?.retryHint,
+          compileFixTargetHint,
+          compileFixMultiErrorHint,
+          compileFixCiteCommandHint,
+        });
+
+        if (compileFixRequest) {
+          const messagesChars = messages.reduce((sum, message) => sum + message.content.length, 0);
+          compileFixMetricsRef.current = {
+            mode,
+            systemPromptChars: systemPrompt.length,
+            messagesChars,
+            errorCount: compileErrors.length,
+          };
+          console.info("[ai compile-fix]", {
+            mode,
+            systemPromptChars: systemPrompt.length,
+            messagesChars,
+            messageCount: messages.length,
+            errorCount: compileErrors.length,
+            fileContextLength: fileContext.length,
+            slim: isSlimCompileFixPrompt(systemPrompt.length, messagesChars),
+            primaryErrorLocation,
+          });
+        }
+
+        const allowedPluginTools = getAllowedPluginToolNames({
+          intent: aiIntent,
+          forcedToolName,
+          compileFix: compileFixRequest,
+        });
+
+        const streamResult = compileFixRequest
+          ? streamText({
+              model,
+              system: systemPrompt,
+              messages,
+              maxRetries: 0,
+              maxSteps: COMPILE_FIX_MAX_STEPS,
+              tools: workspaceTools,
+            })
+          : forcedToolName
+            ? streamText({
+                model,
+                system: systemPrompt,
+                messages,
+                maxRetries: 0,
+                maxSteps: CHAT_MAX_STEPS,
+                tools: wrapPluginToolsWithPolicy(
+                  toolsForForcedPlugin(forcedToolName, pluginTools, workspaceTools),
+                  allowedPluginTools
+                ),
+                toolChoice: { type: "tool", toolName: forcedToolName },
+              })
+            : streamText({
+                model,
+                system: systemPrompt,
+                messages,
+                maxRetries: 0,
+                maxSteps: CHAT_MAX_STEPS,
+                tools: wrapPluginToolsWithPolicy(
+                  toolsForIntent(aiIntent, pluginTools, workspaceTools, {
+                    includeCompileDiagnostics: hasCompileDiagnostics,
+                  }),
+                  allowedPluginTools
+                ),
+              });
+
+        return { streamResult, systemPrompt };
+      }
+
+      const initialMode: AiContextMode = compileFixRequest ? "compile-fix-minimal" : "full";
 
       const bibliographyRecovery = tryBibliographyRecovery({
         texFiles: texFileMap,
@@ -1025,10 +1031,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             return;
           } catch (retryError) {
             console.error("AI tool-choice-none retry failed:", retryError);
+            const formatted = formatAiStreamError(retryError);
             emit({
               type: "error",
-              error: formatAiRequestError(retryError),
-              status: 502,
+              error: formatted.error,
+              status: formatted.status,
             });
             return;
           }
@@ -1041,10 +1048,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             return;
           } catch (retryError) {
             console.error("AI unknown-tool retry failed:", retryError);
+            const formatted = formatAiStreamError(retryError);
             emit({
               type: "error",
-              error: formatAiRequestError(retryError),
-              status: 502,
+              error: formatted.error,
+              status: formatted.status,
             });
             return;
           }
@@ -1089,10 +1097,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         }
 
         console.error("AI request failed:", error);
+        const formatted = formatAiStreamError(error);
         emit({
           type: "error",
-          error: formatAiRequestError(error),
-          status: 502,
+          error: formatted.error,
+          status: formatted.status,
         });
       } finally {
         close();
