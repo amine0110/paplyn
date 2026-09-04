@@ -16,6 +16,8 @@ import { AiComposerToolChip, AiComposerToolPicker, getComposerToolMeta } from "@
 import { loadingLabelForAction, type AiPluginClientMeta } from "@/lib/ai-plugins/client-meta";
 import { applyAiClientActions, type ApplyAiActionsContext } from "@/lib/apply-ai-client-actions";
 import { consumeAiStream } from "@/lib/ai-stream";
+import { initialProgressSteps, pushProgressStep } from "@/lib/ai-working-progress";
+import { AiWorkingProgress } from "@/components/ai-working-progress";
 import { useSpeechRecognition } from "@/lib/use-speech-recognition";
 import { parseVoiceCommand, speechStatusMessage } from "@/lib/voice-commands";
 import {
@@ -163,15 +165,6 @@ function ChatImageThumbnails({
   );
 }
 
-function TypingIndicator() {
-  return (
-    <span className="inline-flex items-center gap-1" aria-hidden="true">
-      <span className="ai-typing-dot" />
-      <span className="ai-typing-dot" />
-      <span className="ai-typing-dot" />
-    </span>
-  );
-}
 
 export function AiSidebar({
   projectId,
@@ -198,8 +191,7 @@ export function AiSidebar({
 }: AiSidebarProps) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState("Thinking…");
-  const [hasStreamProgress, setHasStreamProgress] = useState(false);
+  const [progressSteps, setProgressSteps] = useState<string[]>([]);
   const [available, setAvailable] = useState(true);
   const [citingKey, setCitingKey] = useState<string | null>(null);
   const [citingArxivId, setCitingArxivId] = useState<string | null>(null);
@@ -269,7 +261,7 @@ export function AiSidebar({
   useEffect(() => {
     if (userScrolledUpRef.current) return;
     scrollToBottom();
-  }, [messages, loading, loadingMessage, scrollToBottom]);
+  }, [messages, loading, progressSteps, scrollToBottom]);
 
   const applyReturnedActions = useCallback(
     async (
@@ -389,8 +381,7 @@ export function AiSidebar({
     const { signal } = abortController;
 
     setLoading(true);
-    setHasStreamProgress(false);
-    setLoadingMessage(loadingLabelForAction(effectiveAction, content, forcedTool));
+    setProgressSteps(initialProgressSteps(loadingLabelForAction(effectiveAction, content, forcedTool)));
 
     const userMsg: AiChatMessage = {
       role: "user",
@@ -445,8 +436,7 @@ export function AiSidebar({
       const data = await consumeAiStream(
         res,
         (message) => {
-          setHasStreamProgress(true);
-          setLoadingMessage(message);
+          setProgressSteps((prev) => pushProgressStep(prev, message));
         },
         signal
       );
@@ -524,7 +514,7 @@ export function AiSidebar({
     } finally {
       abortControllerRef.current = null;
       setLoading(false);
-      setHasStreamProgress(false);
+      setProgressSteps([]);
     }
   }
 
@@ -978,20 +968,14 @@ export function AiSidebar({
               )}
             </div>
           ))}
-          {loading && (
+          {loading && progressSteps.length > 0 && (
             <div
-              className="ai-message-enter mr-auto max-w-[92%] rounded-2xl rounded-bl-md bg-paper px-3.5 py-2.5 shadow-sm ring-1 ring-border/60"
+              className={cn(
+                "ai-message-enter mr-auto max-w-[92%] rounded-2xl rounded-bl-md bg-paper px-3.5 py-2.5 shadow-sm ring-1 ring-border/60",
+                variant === "sheet" && "sticky bottom-0 z-10 backdrop-blur-sm"
+              )}
             >
-              <div className="flex items-center gap-2 text-sm text-ink-muted">
-                {!hasStreamProgress ? (
-                  <>
-                    <TypingIndicator />
-                    <span className="text-ink-faint">Thinking</span>
-                  </>
-                ) : (
-                  <span className="leading-snug">{loadingMessage}</span>
-                )}
-              </div>
+              <AiWorkingProgress steps={progressSteps} />
             </div>
           )}
           <div ref={bottomRef} />
@@ -1004,6 +988,11 @@ export function AiSidebar({
           variant === "sheet" ? "pb-[max(0.75rem,env(safe-area-inset-bottom))]" : ""
         )}
       >
+        {loading && progressSteps.length > 0 && variant === "sheet" ? (
+          <div className="mb-2 rounded-xl border border-border/70 bg-paper/95 px-2.5 py-2 shadow-sm backdrop-blur-sm">
+            <AiWorkingProgress steps={progressSteps} compact />
+          </div>
+        ) : null}
         <form onSubmit={handleComposerSubmit}>
           <input
             ref={fileInputRef}

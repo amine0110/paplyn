@@ -155,6 +155,16 @@
   .ai-typing-dot:nth-child(3) {
     animation-delay: 0.3s;
   }
+
+  /* AI chat — live progress chips while a turn is in flight (PAP-43) */
+  .ai-progress-chip {
+    @apply transition-colors duration-200;
+  }
+
+  .ai-progress-chip-active {
+    @apply border-accent/45 bg-accent/10;
+    animation: ai-progress-chip-pulse 1.4s ease-in-out infinite;
+  }
 }
 
 @keyframes ai-message-enter {
@@ -178,6 +188,18 @@
   40% {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+@keyframes ai-progress-chip-pulse {
+  0%,
+  100% {
+    opacity: 0.82;
+    border-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
+  }
+  50% {
+    opacity: 1;
+    border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
   }
 }
 

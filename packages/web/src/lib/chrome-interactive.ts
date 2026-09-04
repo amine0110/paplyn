@@ -34,6 +34,13 @@ export const CHROME_DESTRUCTIVE_ICON = "chrome-destructive-icon";
 
 export const CHROME_LINK = "chrome-link";
 
+/** Live assistant progress chips (PAP-43) — defined in globals.css @layer components. */
+export const AI_WORKING_PROGRESS = "ai-working-progress";
+
+export const AI_PROGRESS_CHIP = "ai-progress-chip";
+
+export const AI_PROGRESS_CHIP_ACTIVE = "ai-progress-chip-active";
+
 /** Right chrome cluster: theme toggle + text links (landing Nav, docs header). */
 export const CHROME_NAV_CLUSTER = "flex items-center gap-2 sm:gap-3 md:gap-6";
 
