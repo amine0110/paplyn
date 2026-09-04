@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { DetectedErrorReportFooter } from "@/components/detected-error-report-footer";
 import { FixWithAiButton } from "@/components/fix-with-ai-button";
+import { buildCompileFailureReportMessage } from "@/lib/compile-failure-report-message";
 import { reportDetectedError } from "@/lib/report-detected-error";
 import { downloadPdfBase64 } from "@/lib/project-files";
 import {
@@ -57,6 +58,7 @@ interface PdfPreviewProps {
   showDownload?: boolean;
   compileFailed?: boolean;
   compileErrors?: CompileError[];
+  compileLog?: string;
   isStale?: boolean;
   staleErrorCount?: number;
   onFixWithAi?: () => void;
@@ -92,6 +94,7 @@ export function PdfPreview({
   showDownload = false,
   compileFailed,
   compileErrors = [],
+  compileLog = "",
   isStale,
   staleErrorCount = 0,
   onFixWithAi,
@@ -219,11 +222,15 @@ export function PdfPreview({
 
   const failureMessage = useMemo(() => {
     if (loading || pdfData) return null;
-    return (
-      compileErrors.find((error) => error.severity === "error")?.message ||
-      (compileFailed ? "Compilation failed — see errors below the editor" : null)
-    );
-  }, [loading, pdfData, compileErrors, compileFailed]);
+    const reportMessage = buildCompileFailureReportMessage({
+      errors: compileErrors,
+      log: compileLog,
+    });
+    if (compileErrors.some((error) => error.severity === "error")) {
+      return reportMessage;
+    }
+    return compileFailed ? reportMessage : null;
+  }, [loading, pdfData, compileErrors, compileFailed, compileLog]);
 
   useEffect(() => {
     if (!failureMessage) {

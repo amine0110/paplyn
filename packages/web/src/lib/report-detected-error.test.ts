@@ -7,6 +7,7 @@ import {
   titleForDetectedErrorKind,
 } from "@/lib/report-detected-error-dedup";
 import { mapReportSourceToNotion } from "@/lib/user-reports-validation";
+import { COMPILE_FIX_USER_MESSAGE } from "@/lib/ai-compile-fix-intent";
 
 describe("report-detected-error dedup", () => {
   it("hashes kind, message, and page deterministically", () => {
@@ -89,6 +90,62 @@ describe("reportDetectedError client helper", () => {
     expect(body.whatHappened).toBe("Undefined control sequence");
     expect(body.title).toBe("Compile failed");
     expect(body.page).toBe("/project/abc");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("skips auto-report when only the compile-fix AI chip prompt is provided", async () => {
+    vi.stubGlobal("sessionStorage", {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+    });
+    vi.stubGlobal("fetch", vi.fn());
+
+    const { reportDetectedError } = await import("@/lib/report-detected-error");
+    const result = await reportDetectedError({
+      kind: "compile",
+      message: COMPILE_FIX_USER_MESSAGE,
+      page: "/project/abc",
+    });
+
+    expect(result).toEqual({ sent: false, skipped: true });
+    expect(fetch).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+  });
+
+  it("uses fallback text when the compile-fix AI chip prompt leaks into a report", async () => {
+    vi.stubGlobal("sessionStorage", {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/api/user-reports/csrf") {
+          return new Response(JSON.stringify({ csrfToken: "csrf-1" }), { status: 200 });
+        }
+        if (url === "/api/user-reports") {
+          return new Response(JSON.stringify({ ok: true }), { status: 200 });
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      }),
+    );
+
+    const { reportDetectedError } = await import("@/lib/report-detected-error");
+    const result = await reportDetectedError({
+      kind: "compile",
+      message: COMPILE_FIX_USER_MESSAGE,
+      fallbackMessage: "L12: Undefined control sequence \\foo",
+      page: "/project/abc",
+    });
+
+    expect(result.sent).toBe(true);
+    const fetchMock = vi.mocked(fetch);
+    const postCall = fetchMock.mock.calls.find(([u]) => u === "/api/user-reports");
+    const body = JSON.parse(String((postCall?.[1] as RequestInit)?.body));
+    expect(body.whatHappened).toBe("L12: Undefined control sequence \\foo");
+    expect(body.whatHappened).not.toBe(COMPILE_FIX_USER_MESSAGE);
 
     vi.unstubAllGlobals();
   });

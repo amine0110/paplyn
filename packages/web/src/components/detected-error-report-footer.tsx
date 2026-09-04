@@ -1,5 +1,6 @@
 import { ReportIssueLink } from "@/components/report-issue-link";
 import { cn } from "@/components/ui/cn";
+import { resolveReportWhatHappenedMessage } from "@/lib/compile-failure-report-message";
 import { titleForDetectedErrorKind, type DetectedErrorKind } from "@/lib/report-detected-error-dedup";
 
 type DetectedErrorReportFooterProps = {
@@ -19,6 +20,8 @@ export function DetectedErrorReportFooter({
   className,
   linkClassName,
 }: DetectedErrorReportFooterProps) {
+  const reportMessage = resolveReportWhatHappenedMessage(message);
+
   return (
     <div className={cn("flex flex-wrap items-center justify-center gap-x-2 gap-y-1", className)}>
       {sent && <span className="text-xs text-ink-muted">We sent this to us.</span>}
@@ -27,7 +30,7 @@ export function DetectedErrorReportFooter({
         className={linkClassName}
         prefill={{
           title: titleForDetectedErrorKind(kind),
-          whatHappened: message,
+          ...(reportMessage ? { whatHappened: reportMessage } : {}),
           steps: kind,
         }}
       />

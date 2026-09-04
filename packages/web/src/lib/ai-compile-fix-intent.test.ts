@@ -4,6 +4,7 @@ import {
   COMPILE_FIX_ACTION,
   COMPILE_FIX_USER_MESSAGE,
   detectFixCompileIntent,
+  isCompileFixAiPrompt,
   resolveCompileRouting,
 } from "./ai-compile-fix-intent";
 import {
@@ -23,6 +24,11 @@ describe("compile-fix request helpers", () => {
       message: "Find the error that stopping the compiler",
       action: "explain-errors",
     });
+  });
+
+  it("identifies the compile-fix chip prompt separately from user-visible errors", () => {
+    expect(isCompileFixAiPrompt(COMPILE_FIX_USER_MESSAGE)).toBe(true);
+    expect(isCompileFixAiPrompt("L18: Undefined control sequence \\foo")).toBe(false);
   });
 });
 

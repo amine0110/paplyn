@@ -8,6 +8,15 @@ import {
 /** Canonical user message for compile-fix requests (sidebar chip, Fix with AI, etc.). */
 export const COMPILE_FIX_USER_MESSAGE = "Find the error that stopping the compiler";
 
+const COMPILE_FIX_AI_PROMPT_RE = /\bfind the error that stopping the compiler\b/i;
+
+/** True for the compile-fix chip / Fix with AI prompt — not a user-visible error. */
+export function isCompileFixAiPrompt(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  return trimmed === COMPILE_FIX_USER_MESSAGE || COMPILE_FIX_AI_PROMPT_RE.test(trimmed);
+}
+
 /** Quick-action / voice action id that triggers compile-fix mode. */
 export const COMPILE_FIX_ACTION = "explain-errors";
 
@@ -50,10 +59,7 @@ export function detectFixCompileIntent(text: string, action?: string): boolean {
   const trimmed = text.trim();
   if (!trimmed) return false;
 
-  if (
-    trimmed === COMPILE_FIX_USER_MESSAGE ||
-    /\bfind the error that stopping the compiler\b/i.test(trimmed)
-  ) {
+  if (isCompileFixAiPrompt(trimmed)) {
     return true;
   }
 

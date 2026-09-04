@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { DetectedErrorReportFooter } from "@/components/detected-error-report-footer";
 import { FixWithAiButton } from "@/components/fix-with-ai-button";
 import { CHROME_LINK, CHROME_MENU_ITEM } from "@/lib/chrome-interactive";
+import { buildCompileFailureReportMessage } from "@/lib/compile-failure-report-message";
 import { reportDetectedError } from "@/lib/report-detected-error";
 
 interface CompileError {
@@ -24,21 +25,15 @@ interface CompilePanelProps {
   onFixWithAi?: () => void;
 }
 
-function compileFailureMessage(errors: CompileError[]): string {
-  const errorList = errors.filter((error) => error.severity === "error");
-  if (errorList.length === 0) return "Compilation failed";
-  return errorList
-    .slice(0, 5)
-    .map((error) => (error.line ? `L${error.line}: ${error.message}` : error.message))
-    .join("\n");
-}
-
 export function CompilePanel({ log, errors, onJumpToLine, showLog, onToggleLog, onFixWithAi }: CompilePanelProps) {
   const errorList = errors.filter((e) => e.severity === "error");
   const warnList = errors.filter((e) => e.severity === "warning");
   const pathname = usePathname();
   const [autoReportSent, setAutoReportSent] = useState(false);
-  const failureMessage = useMemo(() => compileFailureMessage(errors), [errors]);
+  const failureMessage = useMemo(
+    () => buildCompileFailureReportMessage({ errors, log }),
+    [errors, log],
+  );
 
   const hasErrors = errorList.length > 0;
   const hasWarnings = warnList.length > 0;
