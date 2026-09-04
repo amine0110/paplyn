@@ -435,6 +435,8 @@ describe("ai-response helpers", () => {
     expect(WORKSPACE_SYSTEM_PROMPT).toContain("Add vs fill intent");
     expect(WORKSPACE_SYSTEM_PROMPT).toContain("overwrite the existing value IN PLACE");
     expect(WORKSPACE_SYSTEM_PROMPT).toContain("Do not duplicate");
+    expect(WORKSPACE_SYSTEM_PROMPT).toMatch(/ONE short past-tense sentence/i);
+    expect(WORKSPACE_SYSTEM_PROMPT).toMatch(/Never paste a chain of planning/i);
     expect(WORKSPACE_CHAT_SUFFIX).toContain("apply_edit or replace_lines");
     expect(WORKSPACE_CHAT_SUFFIX).toContain("add (insert new) from fill/replace");
     expect(WORKSPACE_CHAT_SUFFIX).toContain("never stack a new line next to an unreplaced old value");
