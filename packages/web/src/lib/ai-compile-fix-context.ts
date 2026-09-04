@@ -33,11 +33,17 @@ export const COMPILE_FIX_LINE_RADIUS = 10;
 /** Minimum end line for compile-fix preload when the cited error is in the first ~30 lines. */
 export const COMPILE_FIX_MIN_READ_END_LINE = 30;
 
-/** Maximum get_file calls allowed per compile-fix request (large templates need a few slices). */
+/** Maximum get_file calls allowed per compile-fix request when no cited location is known. */
 export const COMPILE_FIX_MAX_GET_FILE_CALLS = 4;
 
 /** After this many get_file calls in one compile-fix turn, further reads are blocked until an edit is attempted. */
 export const COMPILE_FIX_GET_FILE_BEFORE_EDIT = 2;
+
+/** When a cited error snippet is injected, allow at most one fallback get_file (snippet should suffice). */
+export const COMPILE_FIX_MAX_GET_FILE_CALLS_WITH_SNIPPET = 1;
+
+/** Default max LLM tool steps per compile-fix turn (enough for edit + one retry; multi-error retries use PAP-38 rounds). */
+export const COMPILE_FIX_MAX_STEPS = 6;
 
 function truncateCompileErrorMessage(message: string): string {
   if (message.length <= MAX_COMPILE_ERROR_MESSAGE_LENGTH) return message;
@@ -302,11 +308,68 @@ export function buildGetFileWindow(
   };
 }
 
-export function buildCompileFixTargetHint(location: {
-  file: string;
-  line: number;
-}): string {
+export interface BuildCompileFixTargetHintOptions {
+  /** Line-numbered snippet around the cited error (from extractLineSnippet). */
+  snippet?: string;
+}
+
+export function resolveCompileFixFileContent(
+  texFiles: Map<string, string>,
+  file: string
+): string | undefined {
+  if (texFiles.has(file)) return texFiles.get(file);
+  const normalized = file.trim().replace(/^\.\//, "").replace(/^\/+/, "");
+  if (texFiles.has(normalized)) return texFiles.get(normalized);
+  const suffix = normalized.split("/").pop();
+  if (!suffix) return undefined;
+  for (const [path, content] of texFiles) {
+    if (path === suffix || path.endsWith(`/${suffix}`)) return content;
+  }
+  return undefined;
+}
+
+export function resolveCompileFixSnippet(
+  location: { file: string; line: number },
+  texFiles: Map<string, string>,
+  radius = COMPILE_FIX_LINE_RADIUS
+): string | undefined {
+  const fileContent = resolveCompileFixFileContent(texFiles, location.file);
+  if (!fileContent?.trim()) return undefined;
+  return extractLineSnippet(fileContent, location.line, radius);
+}
+
+export function getCompileFixGetFileBudget(options: {
+  hasCitedLocation: boolean;
+  hasSnippet: boolean;
+}): number {
+  if (options.hasSnippet) return COMPILE_FIX_MAX_GET_FILE_CALLS_WITH_SNIPPET;
+  if (options.hasCitedLocation) return COMPILE_FIX_GET_FILE_BEFORE_EDIT;
+  return COMPILE_FIX_MAX_GET_FILE_CALLS;
+}
+
+export function buildCompileFixTargetHint(
+  location: { file: string; line: number },
+  options: BuildCompileFixTargetHintOptions = {}
+): string {
+  const { snippet } = options;
   const { startLine, endLine } = buildGetFileWindow(location.line);
+  const packageHint =
+    "You may add \\usepackage{pkg} when the compile error cites a missing package or undefined command and that package is installed on Paplyn (e.g. natbib for \\citep, graphicx for \\includegraphics, siunitx for \\SI).";
+
+  if (snippet) {
+    const budget = COMPILE_FIX_MAX_GET_FILE_CALLS_WITH_SNIPPET;
+    return (
+      `Primary error location: ${location.file}:${location.line}. ` +
+      `You already have the cited error location and snippet below. ` +
+      `Your FIRST tool call must be replace_lines or apply_edit on that line in the FIRST document copy — ` +
+      `do NOT call list_files or get_file unless the snippet is insufficient. ` +
+      `At most ${budget} get_file call is allowed only when you need more context than the snippet. ` +
+      `Cited error snippet:\n${snippet}\n` +
+      `Fix line ${location.line} in place (if it is a broken \\begin{document without a closing brace, fix that line first before adding \\documentclass). ` +
+      `Do not prepend a preamble. ${packageHint}`
+    );
+  }
+
   return (
     `Primary error location: ${location.file}:${location.line}. ` +
     `Your FIRST tool call must be get_file(path="${location.file}", startLine=${startLine}, endLine=${endLine}) — ` +
@@ -315,7 +378,7 @@ export function buildCompileFixTargetHint(location: {
     `Then call replace_lines on that exact line in the FIRST document copy (line ${location.line} — ` +
     `if it is a broken \\begin{document without a closing brace, fix that line first before adding \\documentclass). ` +
     `Do not read overlapping windows past line ${endLine} before attempting an edit. ` +
-    `Do not prepend a preamble. You may add \\usepackage{pkg} when the compile error cites a missing package or undefined command and that package is installed on Paplyn (e.g. natbib for \\citep, graphicx for \\includegraphics, siunitx for \\SI).`
+    `Do not prepend a preamble. ${packageHint}`
   );
 }
 

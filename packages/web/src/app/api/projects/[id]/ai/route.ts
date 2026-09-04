@@ -28,10 +28,13 @@ import {
   buildCompileFixMultiErrorHint,
   buildCompileFixCiteCommandHint,
   COMPILE_FIX_MAX_GET_FILE_CALLS,
+  COMPILE_FIX_MAX_STEPS,
+  getCompileFixGetFileBudget,
   hasCompileDiagnosticsPayload,
   normalizeAiCompileDiagnostics,
   normalizeAiCompileErrors,
   prepareCompileErrorsForCompileFix,
+  resolveCompileFixSnippet,
   selectCompileFixMessages,
   truncateCompileLogExcerpt,
   type AiCompileError,
@@ -231,7 +234,6 @@ const INLINE_SELECTION_SUFFIX =
 const SELECTION_REPLACE_SUFFIX =
   "The user has selected text in the editor. When rewriting the selection, call replace_selection with the replacement text. Do not insert above or below the selection.";
 
-const COMPILE_FIX_MAX_STEPS = 12;
 const CHAT_MAX_STEPS = 10;
 
 function getLastUserMessage(messages: ChatRequest["messages"]): string {
@@ -331,7 +333,7 @@ ${WORKSPACE_SYSTEM_PROMPT}`;
 
   if (compileFix && compileErrors.length > 0) {
     systemPrompt +=
-      "\n\nWhen fixing errors, call get_file for small line ranges around cited lines. Prefer replace_lines when errors cite a line number — large templates often have no unique apply_edit substrings. Use fix_compile_errors or apply_edit only when search matches exactly once. If apply_edit is rejected, use replace_lines for the cited line range.";
+      "\n\nWhen fixing errors, prefer replace_lines when errors cite a line number — you may already have a cited error snippet in the prompt. Call get_file only when the snippet is insufficient. Use fix_compile_errors or apply_edit only when search matches exactly once. If apply_edit is rejected, use replace_lines for the cited line range.";
   }
 
   if (
@@ -764,6 +766,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         : null;
       const compileErrors = compileFixErrorPrep?.errors ?? compileErrorsRaw;
       const primaryErrorLocation = compileFixErrorPrep?.primaryLocation ?? null;
+      const primaryErrorSnippet =
+        compileFixRequest && primaryErrorLocation
+          ? resolveCompileFixSnippet(primaryErrorLocation, texFileMap)
+          : undefined;
+      const compileFixGetFileBudget = compileFixRequest
+        ? getCompileFixGetFileBudget({
+            hasCitedLocation: Boolean(primaryErrorLocation),
+            hasSnippet: Boolean(primaryErrorSnippet),
+          })
+        : undefined;
       const projectPage = `/project/${id}`;
       const hasSelection = Boolean(requestData.selectedText?.trim());
       const getFileCalls: GetFileCall[] = [];
@@ -795,10 +807,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         workspaceCtx,
         compileFixRequest
           ? {
-              maxGetFileCalls: COMPILE_FIX_MAX_GET_FILE_CALLS,
+              maxGetFileCalls: compileFixGetFileBudget ?? COMPILE_FIX_MAX_GET_FILE_CALLS,
               compileFix: true,
               manuscriptGuards: true,
               citedErrorLocation: primaryErrorLocation,
+              citedErrorSnippet: primaryErrorSnippet,
               refreshTexFiles: refreshTexFilesFromDb,
               compileErrors,
               onGetFileCall: (call) => {
@@ -842,7 +855,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
         const compileFixTargetHint =
           compileFixRequest && primaryErrorLocation
-            ? buildCompileFixTargetHint(primaryErrorLocation)
+            ? buildCompileFixTargetHint(primaryErrorLocation, {
+                snippet: primaryErrorSnippet,
+              })
             : undefined;
 
         const compileFixMultiErrorHint =
@@ -891,6 +906,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             fileContextLength: fileContext.length,
             slim: isSlimCompileFixPrompt(systemPrompt.length, messagesChars),
             primaryErrorLocation,
+            hasCitedSnippet: Boolean(primaryErrorSnippet),
+            getFileBudget: compileFixGetFileBudget,
           });
         }
 

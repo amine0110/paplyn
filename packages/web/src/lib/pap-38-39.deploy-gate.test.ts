@@ -7,6 +7,7 @@ import {
   decideCompileFixAutoRetry,
   fingerprintCompileErrors,
 } from "@/lib/compile-fix-auto-retry";
+import { COMPILE_FIX_MAX_STEPS } from "@/lib/ai-compile-fix-context";
 import {
   NO_DUMMY_MANUSCRIPT_CONTENT_SUFFIX,
   COMPILE_FIX_WORKSPACE_SUFFIX,
@@ -39,6 +40,12 @@ describe("PAP-38 bounded compile-fix auto-retry", () => {
   it("exports decideCompileFixAutoRetry no_progress reason", () => {
     expect(decideCompileFixAutoRetry).toBeDefined();
     expect(fingerprintCompileErrors).toBeDefined();
+  });
+
+  it("keeps per-turn compile-fix steps short while auto-retry covers multi-error rounds (PAP-51)", () => {
+    expect(COMPILE_FIX_MAX_STEPS).toBe(6);
+    expect(COMPILE_FIX_MAX_ROUNDS).toBe(4);
+    expect(COMPILE_FIX_MAX_AUTO_RETRIES).toBe(3);
   });
 });
 
