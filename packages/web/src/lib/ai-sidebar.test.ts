@@ -27,10 +27,11 @@ describe("AI sidebar chat UX", () => {
     expect(src).toContain("onPendingRequestConsumed");
   });
 
-  it("keeps consumeAiStream for NDJSON progress", () => {
+  it("keeps consumeAiStream for NDJSON progress with visible progress chips", () => {
     const src = readSource("components/ai-sidebar.tsx");
     expect(src).toContain("consumeAiStream");
-    expect(src).toContain("setHasStreamProgress(true)");
+    expect(src).toContain("pushProgressStep");
+    expect(src).toContain("AiWorkingProgress");
   });
 
   it("shows tool read chips separately from the assistant message bubble", () => {
@@ -39,12 +40,14 @@ describe("AI sidebar chat UX", () => {
     expect(src).toContain("toolReads");
   });
 
-  it("defines chat enter and typing animations in globals.css", () => {
+  it("defines chat enter, typing, and progress chip animations in globals.css", () => {
     const css = readSource("app/globals.css");
     expect(css).toContain(".ai-message-enter");
     expect(css).toContain(".ai-typing-dot");
+    expect(css).toContain(".ai-progress-chip-active");
     expect(css).toContain("@keyframes ai-message-enter");
     expect(css).toContain("@keyframes ai-typing-pulse");
+    expect(css).toContain("@keyframes ai-progress-chip-pulse");
   });
 
   it("composer exposes a tools button and attaches a picked plugin to the next send", () => {
