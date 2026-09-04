@@ -8,7 +8,7 @@ import {
   readTexFile,
   resolveTexFilePath,
 } from "./workspace-tools";
-import { buildGetFileWindow, COMPILE_FIX_GET_FILE_BEFORE_EDIT } from "@/lib/ai-compile-fix-context";
+import { buildGetFileWindow, COMPILE_FIX_GET_FILE_BEFORE_EDIT, COMPILE_FIX_MAX_GET_FILE_CALLS_WITH_SNIPPET, extractLineSnippet } from "@/lib/ai-compile-fix-context";
 
 const texFiles = new Map<string, string>([
   ["main.tex", "\\documentclass{article}\n\\usepackage{amsmath}\n\\begin{document}\n\\end{document}\n"],
@@ -466,6 +466,52 @@ describe("workspace-tools", () => {
     expect(result.startLine).toBe(startLine);
     expect(result.endLine).toBe(endLine);
     expect(result.note).toMatch(/Steered to cited error window/i);
+  });
+
+  it("allows replace_lines on turn 1 when cited error snippet is injected", async () => {
+    const files = new Map([
+      ["main.tex", "\\documentclass{article}\n\\usepackage\n\\begin{document}\n\\end{document}"],
+    ]);
+    const snippet = extractLineSnippet(files.get("main.tex")!, 2, 1);
+    const tools = createWorkspaceTools(
+      { texFiles: files, hasSelection: false },
+      {
+        compileFix: true,
+        citedErrorLocation: { file: "main.tex", line: 2 },
+        citedErrorSnippet: snippet,
+      }
+    );
+
+    const result = await tools.replace_lines.execute({
+      file: "main.tex",
+      startLine: 2,
+      endLine: 2,
+      replace: "\\usepackage{amsmath}",
+    });
+
+    expect(result.kind).toBe("client-action");
+  });
+
+  it("caps compile-fix get_file to 1 when cited error snippet is injected", async () => {
+    const files = new Map([
+      ["main.tex", "\\documentclass{article}\n\\begin{document}\n\\end{document}\n"],
+    ]);
+    const snippet = extractLineSnippet(files.get("main.tex")!, 2, 1);
+    const tools = createWorkspaceTools(
+      { texFiles: files, hasSelection: false },
+      {
+        compileFix: true,
+        citedErrorLocation: { file: "main.tex", line: 2 },
+        citedErrorSnippet: snippet,
+      }
+    );
+
+    await tools.get_file.execute({ path: "main.tex", startLine: 1, endLine: 5 });
+    const blocked = await tools.get_file.execute({ path: "main.tex", startLine: 1, endLine: 1 });
+
+    expect(blocked.error).toContain("get_file budget used");
+    expect(blocked.error).toContain(String(COMPILE_FIX_MAX_GET_FILE_CALLS_WITH_SNIPPET));
+    expect(blocked.error).toMatch(/replace_lines/i);
   });
 
   it("blocks compile-fix get_file after budget is used", async () => {

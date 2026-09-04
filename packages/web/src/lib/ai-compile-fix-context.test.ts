@@ -7,9 +7,12 @@ import {
   buildCompileFixCiteCommandHint,
   buildGetFileWindow,
   COMPILE_FIX_GET_FILE_BEFORE_EDIT,
+  COMPILE_FIX_MAX_GET_FILE_CALLS_WITH_SNIPPET,
+  COMPILE_FIX_MAX_STEPS,
   enrichCompileErrorsWithLocations,
   extractLineSnippet,
   formatCompileErrorLines,
+  getCompileFixGetFileBudget,
   getPrimaryCompileErrorLocation,
   inferFirstCopyCompileFixLocation,
   isBrokenBeginDocumentLine,
@@ -18,6 +21,7 @@ import {
   parseFileLineFromMessage,
   prepareCompileErrorsForCompileFix,
   resolveCompileErrorLocation,
+  resolveCompileFixSnippet,
   resolvePrimaryCompileErrorLocation,
   selectCompileFixMessages,
 } from "./ai-compile-fix-context";
@@ -168,7 +172,19 @@ describe("buildGetFileWindow", () => {
 });
 
 describe("buildCompileFixTargetHint", () => {
-  it("instructs the model to read a small window first", () => {
+  it("steers edit-first when a cited error snippet is provided", () => {
+    const snippet = extractLineSnippet(sampleTex, 5, 1);
+    const hint = buildCompileFixTargetHint({ file: "main.tex", line: 5 }, { snippet });
+    expect(hint).toContain("main.tex:5");
+    expect(hint).toContain("already have the cited error location and snippet");
+    expect(hint).toContain("replace_lines or apply_edit");
+    expect(hint).toContain("do NOT call list_files or get_file");
+    expect(hint).toContain(snippet);
+    expect(hint).toContain(String(COMPILE_FIX_MAX_GET_FILE_CALLS_WITH_SNIPPET));
+    expect(hint).not.toContain("FIRST tool call must be get_file");
+  });
+
+  it("instructs the model to read a small window when no snippet is available", () => {
     const hint = buildCompileFixTargetHint({ file: "main.tex", line: 12 });
     expect(hint).toContain("main.tex:12");
     expect(hint).toContain('get_file(path="main.tex", startLine=2, endLine=30)');
@@ -177,6 +193,36 @@ describe("buildCompileFixTargetHint", () => {
     expect(hint).toContain("Do not prepend");
     expect(hint).toContain("natbib");
     expect(hint).toContain(String(COMPILE_FIX_GET_FILE_BEFORE_EDIT));
+  });
+});
+
+describe("getCompileFixGetFileBudget", () => {
+  it("caps get_file to 1 when a cited snippet is injected", () => {
+    expect(
+      getCompileFixGetFileBudget({ hasCitedLocation: true, hasSnippet: true })
+    ).toBe(COMPILE_FIX_MAX_GET_FILE_CALLS_WITH_SNIPPET);
+    expect(COMPILE_FIX_MAX_GET_FILE_CALLS_WITH_SNIPPET).toBeLessThanOrEqual(1);
+  });
+
+  it("allows two reads when cited location exists without snippet", () => {
+    expect(
+      getCompileFixGetFileBudget({ hasCitedLocation: true, hasSnippet: false })
+    ).toBe(COMPILE_FIX_GET_FILE_BEFORE_EDIT);
+  });
+});
+
+describe("resolveCompileFixSnippet", () => {
+  it("returns a line-numbered window from project files", () => {
+    const texFiles = new Map([["main.tex", sampleTex]]);
+    const snippet = resolveCompileFixSnippet({ file: "main.tex", line: 5 }, texFiles, 1);
+    expect(snippet).toContain("> 5:");
+    expect(snippet).toContain("\\textbf{broken");
+  });
+});
+
+describe("COMPILE_FIX_MAX_STEPS", () => {
+  it("keeps compile-fix turns short while PAP-38 handles multi-round retries", () => {
+    expect(COMPILE_FIX_MAX_STEPS).toBe(6);
   });
 });
 

@@ -54,6 +54,13 @@ describe("PAP-41 citep/natbib first-pass compile-fix", () => {
     expect(target).toMatch(/small window around the cited error line/i);
     expect(target).toMatch(/not lines 1.100/i);
 
+    const snippetTarget = buildCompileFixTargetHint(
+      { file: "template.tex", line: 64 },
+      { snippet: "  64: \\citep{foo}" }
+    );
+    expect(snippetTarget).toMatch(/replace_lines or apply_edit/i);
+    expect(snippetTarget).toMatch(/do NOT call list_files or get_file/i);
+
     const cite = buildCompileFixCiteCommandHint([
       { message: "template.tex:64: Undefined control sequence. \\citep" },
     ]);

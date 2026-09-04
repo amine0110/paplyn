@@ -10,6 +10,8 @@ import {
   buildCompileDiagnosticsContext,
   buildGetFileWindow,
   COMPILE_FIX_GET_FILE_BEFORE_EDIT,
+  COMPILE_FIX_MAX_GET_FILE_CALLS_WITH_SNIPPET,
+  getCompileFixGetFileBudget,
   truncateCompileLogExcerpt,
   type AiCompileError,
 } from "@/lib/ai-compile-fix-context";
@@ -330,7 +332,7 @@ Rules:
 1. Never put \\\\usepackage, \\\\title, or body content before \\\\documentclass. Repair the cited line — do not prepend a new preamble or smash multiple commands onto one line.
 2. Prefer replace_lines on the exact cited line in the first copy. You may add \\usepackage{pkg} when the compile error cites a missing package or undefined command and that package is installed on Paplyn (e.g. natbib for \\citep/\\citet, graphicx for \\includegraphics, siunitx for \\SI). Insert it immediately after an existing \\usepackage in the first copy. Fixing a bare \\\\usepackage line is allowed. Do not add packages that are not installed on Paplyn.
 3. When several errors cite line numbers, plan ALL replace_lines against the ORIGINAL file (before any edits) and apply from the highest line number downward so line numbers stay valid. Attempt every cited error in the first copy in one turn when possible.
-4. Your FIRST get_file must be a small window around the cited error line (see Primary error location) — not overlapping lines 1–100. After at most ${COMPILE_FIX_GET_FILE_BEFORE_EDIT} get_file calls you must call replace_lines, apply_edit, or fix_compile_errors.
+4. When a cited error snippet is provided in the prompt, call replace_lines or apply_edit immediately — skip list_files and get_file unless the snippet is insufficient (at most ${COMPILE_FIX_MAX_GET_FILE_CALLS_WITH_SNIPPET} get_file). Otherwise your FIRST get_file must be a small window around the cited error line (see Primary error location) — not overlapping lines 1–100. After at most ${COMPILE_FIX_GET_FILE_BEFORE_EDIT} get_file calls you must call replace_lines, apply_edit, or fix_compile_errors.
 5. In your reply, state exactly which lines you changed (e.g. "Changed main.tex line 3."). If an edit is rejected, quote the rejection reason — never claim a fix after a rejected or unsafe edit.
 6. For citation or bibliography errors: keep a single \\bibliography or References section at the END of the document (after abstract and body sections, near \\\\end{document}). If references were misplaced near the top, REMOVE or MOVE that block back to the end — do not insert a second bibliography at the cursor.
 
@@ -347,6 +349,8 @@ export interface WorkspaceToolsOptions {
   manuscriptGuards?: boolean;
   /** Primary cited error location for compile-fix preload. */
   citedErrorLocation?: { file: string; line: number } | null;
+  /** Line-numbered snippet around cited error — enables edit-first path with tighter get_file cap. */
+  citedErrorSnippet?: string | null;
   /** Refresh project files between get_file retries (compile-fix DB race). */
   refreshTexFiles?: () => Promise<Map<string, string>>;
   /** Latest compile diagnostics for get_compile_diagnostics. */
@@ -416,11 +420,18 @@ export function createWorkspaceTools(
       };
     };
 
-  const { maxGetFileCalls, onGetFileCall, compileFix, manuscriptGuards, citedErrorLocation, refreshTexFiles, compileDiagnostics, compileErrors } =
+  const { maxGetFileCalls, onGetFileCall, compileFix, manuscriptGuards, citedErrorLocation, citedErrorSnippet, refreshTexFiles, compileDiagnostics, compileErrors } =
     options;
   const validateCtx: ValidateActionContext = { ...ctx, compileFix, manuscriptGuards, compileErrors };
   let getFileCallCount = 0;
   const readLineCoverage: Map<string, LineCoverageRange[]> = new Map();
+
+  const compileFixGetFileBudget = compileFix
+    ? getCompileFixGetFileBudget({
+        hasCitedLocation: Boolean(citedErrorLocation),
+        hasSnippet: Boolean(citedErrorSnippet),
+      })
+    : maxGetFileCalls;
 
   const applyValidatedActionToTexFiles = (action: AiClientAction) => {
     switch (action.type) {
@@ -451,6 +462,14 @@ export function createWorkspaceTools(
         break;
     }
   };
+
+  if (compileFix && citedErrorLocation && citedErrorSnippet) {
+    const resolved = resolveTexFilePath(ctx.texFiles, citedErrorLocation.file);
+    if (resolved) {
+      const { startLine, endLine } = buildGetFileWindow(citedErrorLocation.line);
+      recordLineCoverage(readLineCoverage, ctx.texFiles, resolved, startLine, endLine);
+    }
+  }
 
   const citedFilePreload = (() => {
     if (!compileFix || !citedErrorLocation) return null;
@@ -523,8 +542,7 @@ export function createWorkspaceTools(
     startLine: number;
     endLine: number;
   }) => {
-    const getFileBudget =
-      compileFix ? COMPILE_FIX_GET_FILE_BEFORE_EDIT : maxGetFileCalls;
+    const getFileBudget = compileFix ? compileFixGetFileBudget : maxGetFileCalls;
 
     if (getFileBudget != null && getFileCallCount >= getFileBudget) {
       const citedLine = citedErrorLocation?.line;
@@ -533,7 +551,7 @@ export function createWorkspaceTools(
           ? ` Use replace_lines on ${citedErrorLocation?.file ?? path} line ${citedLine} now.`
           : " Use replace_lines on the cited error line now.";
       const budgetMessage = compileFix
-        ? `get_file budget used (${COMPILE_FIX_GET_FILE_BEFORE_EDIT} reads per compile-fix turn). ` +
+        ? `get_file budget used (${getFileBudget} read${getFileBudget === 1 ? "" : "s"} per compile-fix turn). ` +
           `You must call replace_lines, apply_edit, or fix_compile_errors before reading more.${citedHint}`
         : `get_file limit reached (${getFileBudget} calls). Use replace_lines on the cited error line or apply_edit now.`;
       return {
