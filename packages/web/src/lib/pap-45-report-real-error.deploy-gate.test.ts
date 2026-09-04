@@ -1,7 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { COMPILE_FIX_USER_MESSAGE } from "@/lib/ai-compile-fix-intent";
+import {
+  buildCompileFixAiRequest,
+  COMPILE_FIX_MESSAGE_LEAD_IN,
+  COMPILE_FIX_USER_MESSAGE,
+} from "@/lib/ai-compile-fix-intent";
 import { buildCompileFailureReportMessage } from "@/lib/compile-failure-report-message";
 
 const ROOT = join(import.meta.dirname, "..");
@@ -39,6 +43,15 @@ describe("PAP-45 report real on-screen error deploy gate", () => {
       log: "ignored",
     });
 
+    expect(message).toContain("Missing $ inserted");
+    expect(message).not.toBe(COMPILE_FIX_USER_MESSAGE);
+  });
+
+  it("Fix-with-AI chat messages quote on-screen compile errors", () => {
+    const errors = [{ severity: "error" as const, line: 7, message: "Missing $ inserted" }];
+    const message = buildCompileFixAiRequest({ errors }).message;
+
+    expect(message).toContain(COMPILE_FIX_MESSAGE_LEAD_IN);
     expect(message).toContain("Missing $ inserted");
     expect(message).not.toBe(COMPILE_FIX_USER_MESSAGE);
   });

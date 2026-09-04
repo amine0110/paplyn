@@ -7,7 +7,7 @@ import { Sparkles, Send, X, Mic, MicOff, Square, ImagePlus } from "lucide-react"
 import { aiUnavailableBannerMessage, isClientSelfHosted } from "@/lib/ai-config";
 import { extractInsertableContent, hasInsertableContent } from "@/lib/ai-insert-content";
 import { classifyCompileDiagnosticsReviewFallback } from "@/lib/ai-compile-diagnostics-intent";
-import { resolveCompileRouting } from "@/lib/ai-compile-fix-intent";
+import { buildCompileFixAiRequest, resolveCompileRouting } from "@/lib/ai-compile-fix-intent";
 import type { AiCompileError } from "@/lib/ai-compile-fix-context";
 import { hasCompileDiagnosticsPayload } from "@/lib/ai-compile-fix-context";
 import { AiMarkdown } from "@/components/ai-markdown";
@@ -758,7 +758,17 @@ export function AiSidebar({
                       "h-8 border border-border/80 bg-paper px-3 text-xs text-ink-muted hover:text-ink"
                     )}
                     disabled={a.disabled || loading}
-                    onClick={() => void sendMessage(a.label, a.action)}
+                    onClick={() => {
+                      if (a.action === "explain-errors") {
+                        const request = buildCompileFixAiRequest({
+                          errors: compileErrors,
+                          log: compileLog,
+                        });
+                        void sendMessage(request.message, request.action);
+                        return;
+                      }
+                      void sendMessage(a.label, a.action);
+                    }}
                   >
                     {a.label}
                   </button>

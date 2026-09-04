@@ -460,7 +460,12 @@ export default function ProjectPage() {
         { errors: compileErrorsSnapshot, log: compileLogSnapshot }
       );
       if (retryDecision.shouldRetry) {
-        setAiPendingRequest(buildCompileFixAutoRetryRequest());
+        setAiPendingRequest(
+          buildCompileFixAutoRetryRequest({
+            errors: compileErrorsSnapshot,
+            log: compileLogSnapshot,
+          }),
+        );
         setShowAi(true);
       }
     }
@@ -876,7 +881,9 @@ export default function ProjectPage() {
   }
 
   function handleFixCompileWithAi() {
-    setAiPendingRequest(buildCompileFixAiRequest());
+    setAiPendingRequest(
+      buildCompileFixAiRequest({ errors: compileErrors, log: compileLog }),
+    );
     setShowAi(true);
   }
 

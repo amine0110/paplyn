@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { COMPILE_FIX_USER_MESSAGE } from "@/lib/ai-compile-fix-intent";
 import {
   buildCompileFailureReportMessage,
+  buildCompileFixUserMessage,
+  COMPILE_FIX_MESSAGE_LEAD_IN,
   resolveReportWhatHappenedMessage,
 } from "@/lib/compile-failure-report-message";
 
@@ -40,6 +42,19 @@ describe("buildCompileFailureReportMessage", () => {
 
     expect(message).toContain("Compile log excerpt:");
     expect(message).not.toContain(COMPILE_FIX_USER_MESSAGE);
+  });
+});
+
+describe("buildCompileFixUserMessage", () => {
+  it("quotes on-screen compile errors in the Fix-with-AI chat message", () => {
+    const message = buildCompileFixUserMessage({
+      errors: [{ severity: "error", line: 18, message: "Undefined control sequence \\foo" }],
+    });
+
+    expect(message).toBe(
+      `${COMPILE_FIX_MESSAGE_LEAD_IN}\n- L18: Undefined control sequence \\foo`,
+    );
+    expect(message).not.toBe(COMPILE_FIX_USER_MESSAGE);
   });
 });
 
