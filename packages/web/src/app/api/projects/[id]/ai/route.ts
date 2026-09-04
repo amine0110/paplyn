@@ -49,6 +49,7 @@ import {
 } from "@/lib/ai-compile-fix-bibliography-recovery";
 import { tryMisplacedBodyRecovery } from "@/lib/ai-manuscript-body-recovery";
 import { sanitizeCompileFixSuccessClaims } from "@/lib/ai-compile-fix-success-gating";
+import { resolveAssistantBubbleContent } from "@/lib/ai-planning-text-sanitize";
 import {
   analyzeCompileMissingPackage,
   isCompileFixStopOutcome,
@@ -538,7 +539,15 @@ async function resolveAssistantContent<TOOLS extends ToolSet>(options: {
     return finalize(changeBlock);
   }
 
-  if (trimmed) return finalize(result.text);
+  if (trimmed) {
+    return finalize(
+      resolveAssistantBubbleContent({
+        rawText: result.text,
+        actions,
+        result,
+      })
+    );
+  }
 
   if (!compileFixRequest) {
     return {
