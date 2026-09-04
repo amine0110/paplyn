@@ -27,6 +27,7 @@ import {
 } from "@/lib/project-files";
 import { CompilePanel } from "@/components/compile-panel";
 import { DetectedErrorReportFooter } from "@/components/detected-error-report-footer";
+import { ProjectReportLink } from "@/components/project-report-link";
 import { ProjectSettingsDialog } from "@/components/project-settings-dialog";
 import { ShareDialog } from "@/components/share-dialog";
 import { HistoryDialog } from "@/components/history-dialog";
@@ -1031,6 +1032,7 @@ export default function ProjectPage() {
         downloadFilename={project?.name ?? "manuscript"}
         compileFailed={compileErrorCount > 0}
         compileErrors={compileErrors}
+        compileLog={compileLog}
         isStale={showStaleProofBanner}
         staleErrorCount={compileErrorCount}
         onFixWithAi={handleFixCompileWithAi}
@@ -1157,9 +1159,11 @@ export default function ProjectPage() {
           >
             Docs
           </Link>
-          <Link href="/report" className={cn("hidden sm:inline text-sm", CHROME_LINK)}>
-            Report
-          </Link>
+          <ProjectReportLink
+            compileErrors={compileErrors}
+            compileLog={compileLog}
+            className="hidden sm:inline"
+          />
           <Button variant="default" size="sm" onClick={compile} disabled={compiling}>
             <Play className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">{compiling ? "Typesetting…" : "Compile"}</span>
@@ -1262,14 +1266,13 @@ export default function ProjectPage() {
                   >
                     Docs
                   </Link>
-                  <Link
-                    href="/report"
+                  <ProjectReportLink
+                    compileErrors={compileErrors}
+                    compileLog={compileLog}
                     role="menuitem"
                     className={cn(CHROME_MENU_ITEM, "block w-full px-3 py-2.5 text-sm")}
                     onClick={() => setShowMobileMenu(false)}
-                  >
-                    Report
-                  </Link>
+                  />
                 </div>
               </>
             )}

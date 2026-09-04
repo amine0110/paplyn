@@ -79,8 +79,8 @@ describe("PAP-30 user reports deploy gate", () => {
     expect(settings).toContain('href="/report"');
 
     const projectPage = readSrc("app/project/[id]/page.tsx");
-    expect(projectPage).toContain('href="/report"');
-    expect(projectPage).toMatch(/ReportIssueLink|DetectedErrorReportFooter|reportDetectedError/);
+    expect(projectPage).toMatch(/href="\/report"|ProjectReportLink/);
+    expect(projectPage).toMatch(/ReportIssueLink|DetectedErrorReportFooter|reportDetectedError|ProjectReportLink/);
   });
 
   it("hooks compile, cite, and error UI to report CTAs", () => {

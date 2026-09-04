@@ -8,6 +8,7 @@ import {
   titleForDetectedErrorKind,
   type DetectedErrorKind,
 } from "@/lib/report-detected-error-dedup";
+import { resolveReportWhatHappenedMessage } from "@/lib/compile-failure-report-message";
 import { sanitizePlainText } from "@/lib/user-reports-sanitize";
 import { REPORT_WHAT_HAPPENED_MAX } from "@/lib/user-reports-validation";
 
@@ -18,6 +19,8 @@ export type ReportDetectedErrorInput = {
   message: string;
   page?: string;
   steps?: string;
+  /** Used when message is the compile-fix AI chip prompt instead of a real error. */
+  fallbackMessage?: string;
 };
 
 export type ReportDetectedErrorResult = {
@@ -62,7 +65,12 @@ function normalizeMessage(message: string): string {
 export async function reportDetectedError(
   input: ReportDetectedErrorInput,
 ): Promise<ReportDetectedErrorResult> {
-  const message = normalizeMessage(input.message);
+  const resolved = resolveReportWhatHappenedMessage(input.message, input.fallbackMessage);
+  if (!resolved) {
+    return { sent: false, skipped: true };
+  }
+
+  const message = normalizeMessage(resolved);
   if (!message) {
     return { sent: false, skipped: true };
   }
