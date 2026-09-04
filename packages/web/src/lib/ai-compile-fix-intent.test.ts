@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   buildCompileFixAiRequest,
   COMPILE_FIX_ACTION,
+  COMPILE_FIX_MESSAGE_LEAD_IN,
   COMPILE_FIX_USER_MESSAGE,
   detectFixCompileIntent,
   isCompileFixAiPrompt,
+  isCompileFixErrorBearingMessage,
   resolveCompileRouting,
 } from "./ai-compile-fix-intent";
 import {
@@ -13,15 +15,27 @@ import {
   detectCompileDiagnosticsIntent,
 } from "./ai-compile-diagnostics-intent";
 
+const SAMPLE_ERRORS = [
+  { severity: "error" as const, line: 18, message: "Undefined control sequence \\foo" },
+];
+
 describe("compile-fix request helpers", () => {
   it("exposes the canonical compile-fix user message", () => {
     expect(COMPILE_FIX_USER_MESSAGE).toBe("Find the error that stopping the compiler");
     expect(COMPILE_FIX_ACTION).toBe("explain-errors");
   });
 
-  it("builds a pending AI request for compile-fix", () => {
+  it("builds a pending AI request with quoted compile errors", () => {
+    const request = buildCompileFixAiRequest({ errors: SAMPLE_ERRORS });
+    expect(request.action).toBe("explain-errors");
+    expect(request.message).toContain(COMPILE_FIX_MESSAGE_LEAD_IN);
+    expect(request.message).toContain("Undefined control sequence \\foo");
+    expect(request.message).not.toBe(COMPILE_FIX_USER_MESSAGE);
+  });
+
+  it("falls back to the bare chip prompt when no errors are provided", () => {
     expect(buildCompileFixAiRequest()).toEqual({
-      message: "Find the error that stopping the compiler",
+      message: COMPILE_FIX_USER_MESSAGE,
       action: "explain-errors",
     });
   });
@@ -29,6 +43,12 @@ describe("compile-fix request helpers", () => {
   it("identifies the compile-fix chip prompt separately from user-visible errors", () => {
     expect(isCompileFixAiPrompt(COMPILE_FIX_USER_MESSAGE)).toBe(true);
     expect(isCompileFixAiPrompt("L18: Undefined control sequence \\foo")).toBe(false);
+  });
+
+  it("identifies error-bearing Fix-with-AI chat messages", () => {
+    const message = buildCompileFixAiRequest({ errors: SAMPLE_ERRORS }).message;
+    expect(isCompileFixErrorBearingMessage(message)).toBe(true);
+    expect(isCompileFixAiPrompt(message)).toBe(false);
   });
 });
 
@@ -43,6 +63,11 @@ describe("detectFixCompileIntent", () => {
     ).toBe(true);
     expect(detectFixCompileIntent("Fix the compile errors")).toBe(true);
     expect(detectFixCompileIntent(COMPILE_FIX_USER_MESSAGE)).toBe(true);
+  });
+
+  it("detects error-bearing Fix-with-AI chat messages", () => {
+    const message = buildCompileFixAiRequest({ errors: SAMPLE_ERRORS }).message;
+    expect(detectFixCompileIntent(message)).toBe(true);
   });
 
   it("ignores unrelated chat", () => {
@@ -79,6 +104,16 @@ describe("compile review vs fix routing", () => {
       resolveCompileRouting({
         message: "what's wrong with the compile",
         action: "explain-errors",
+        diagnosticsReview: false,
+      })
+    ).toEqual({ compileFix: true, diagnosticsReview: false });
+  });
+
+  it("routes error-bearing Fix-with-AI messages to compile-fix", () => {
+    const message = buildCompileFixAiRequest({ errors: SAMPLE_ERRORS }).message;
+    expect(
+      resolveCompileRouting({
+        message,
         diagnosticsReview: false,
       })
     ).toEqual({ compileFix: true, diagnosticsReview: false });

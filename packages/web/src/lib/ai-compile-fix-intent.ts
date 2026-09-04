@@ -4,18 +4,25 @@ import {
   classifyCompileDiagnosticsReviewFallback,
   detectCompileDiagnosticsIntent,
 } from "@/lib/ai-compile-diagnostics-intent";
+import {
+  buildCompileFixUserMessage,
+  type CompileFailureReportError,
+} from "@/lib/compile-failure-report-message";
+import { COMPILE_FIX_USER_MESSAGE, isCompileFixAiPrompt } from "@/lib/compile-fix-prompt";
 
-/** Canonical user message for compile-fix requests (sidebar chip, Fix with AI, etc.). */
-export const COMPILE_FIX_USER_MESSAGE = "Find the error that stopping the compiler";
+export { COMPILE_FIX_USER_MESSAGE } from "@/lib/compile-fix-prompt";
+export { COMPILE_FIX_MESSAGE_LEAD_IN } from "@/lib/compile-failure-report-message";
 
-const COMPILE_FIX_AI_PROMPT_RE = /\bfind the error that stopping the compiler\b/i;
+const COMPILE_FIX_ERROR_MESSAGE_RE = /^fix these compile errors:/i;
 
-/** True for the compile-fix chip / Fix with AI prompt — not a user-visible error. */
-export function isCompileFixAiPrompt(text: string): boolean {
+/** True for Fix-with-AI chat messages that include quoted compile errors. */
+export function isCompileFixErrorBearingMessage(text: string): boolean {
   const trimmed = text.trim();
   if (!trimmed) return false;
-  return trimmed === COMPILE_FIX_USER_MESSAGE || COMPILE_FIX_AI_PROMPT_RE.test(trimmed);
+  return COMPILE_FIX_ERROR_MESSAGE_RE.test(trimmed);
 }
+
+export { isCompileFixAiPrompt } from "@/lib/compile-fix-prompt";
 
 /** Quick-action / voice action id that triggers compile-fix mode. */
 export const COMPILE_FIX_ACTION = "explain-errors";
@@ -25,19 +32,30 @@ export interface CompileFixAiRequest {
   action: typeof COMPILE_FIX_ACTION;
 }
 
-export function buildCompileFixAiRequest(): CompileFixAiRequest {
+export function buildCompileFixAiRequest(options?: {
+  errors?: readonly CompileFailureReportError[];
+  log?: string;
+}): CompileFixAiRequest {
+  const message =
+    options?.errors && options.errors.length > 0
+      ? buildCompileFixUserMessage({ errors: options.errors, log: options.log })
+      : COMPILE_FIX_USER_MESSAGE;
+
   return {
-    message: COMPILE_FIX_USER_MESSAGE,
+    message,
     action: COMPILE_FIX_ACTION,
   };
 }
 
 /** Automatic follow-up compile-fix turn after a post-fix compile still fails. */
-export function buildCompileFixAutoRetryRequest(): CompileFixAiRequest & {
+export function buildCompileFixAutoRetryRequest(options?: {
+  errors?: readonly CompileFailureReportError[];
+  log?: string;
+}): CompileFixAiRequest & {
   autoCompileFixRetry: true;
 } {
   return {
-    ...buildCompileFixAiRequest(),
+    ...buildCompileFixAiRequest(options),
     autoCompileFixRetry: true,
   };
 }
@@ -59,7 +77,7 @@ export function detectFixCompileIntent(text: string, action?: string): boolean {
   const trimmed = text.trim();
   if (!trimmed) return false;
 
-  if (isCompileFixAiPrompt(trimmed)) {
+  if (isCompileFixAiPrompt(trimmed) || isCompileFixErrorBearingMessage(trimmed)) {
     return true;
   }
 

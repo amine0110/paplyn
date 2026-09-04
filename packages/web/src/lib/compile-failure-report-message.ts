@@ -1,4 +1,4 @@
-import { isCompileFixAiPrompt } from "@/lib/ai-compile-fix-intent";
+import { isCompileFixAiPrompt } from "@/lib/compile-fix-prompt";
 import { REPORT_WHAT_HAPPENED_MAX } from "@/lib/user-reports-validation";
 
 export type CompileFailureReportError = {
@@ -76,6 +76,29 @@ export function buildCompileFailureReportMessage(options: {
   }
 
   return trimReportMessage("Compilation failed");
+}
+
+/** Lead-in for Fix-with-AI chat messages that quote on-screen compile errors. */
+export const COMPILE_FIX_MESSAGE_LEAD_IN = "Fix these compile errors:";
+
+/** Build the user-visible Fix-with-AI chat message from on-screen compile errors. */
+export function buildCompileFixUserMessage(options: {
+  errors: readonly CompileFailureReportError[];
+  log?: string;
+}): string {
+  const errorText = buildCompileFailureReportMessage(options).trim();
+  if (!errorText) {
+    return COMPILE_FIX_MESSAGE_LEAD_IN;
+  }
+
+  const bulletLines = errorText
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => `- ${line}`)
+    .join("\n");
+
+  return `${COMPILE_FIX_MESSAGE_LEAD_IN}\n${bulletLines}`;
 }
 
 /** Never send the compile-fix AI chip prompt as a user report. */
