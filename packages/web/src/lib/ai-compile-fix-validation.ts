@@ -1,6 +1,12 @@
 /** Server-side guards for compile-fix edits on real LaTeX manuscripts. */
 
 import {
+  validateDocumentClassPreserved,
+  validateManuscriptStructureEdit,
+  validateNoBodyContentBeforeDocumentClass,
+  validateNoDestructivePreambleReplace,
+} from "@/lib/ai-manuscript-guards";
+import {
   getAllowedPackagesForCompileErrors,
   detectUndefinedCommands,
 } from "@/lib/compile-missing-package";
@@ -459,6 +465,23 @@ export function validateCompileFixEdit(
     previewContent,
   });
   if (!dummyCheck.ok) return dummyCheck;
+
+  const classPreserved = validateDocumentClassPreserved(content, previewContent);
+  if (!classPreserved.ok) return classPreserved;
+
+  const bodyBeforeClass = validateNoBodyContentBeforeDocumentClass(previewContent);
+  if (!bodyBeforeClass.ok) return bodyBeforeClass;
+
+  if (startLine != null && endLine != null) {
+    const preambleDestructive = validateNoDestructivePreambleReplace(
+      content,
+      startLine,
+      endLine,
+      replace,
+      previewContent
+    );
+    if (!preambleDestructive.ok) return preambleDestructive;
+  }
 
   const relocationCheck = validateNoNewBibliographySites(content, previewContent);
   if (!relocationCheck.ok) return relocationCheck;

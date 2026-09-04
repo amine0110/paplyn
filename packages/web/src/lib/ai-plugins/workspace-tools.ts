@@ -271,8 +271,19 @@ When compile errors cite a line number, use replace_lines — apply_edit often f
 If apply_edit is rejected (0 or multiple matches), use replace_lines for the cited line range.
 After applying edits, reply with a short human sentence about what changed. Never put raw tool logs in your reply.`;
 
+export const MANUSCRIPT_STRUCTURE_SUFFIX = `This is a LaTeX manuscript. Never edit the preamble (\\documentclass, \\usepackage, \\title, \\author) unless the user explicitly asked to change packages, authors, or title.
+
+Body content rules:
+- Never insert tables, figures, tabular environments, or section text before \\documentclass or before \\begin{document}.
+- insert_at_cursor for body content: if the cursor is in the preamble, insert after \\end{abstract} instead (or after \\maketitle when there is no abstract).
+- When the user names a location (e.g. "between abstract and intro"), insert after \\end{abstract} or before \\section{Introduction} — not at the cursor if the cursor is in the preamble.
+- When moving a misplaced table, delete only the table lines — never replace a large preamble span (lines 1–26) that removes \\documentclass or author/title blocks.
+- Compile-fix may add a \\usepackage line for a missing package; it may not delete \\documentclass.`;
+
 /** Extra guidance for general chat (non compile-fix) turns. */
 export const WORKSPACE_CHAT_SUFFIX = `Treat user messages that state or request a change to the paper as edit requests: locate the field in the project .tex files, apply_edit or replace_lines, then confirm briefly in your reply. Distinguish add (insert new) from fill/replace (overwrite the existing value in place — never stack a new line next to an unreplaced old value).
+
+${MANUSCRIPT_STRUCTURE_SUFFIX}
 
 Why-questions about broken paper structure (e.g. references at the beginning, duplicate bibliography) are fix requests — apply the fix on the first turn without asking permission. Never say the edit tool is unavailable or ask "do you want me to move it".`;
 
@@ -312,6 +323,8 @@ Forbidden:
 export const COMPILE_FIX_WORKSPACE_SUFFIX = `Focus on fixing compile errors in the FIRST document copy only (from the first \\\\documentclass through the first \\\\end{document}). pdflatex stops at the first \\\\end{document} — ignore duplicate templates pasted after it.
 
 ${NO_DUMMY_MANUSCRIPT_CONTENT_SUFFIX}
+
+${MANUSCRIPT_STRUCTURE_SUFFIX}
 
 Rules:
 1. Never put \\\\usepackage, \\\\title, or body content before \\\\documentclass. Repair the cited line — do not prepend a new preamble or smash multiple commands onto one line.

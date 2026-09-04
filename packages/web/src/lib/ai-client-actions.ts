@@ -1,7 +1,16 @@
 /** Client-side editor actions returned by the AI assistant API. */
 
 import { validateNoSiblingCommandStacking } from "@/lib/ai-edit-guards";
-import { validateCompileFixEdit, validateNoDummyManuscriptContent } from "@/lib/ai-compile-fix-validation";
+import {
+  validateCompileFixEdit,
+  validateNoDummyManuscriptContent,
+} from "@/lib/ai-compile-fix-validation";
+import {
+  buildBodyContentInsertPlan,
+  containsBodyManuscriptContent,
+  isCursorInPreamble,
+  validateManuscriptStructureEdit,
+} from "@/lib/ai-manuscript-guards";
 
 export const MAX_CLIENT_EDIT_CHARS = 8_000;
 
@@ -159,6 +168,10 @@ export interface ValidateActionContext {
   texFiles: Map<string, string>;
   activeFile?: string;
   hasSelection: boolean;
+  /** 1-based cursor line in the active editor (for insert-at-cursor guards). */
+  cursorLine?: number;
+  /** Latest user message — resolves named insert anchors (e.g. between abstract and intro). */
+  userMessage?: string;
   /** When true, apply compile-fix preamble/first-copy guards. */
   compileFix?: boolean;
   /** When true, reject placeholder tables/figures/bibliography invented for compile/warning fixes. */
@@ -344,6 +357,26 @@ function rejectCompileFixEdit(
   return { rejected: true, reason: check.reason };
 }
 
+function rejectManuscriptStructureEdit(
+  ctx: ValidateActionContext,
+  originalContent: string,
+  previewContent: string,
+  replace: string,
+  startLine?: number,
+  endLine?: number
+): RejectedAction | null {
+  if (!ctx.manuscriptGuards || ctx.compileFix) return null;
+  const check = validateManuscriptStructureEdit({
+    originalContent,
+    previewContent,
+    replace,
+    startLine,
+    endLine,
+  });
+  if (check.ok) return null;
+  return { rejected: true, reason: check.reason };
+}
+
 function rejectDummyManuscriptEdit(
   ctx: ValidateActionContext,
   replace: string,
@@ -471,6 +504,57 @@ export function validateClientAction(
       if (!text) {
         return { rejected: true, reason: "Insert text is empty or exceeds size limits." };
       }
+
+      if (ctx.manuscriptGuards && containsBodyManuscriptContent(text) && ctx.activeFile) {
+        const file = validateFilePath(ctx.activeFile, ctx.texFiles);
+        if (file) {
+          const content = ctx.texFiles.get(file) ?? "";
+          const cursorLine = ctx.cursorLine ?? 1;
+          const inPreamble = isCursorInPreamble(content, cursorLine);
+
+          if (inPreamble || cursorLine <= 1) {
+            const insertPlan = buildBodyContentInsertPlan(content, text, ctx.userMessage);
+            if (insertPlan) {
+              const preview = applyLinesReplace(
+                content,
+                insertPlan.startLine,
+                insertPlan.endLine,
+                insertPlan.replace
+              );
+              if (preview.ok) {
+                const structureReject = rejectManuscriptStructureEdit(
+                  ctx,
+                  content,
+                  preview.content,
+                  insertPlan.replace,
+                  insertPlan.startLine,
+                  insertPlan.endLine
+                );
+                if (structureReject) return structureReject;
+
+                return {
+                  action: {
+                    type: "replace_lines",
+                    file,
+                    startLine: insertPlan.startLine,
+                    endLine: insertPlan.endLine,
+                    replace: insertPlan.replace,
+                    label: `Inserted content after abstract in ${file}`,
+                  },
+                };
+              }
+            }
+
+            return {
+              rejected: true,
+              reason:
+                "Cannot insert body content (table, figure, or section) in the preamble or before \\begin{document}. " +
+                "Use replace_lines after \\end{abstract} or before \\section{Introduction}.",
+            };
+          }
+        }
+      }
+
       return {
         action: {
           type: "insert_at_cursor",
@@ -546,6 +630,14 @@ export function validateClientAction(
       const dummyReject = rejectDummyManuscriptEdit(ctx, replace, preview.search.split("\n"));
       if (dummyReject) return dummyReject;
 
+      const manuscriptReject = rejectManuscriptStructureEdit(
+        ctx,
+        content,
+        preview.content,
+        replace
+      );
+      if (manuscriptReject) return manuscriptReject;
+
       if (ctx.compileFix) {
         const compileFixReject = rejectCompileFixEdit(
           content,
@@ -594,6 +686,16 @@ export function validateClientAction(
       const originalLines = content.split("\n").slice(raw.startLine - 1, raw.endLine);
       const dummyReject = rejectDummyManuscriptEdit(ctx, raw.replace, originalLines);
       if (dummyReject) return dummyReject;
+
+      const manuscriptReject = rejectManuscriptStructureEdit(
+        ctx,
+        content,
+        preview.content,
+        raw.replace,
+        raw.startLine,
+        raw.endLine
+      );
+      if (manuscriptReject) return manuscriptReject;
 
       if (ctx.compileFix) {
         const compileFixReject = rejectCompileFixEdit(
@@ -647,6 +749,16 @@ export function validateClientAction(
         const dummyReject = rejectDummyManuscriptEdit(ctx, replace, preview.search.split("\n"));
         if (dummyReject) {
           rejections.push(`${file}: ${dummyReject.reason}`);
+          continue;
+        }
+        const manuscriptReject = rejectManuscriptStructureEdit(
+          ctx,
+          content,
+          preview.content,
+          replace
+        );
+        if (manuscriptReject) {
+          rejections.push(`${file}: ${manuscriptReject.reason}`);
           continue;
         }
         if (ctx.compileFix) {

@@ -44,6 +44,7 @@ import {
   detectReferencesRecoveryIntent,
   tryBibliographyRecovery,
 } from "@/lib/ai-compile-fix-bibliography-recovery";
+import { tryMisplacedBodyRecovery } from "@/lib/ai-manuscript-body-recovery";
 import { sanitizeCompileFixSuccessClaims } from "@/lib/ai-compile-fix-success-gating";
 import {
   analyzeCompileMissingPackage,
@@ -150,6 +151,8 @@ const chatSchema = z.object({
     })
   ),
   activeFile: z.string().optional(),
+  /** 1-based cursor line in the active editor (insert-at-cursor guards). */
+  cursorLine: z.number().int().positive().optional(),
   selectedText: z.string().optional(),
   action: z
     .enum([
@@ -769,6 +772,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         texFiles: texFileMap,
         activeFile: requestData.activeFile,
         hasSelection,
+        cursorLine: requestData.cursorLine,
+        userMessage: lastUserMessage,
       };
 
       async function refreshTexFilesFromDb(): Promise<Map<string, string>> {
@@ -805,7 +810,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               },
             }
           : {
-              manuscriptGuards: compileDiagnosticsReviewTurn,
+              manuscriptGuards: true,
               compileDiagnostics: hasCompileDiagnostics
                 ? {
                     errors: mergedCompileDiagnostics,
@@ -960,6 +965,34 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             postEditCompileKnown: requestData.autoCompileFixRetry === true,
           }),
           actions: bibliographyRecovery.actions,
+          appliedActions,
+        };
+        emit(doneEvent);
+        close();
+        return;
+      }
+
+      const misplacedBodyRecovery = tryMisplacedBodyRecovery({
+        texFiles: texFileMap,
+        mainFile,
+        userMessage: lastUserMessage,
+        activeFile: requestData.activeFile,
+      });
+
+      if (misplacedBodyRecovery) {
+        emitProgress("Relocating misplaced body content…");
+        await incrementAiUsage(session.user.id);
+        const appliedActions = toAppliedActionSummaries(misplacedBodyRecovery.actions);
+        const doneEvent: AiStreamDoneEvent = {
+          type: "done",
+          content: sanitizeCompileFixSuccessClaims(misplacedBodyRecovery.message, {
+            compileFixRequest,
+            appliedEditCount: misplacedBodyRecovery.actions.length,
+            compileErrorCount: compileErrors.filter((entry) => entry.severity !== "warning")
+              .length,
+            postEditCompileKnown: requestData.autoCompileFixRetry === true,
+          }),
+          actions: misplacedBodyRecovery.actions,
           appliedActions,
         };
         emit(doneEvent);
