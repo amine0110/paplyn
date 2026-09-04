@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { WORKSPACE_SYSTEM_PROMPT } from "@/lib/ai-plugins/workspace-tools";
-import { isMashedPlanningText, MASHED_PLANNING_SAMPLE } from "@/lib/ai-planning-text-sanitize";
+import {
+  formatAppliedActionsSummary,
+  isMashedPlanningText,
+  MASHED_PLANNING_SAMPLE,
+} from "@/lib/ai-planning-text-sanitize";
 
 const ROOT = join(import.meta.dirname, "..");
 
@@ -21,8 +25,34 @@ describe("PAP-52 planning text sanitize deploy gate", () => {
     expect(routeSrc).toContain("ai-planning-text-sanitize");
   });
 
-  it("steers the model to one short past-tense reply after edits", () => {
-    expect(WORKSPACE_SYSTEM_PROMPT).toMatch(/ONE short past-tense sentence/i);
-    expect(WORKSPACE_SYSTEM_PROMPT).toMatch(/Never paste a chain of planning/i);
+  it("formats applied edits as bullets with Done", () => {
+    expect(
+      formatAppliedActionsSummary([
+        {
+          type: "apply_edit",
+          file: "template.tex",
+          search: "a",
+          replace: "b",
+          label: "Inserted content after abstract in template.tex",
+        },
+      ])
+    ).toContain("- Inserted content after abstract in template.tex");
+    expect(
+      formatAppliedActionsSummary([
+        {
+          type: "apply_edit",
+          file: "template.tex",
+          search: "a",
+          replace: "b",
+          label: "Inserted content after abstract in template.tex",
+        },
+      ])
+    ).toMatch(/Done\.$/);
+  });
+
+  it("steers the model to past-tense readable summaries after edits", () => {
+    expect(WORKSPACE_SYSTEM_PROMPT).toMatch(/past tense/i);
+    expect(WORKSPACE_SYSTEM_PROMPT).toMatch(/Never use future-tense planning/i);
+    expect(WORKSPACE_SYSTEM_PROMPT).toMatch(/Bullets plus a final "Done\." are fine/i);
   });
 });

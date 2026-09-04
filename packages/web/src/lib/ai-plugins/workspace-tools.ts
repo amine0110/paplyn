@@ -269,7 +269,7 @@ Never call tools that are not listed above.
 Keep each edit under ${8_000} characters. Prefer minimal, surgical changes.
 When compile errors cite a line number, use replace_lines — apply_edit often fails on repeated lines in large templates.
 If apply_edit is rejected (0 or multiple matches), use replace_lines for the cited line range.
-After applying edits, reply with ONE short past-tense sentence about what changed (e.g. "Inserted the table after the Introduction in template.tex."). Never paste a chain of planning steps or future-tense narration ("I'll…"). Never put raw tool logs in your reply.`;
+After applying edits, reply in past tense with a short, readable summary of what was wrong and what you fixed. Bullets plus a final "Done." are fine. Never use future-tense planning ("I'll…", "I will…") once the edit is finished. Never paste a chain of step-by-step narration or raw tool logs in your reply.`;
 
 export const MANUSCRIPT_STRUCTURE_SUFFIX = `This is a LaTeX manuscript. Never edit the preamble (\\documentclass, \\usepackage, \\title, \\author) unless the user explicitly asked to change packages, authors, or title.
 
@@ -281,7 +281,7 @@ Body content rules:
 - Compile-fix may add a \\usepackage line for a missing package; it may not delete \\documentclass.`;
 
 /** Extra guidance for general chat (non compile-fix) turns. */
-export const WORKSPACE_CHAT_SUFFIX = `Treat user messages that state or request a change to the paper as edit requests: locate the field in the project .tex files, apply_edit or replace_lines, then confirm briefly in ONE past-tense sentence. Never chain planning narration across tool steps. Distinguish add (insert new) from fill/replace (overwrite the existing value in place — never stack a new line next to an unreplaced old value).
+export const WORKSPACE_CHAT_SUFFIX = `Treat user messages that state or request a change to the paper as edit requests: locate the field in the project .tex files, apply_edit or replace_lines, then confirm in past tense what was fixed (short bullets and "Done." are fine). Never use future-tense planning ("I'll…", "I will…") after the work is done. Distinguish add (insert new) from fill/replace (overwrite the existing value in place — never stack a new line next to an unreplaced old value).
 
 ${MANUSCRIPT_STRUCTURE_SUFFIX}
 
