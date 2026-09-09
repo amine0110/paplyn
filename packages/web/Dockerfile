@@ -22,8 +22,10 @@ ARG NEXT_PUBLIC_PUBLIC_SIGNUPS_ENABLED=true
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_COLLAB_URL=$NEXT_PUBLIC_COLLAB_URL
 ENV NEXT_PUBLIC_DEPLOYMENT_MODE=$NEXT_PUBLIC_DEPLOYMENT_MODE
+# Unit tests assume default public signups (enabled); bake deploy flag only into the Next build
+RUN cd packages/web && pnpm test
 ENV NEXT_PUBLIC_PUBLIC_SIGNUPS_ENABLED=$NEXT_PUBLIC_PUBLIC_SIGNUPS_ENABLED
-RUN cd packages/web && pnpm test && pnpm build
+RUN cd packages/web && pnpm build
 
 FROM node:22-bookworm-slim AS runner
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
