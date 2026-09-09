@@ -1,6 +1,6 @@
 # Paplyn
 
-<!-- banner: .github/paplyn-banner.png -->
+![Paplyn — Collaborative LaTeX](.github/paplyn-banner.png)
 
 Collaborative LaTeX for researchers and students. Write, compile, and share documents in real time.
 
