@@ -2,10 +2,23 @@ import { getServerAppUrl } from "./urls";
 
 export type DeploymentMode = "saas" | "selfhosted";
 
+function parseBooleanEnv(value: string | undefined, defaultValue: boolean): boolean {
+  if (value === undefined || value === "") return defaultValue;
+  return value !== "false" && value !== "0";
+}
+
+/** Whether new account registration is allowed (default true for self-host bootstrap). */
+export function isPublicSignupsEnabled(): boolean {
+  const raw =
+    process.env.NEXT_PUBLIC_PUBLIC_SIGNUPS_ENABLED ?? process.env.PUBLIC_SIGNUPS_ENABLED;
+  return parseBooleanEnv(raw, true);
+}
+
 export const config = {
   deploymentMode: (process.env.NEXT_PUBLIC_DEPLOYMENT_MODE || process.env.DEPLOYMENT_MODE || "selfhosted") as DeploymentMode,
   isSaas: (process.env.NEXT_PUBLIC_DEPLOYMENT_MODE || process.env.DEPLOYMENT_MODE) === "saas",
   isSelfHosted: (process.env.NEXT_PUBLIC_DEPLOYMENT_MODE || process.env.DEPLOYMENT_MODE || "selfhosted") !== "saas",
+  publicSignupsEnabled: isPublicSignupsEnabled(),
 
   /** Server-side canonical URL — prefers runtime BETTER_AUTH_URL over build-time NEXT_PUBLIC. */
   get appUrl() {

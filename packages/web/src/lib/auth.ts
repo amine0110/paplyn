@@ -96,6 +96,11 @@ export const auth = betterAuth({
   databaseHooks: {
     user: {
       create: {
+        before: async () => {
+          if (!config.publicSignupsEnabled) {
+            throw new Error("Public signups are disabled on this instance");
+          }
+        },
         after: async (user) => {
           if (config.isSelfHosted) {
             const [result] = await db.select({ count: count() }).from(schema.user);

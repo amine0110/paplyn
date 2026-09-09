@@ -10,7 +10,7 @@ export const BRAND = {
   /** Wide wordmark cards — OG / social preview only, not for in-app chrome. */
   wordmarkLight: "/brand/paplyn-wordmark-light.png",
   wordmarkDark: "/brand/paplyn-wordmark-dark.png",
-  ogImage: "/brand/paplyn-wordmark-light.png",
+  ogImage: "/brand/og-banner.png",
   /** @deprecated Use BRAND.mark */
   iconFoldedP: "/brand/paplyn-mark.png",
   /** @deprecated Use BRAND.markDark */

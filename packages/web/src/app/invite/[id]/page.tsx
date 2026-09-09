@@ -7,6 +7,8 @@ import { Nav } from "@/components/nav";
 import { Button } from "@/components/ui/button";
 import { formatMemberRole } from "@/lib/project-sharing";
 import { useSession } from "@/lib/auth-client";
+import { isPublicSignupsEnabled } from "@/lib/config";
+import { PrivateInstanceNotice } from "@/components/private-instance-notice";
 
 interface InvitePreview {
   id: string;
@@ -117,9 +119,15 @@ export default function InvitePage() {
               <Button asChild className="w-full">
                 <Link href={`/login?next=${authNext}`}>Sign in</Link>
               </Button>
-              <Button asChild variant="outline" className="w-full">
-                <Link href={`/signup?next=${authNext}`}>Create account</Link>
-              </Button>
+              {isPublicSignupsEnabled() ? (
+                <Button asChild variant="outline" className="w-full">
+                  <Link href={`/signup?next=${authNext}`}>Create account</Link>
+                </Button>
+              ) : (
+                <div className="pt-2">
+                  <PrivateInstanceNotice />
+                </div>
+              )}
             </>
           )}
         </div>

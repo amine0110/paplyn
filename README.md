@@ -1,38 +1,14 @@
 # Paplyn
 
+![Paplyn — Collaborative LaTeX](.github/paplyn-banner.png)
+
 Collaborative LaTeX for researchers and students. Write, compile, and share documents in real time.
 
-**Live:** [paplyn.com](https://paplyn.com) (formerly Plicum / plicum.com — legacy domain redirects to paplyn.com)
+**This repository is for running your own Paplyn instance.** Clone it, configure your environment, and deploy with Docker — there is no public cloud signup here.
 
-The public product name is **Paplyn**. This repository is [amine0110/paplyn](https://github.com/amine0110/paplyn) on GitHub; internal npm and Docker identifiers use the `@paplyn` scope.
+The public product name is **Paplyn**. Source: [amine0110/paplyn](https://github.com/amine0110/paplyn) on GitHub; internal npm and Docker identifiers use the `@paplyn` scope.
 
 Product name, tagline, and UI copy are defined in [`packages/web/src/lib/product.ts`](packages/web/src/lib/product.ts). Override the public name with `PRODUCT_NAME` or `NEXT_PUBLIC_PRODUCT_NAME` if needed.
-
-## Deployment
-
-Paplyn runs in two modes, controlled by `DEPLOYMENT_MODE` and `NEXT_PUBLIC_DEPLOYMENT_MODE`:
-
-| Mode | Use case |
-|------|----------|
-| **Hosted (SaaS)** | Multi-tenant cloud at [paplyn.com](https://paplyn.com). Stripe billing, plan limits, managed infrastructure. |
-| **Self-hosted** | Single organization on your own server via Docker Compose. No billing UI; first registered user becomes admin. |
-
-Both modes share the same codebase and feature set. Self-hosting is the supported path for running from this repository.
-
-**Configuration guide:** When self-hosting, see the in-app docs at [`/docs/configuration`](packages/web/content/docs/configuration.md) (or open **Docs → Configuration** after starting the app) for every environment variable, API key, and URL.
-
-## Features
-
-- **Multi-file LaTeX editor** — CodeMirror 6 with syntax highlighting, autocomplete, search/replace, go-to-line, and word count
-- **PDF compile and preview** — pdfLaTeX, XeLaTeX, or LuaLaTeX; BibTeX and Biber bibliography passes; compile log with jump-to-error
-- **SyncTeX** — Click in the PDF preview to jump to the matching source line
-- **Real-time collaboration** — Yjs shared editing with presence indicators; room state persisted to PostgreSQL
-- **Project files** — Folders, rename/move, image and PDF preview, source zip download, Overleaf-style zip import
-- **Sharing** — Email invites with owner/editor/viewer roles
-- **Version history** — Automatic revisions with restore
-- **Templates** — Blank article, IEEE conference, thesis chapter, Beamer slides
-- **AI assistant** — Optional Groq on hosted deployments, or any OpenAI-compatible provider for self-hosting
-- **Themes** — Light, dark, and system appearance
 
 ## Self-host quickstart (Docker)
 
@@ -53,6 +29,32 @@ Database migrations run automatically when the web container starts. To run them
 docker compose --profile migrate run --rm migrate
 ```
 
+## Deployment modes
+
+Paplyn runs in two modes, controlled by `DEPLOYMENT_MODE` and `NEXT_PUBLIC_DEPLOYMENT_MODE`:
+
+| Mode | Use case |
+|------|----------|
+| **Self-hosted** | Single organization on your own server via Docker Compose. No billing UI; first registered user becomes admin. **This is the supported path for open-source users.** |
+| **Multi-tenant (SaaS mode)** | Optional mode for operators who deploy and run their own multi-tenant installation with Stripe billing and plan limits. Not a public cloud service — you host and operate the instance. |
+
+Both modes share the same codebase and feature set.
+
+**Configuration guide:** When self-hosting, see the in-app docs at [`/docs/configuration`](packages/web/content/docs/configuration.md) (or open **Docs → Configuration** after starting the app) for every environment variable, API key, and URL.
+
+## Features
+
+- **Multi-file LaTeX editor** — CodeMirror 6 with syntax highlighting, autocomplete, search/replace, go-to-line, and word count
+- **PDF compile and preview** — pdfLaTeX, XeLaTeX, or LuaLaTeX; BibTeX and Biber bibliography passes; compile log with jump-to-error
+- **SyncTeX** — Click in the PDF preview to jump to the matching source line
+- **Real-time collaboration** — Yjs shared editing with presence indicators; room state persisted to PostgreSQL
+- **Project files** — Folders, rename/move, image and PDF preview, source zip download, Overleaf-style zip import
+- **Sharing** — Email invites with owner/editor/viewer roles
+- **Version history** — Automatic revisions with restore
+- **Templates** — Blank article, IEEE conference, thesis chapter, Beamer slides
+- **AI assistant** — Optional Groq on multi-tenant deployments, or any OpenAI-compatible provider for self-hosting
+- **Themes** — Light, dark, and system appearance
+
 ### Production behind a reverse proxy
 
 Bind services to localhost and put nginx, Caddy, or similar in front of the web app:
@@ -61,14 +63,14 @@ Bind services to localhost and put nginx, Caddy, or similar in front of the web 
 cp .env.example .env
 # Set BETTER_AUTH_SECRET, COLLAB_SECRET, BETTER_AUTH_URL, NEXT_PUBLIC_APP_URL,
 # NEXT_PUBLIC_COLLAB_URL, and other values for your domain (do not commit .env)
-# SaaS example: BETTER_AUTH_URL=https://paplyn.com, NEXT_PUBLIC_APP_URL=https://paplyn.com
+# Example: BETTER_AUTH_URL=https://paplyn.example.com, NEXT_PUBLIC_APP_URL=https://paplyn.example.com
 
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 ```
 
 `docker-compose.prod.yml` overrides port bindings to `127.0.0.1` only.
 
-For Caddy on the production VPS, see [`deploy/caddy/Caddyfile`](deploy/caddy/Caddyfile) (paplyn.com canonical; plicum.com redirects).
+For Caddy on a production VPS, see [`deploy/caddy/Caddyfile`](deploy/caddy/Caddyfile) as an example reverse-proxy configuration.
 
 ### Services
 
@@ -130,6 +132,7 @@ See [`.env.example`](.env.example) for the full list and [`/docs/configuration`]
 | Variable | Description |
 |----------|-------------|
 | `DEPLOYMENT_MODE` | `saas` or `selfhosted` |
+| `PUBLIC_SIGNUPS_ENABLED` | Allow new account registration (default `true`; set `false` to close a private instance) |
 | `DATABASE_URL` | PostgreSQL connection string |
 | `BETTER_AUTH_SECRET` | Session signing secret (32+ chars) |
 | `BETTER_AUTH_URL` | Public URL of the web app (required in production) |
@@ -137,7 +140,7 @@ See [`.env.example`](.env.example) for the full list and [`/docs/configuration`]
 | `NEXT_PUBLIC_COLLAB_URL` | WebSocket URL for collaboration |
 | `COLLAB_SECRET` | Token signing for WebSocket auth |
 | `COMPILER_URL` | Compile service URL |
-| `GROQ_API_KEY` | Enables AI assistant on hosted (SaaS) deployments using Groq |
+| `GROQ_API_KEY` | Enables AI assistant on multi-tenant (SaaS mode) deployments using Groq |
 | `OPENAI_API_KEY` | Enables AI assistant via BYO OpenAI or self-hosted env fallback |
 | `OPENAI_BASE_URL` | OpenAI-compatible API base URL (default `https://api.openai.com/v1`) |
 | `OPENAI_MODEL` | Model override (`openai/gpt-oss-120b` with Groq; fallback `openai/gpt-oss-20b`; `gpt-4o-mini` with OpenAI) |

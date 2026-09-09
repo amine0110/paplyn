@@ -2,6 +2,7 @@ import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { SignupPageClient } from "@/app/signup/signup-form";
+import { SignupClosedPage } from "@/app/signup/signup-closed";
 import * as SignupPageModule from "@/app/signup/page";
 
 vi.mock("@/components/nav", () => ({
@@ -135,6 +136,14 @@ describe("Signup page", () => {
     await waitFor(() => {
       expect(push).toHaveBeenCalledWith("/invite/invite-1");
     });
+  });
+
+  it("renders closed registration page with self-host message", () => {
+    render(<SignupClosedPage />);
+
+    expect(screen.getByRole("heading", { name: "Registration closed" })).toBeInTheDocument();
+    expect(screen.getByText(/This instance is private/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/login");
   });
 
   it("links to login with the same next path", () => {

@@ -12,7 +12,7 @@ Paplyn supports **ORCID Public API** sign-in (not Member API). Researchers can u
 
 1. Sign in at [orcid.org](https://orcid.org) and open **Developer tools** (under your account name).
 2. Click **Register for the free ORCID Public API** (or create a new application if you already have one).
-3. Set **Application name** (e.g. `Paplyn`) and **Application URL** to your Paplyn base URL (e.g. `https://paplyn.com`).
+3. Set **Application name** (e.g. `Paplyn`) and **Application URL** to your Paplyn base URL (e.g. `https://paplyn.example.com`).
 4. Add this **Redirect URI** exactly (replace the host with your deployment):
 
 ```

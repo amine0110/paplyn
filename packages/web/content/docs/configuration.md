@@ -33,8 +33,16 @@ These must be set for the web app, collab server, and compiler to work.
 | `COMPILER_URL` | `.env` | Internal compile service URL (e.g. `http://compiler:3001` in Docker) |
 | `DEPLOYMENT_MODE` | `.env` | Set `selfhosted` for single-org installs |
 | `NEXT_PUBLIC_DEPLOYMENT_MODE` | `.env` | Set `selfhosted` to match |
+| `PUBLIC_SIGNUPS_ENABLED` | `.env` | Allow new account registration (default `true`) |
+| `NEXT_PUBLIC_PUBLIC_SIGNUPS_ENABLED` | `.env` | Client-side mirror of `PUBLIC_SIGNUPS_ENABLED` |
 
 The first registered user becomes admin in self-hosted mode.
+
+### Closing registration on a private instance
+
+Set `PUBLIC_SIGNUPS_ENABLED=false` and `NEXT_PUBLIC_PUBLIC_SIGNUPS_ENABLED=false` when this deployment should not accept new accounts (for example, a maintainer's private instance). Sign-up links and forms are hidden; visitors see a short message to deploy their own instance from [GitHub](https://github.com/amine0110/paplyn). Existing users can still sign in.
+
+Leave both variables `true` (the default) on a fresh self-host install so the first user can register and become admin.
 
 **Docker quickstart:** `docker compose up --build` — see the [README](https://github.com/amine0110/paplyn#self-host-quickstart-docker).
 
@@ -154,15 +162,15 @@ Legacy: a `gsk-` key in `XAI_API_KEY` or `OPENAI_API_KEY` is treated as Groq whe
 
 Organization admins can also set an OpenAI-compatible key, base URL, and model under **Admin → Settings**. Those values are stored in the database and take precedence over `OPENAI_*` env vars for that organization.
 
-### Hosted (SaaS)
+### Multi-tenant (SaaS mode)
 
-Set `GROQ_API_KEY` and/or `OPENAI_API_KEY` in the deployment environment.
+When running your own multi-tenant deployment (`DEPLOYMENT_MODE=saas`), set `GROQ_API_KEY` and/or `OPENAI_API_KEY` in the environment. This is for operators who host their own installation — not a public cloud signup.
 
 ---
 
-## Optional — Stripe (SaaS only)
+## Optional — Stripe (multi-tenant / SaaS mode only)
 
-Only when `DEPLOYMENT_MODE=saas`:
+Only when `DEPLOYMENT_MODE=saas` on an instance you operate:
 
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_PRICE_STUDENT`, `STRIPE_PRICE_RESEARCHER`
