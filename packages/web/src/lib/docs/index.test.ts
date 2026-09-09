@@ -33,6 +33,8 @@ describe("docs registry", () => {
     expect(configuration?.section).toBe("Self-hosting");
     expect(configuration?.content).toContain("DATABASE_URL");
     expect(configuration?.content).toContain("OPENAI_API_KEY");
+    expect(configuration?.content).toContain("/api/auth/callback/github");
+    expect(configuration?.content).toContain("SMTP_PASS");
     expect(configuration?.content).not.toMatch(/apiKey:\s*"[A-Za-z0-9]{8,}"/);
   });
 });

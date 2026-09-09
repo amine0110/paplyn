@@ -45,18 +45,18 @@ export interface SendPlicumEmailParams {
 }
 
 function getSmtpConfig() {
-  return {
-    host: process.env.SMTP_HOST || "smtp.gmail.com",
-    port: Number(process.env.SMTP_PORT || "587"),
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-    from: process.env.SMTP_FROM || `${PRODUCT_NAME} <noreply@example.com>`,
-  };
+  const host = process.env.SMTP_HOST?.trim() || "";
+  const portRaw = process.env.SMTP_PORT?.trim();
+  const port = portRaw ? Number(portRaw) : 587;
+  const user = process.env.SMTP_USER?.trim() || "";
+  const pass = process.env.SMTP_PASS?.trim() || "";
+  const from = process.env.SMTP_FROM?.trim() || `${PRODUCT_NAME} <noreply@example.com>`;
+  return { host, port, user, pass, from };
 }
 
 export function isSmtpConfigured(): boolean {
-  const { user, pass } = getSmtpConfig();
-  return Boolean(user && pass);
+  const { host, user, pass } = getSmtpConfig();
+  return Boolean(host && user && pass);
 }
 
 export async function sendPlicumEmail({

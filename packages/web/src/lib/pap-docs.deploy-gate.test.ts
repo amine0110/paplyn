@@ -30,6 +30,8 @@ describe("Paplyn docs deploy gate", () => {
     const configuration = getDocBySlug("configuration");
     expect(configuration?.section).toBe("Self-hosting");
     expect(configuration?.content).toContain("BETTER_AUTH_SECRET");
+    expect(configuration?.content).toContain("/api/auth/callback/google");
+    expect(configuration?.content).toContain("/api/auth/callback/github");
   });
 
   it("links Settings Zotero and landing footer to docs", () => {

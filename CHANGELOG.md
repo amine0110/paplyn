@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Open-source prep: removed production Notion database defaults, personal emails from tests, and personal SMTP placeholder
+- Configuration docs: explicit OAuth callback URLs, SMTP placement, and invite behavior without email
 
 ### Changed
 
