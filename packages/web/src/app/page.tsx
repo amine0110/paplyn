@@ -2,8 +2,9 @@ import Link from "next/link";
 import { Nav } from "@/components/nav";
 import { LandingHero } from "@/components/landing-hero";
 import { IntegrationsStrip } from "@/components/integrations-strip";
+import { PrivateInstanceNotice } from "@/components/private-instance-notice";
 import { config } from "@/lib/config";
-import { PRODUCT } from "@/lib/product";
+import { GITHUB_REPO_URL, PRODUCT } from "@/lib/product";
 import { getLandingIntegrations } from "@/lib/integrations";
 import { FileText, Users, Sparkles, Server } from "lucide-react";
 
@@ -23,6 +24,11 @@ export default function LandingPage() {
             {PRODUCT.name} {PRODUCT.landingLead}
           </p>
           <LandingHero />
+          {!config.publicSignupsEnabled && (
+            <div className="mt-8 max-w-xl mx-auto">
+              <PrivateInstanceNotice />
+            </div>
+          )}
         </section>
 
         <IntegrationsStrip items={integrations} />
@@ -33,7 +39,7 @@ export default function LandingPage() {
               { icon: FileText, title: "Multi-file editor", desc: "CodeMirror 6 with syntax highlighting, line numbers, and bracket matching." },
               { icon: Users, title: "Real-time collab", desc: "Shared editing with presence and named cursors. Self-hosted Yjs, no lock-in." },
               { icon: Sparkles, title: "AI assistant", desc: "Explain errors, tighten prose, add citations. OpenAI-compatible." },
-              { icon: Server, title: "Your infrastructure", desc: "Run on our cloud or deploy with Docker on your own servers." },
+              { icon: Server, title: "Your infrastructure", desc: "Deploy with Docker on your own servers. Full control, no vendor lock-in." },
             ].map(({ icon: Icon, title, desc }) => (
               <div key={title} className="space-y-3">
                 <Icon className="h-6 w-6 text-navy" />
@@ -45,28 +51,39 @@ export default function LandingPage() {
         </section>
 
         <section className="max-w-4xl mx-auto px-4 py-20">
-          <h2 className="font-serif text-3xl font-semibold text-center mb-12">Deployment options</h2>
+          <h2 className="font-serif text-3xl font-semibold text-center mb-12">Deploy your own instance</h2>
           <div className="grid md:grid-cols-2 gap-8">
             <div className="border border-border rounded-lg p-6 bg-surface">
-              <h3 className="font-serif text-xl font-medium mb-2">{PRODUCT.hostedEditionName}</h3>
+              <h3 className="font-serif text-xl font-medium mb-2">Self-hosted (recommended)</h3>
               <p className="text-sm text-ink-muted mb-4">
-                Fully managed SaaS with subscription plans. Free tier for getting started,
-                student and researcher plans for heavier use.
+                {PRODUCT.selfHostBlurb} Clone the repository, configure `.env`, and run with Docker Compose.
               </p>
-              <ul className="text-sm space-y-1 text-ink-muted">
-                <li>Free — 3 projects, 50 compiles/mo</li>
-                <li>Student — 10 projects, 500 compiles/mo</li>
-                <li>Researcher — 50 projects, 5000 compiles/mo</li>
-              </ul>
+              <pre className="text-xs bg-canvas-dark rounded p-3 font-mono text-ink-muted overflow-x-auto mb-4">
+                docker compose up --build
+              </pre>
+              <a
+                href={GITHUB_REPO_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-accent hover:underline"
+              >
+                View source on GitHub →
+              </a>
             </div>
             <div className="border border-border rounded-lg p-6 bg-surface">
-              <h3 className="font-serif text-xl font-medium mb-2">Self-hosted</h3>
+              <h3 className="font-serif text-xl font-medium mb-2">{PRODUCT.multiTenantEditionName}</h3>
               <p className="text-sm text-ink-muted mb-4">
-                {PRODUCT.selfHostBlurb}
+                Optional deployment mode for operators who run their own multi-tenant installation
+                with Stripe billing and plan limits. This is not a public cloud signup — deploy
+                and operate the instance yourself.
               </p>
-              <pre className="text-xs bg-canvas-dark rounded p-3 font-mono text-ink-muted overflow-x-auto">
-                docker compose up
-              </pre>
+              <p className="text-sm text-ink-muted">
+                Set <code className="text-xs bg-canvas-dark px-1 py-0.5 rounded">DEPLOYMENT_MODE=saas</code> in your environment. See the{" "}
+                <Link href="/docs/configuration" className="text-accent hover:underline">
+                  configuration guide
+                </Link>
+                .
+              </p>
             </div>
           </div>
         </section>

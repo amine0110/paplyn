@@ -60,6 +60,7 @@ services:
         NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
         NEXT_PUBLIC_COLLAB_URL: ${NEXT_PUBLIC_COLLAB_URL:-ws://localhost:1234}
         NEXT_PUBLIC_DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-selfhosted}
+        NEXT_PUBLIC_PUBLIC_SIGNUPS_ENABLED: ${PUBLIC_SIGNUPS_ENABLED:-true}
     environment:
       DATABASE_URL: postgresql://quire:quire@postgres:5432/quire
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-change-me-to-a-random-32-char-string}
@@ -76,6 +77,8 @@ services:
       COLLAB_HTTP_URL: ${COLLAB_HTTP_URL:-http://collab:1234}
       NEXT_PUBLIC_DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-selfhosted}
       DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-selfhosted}
+      PUBLIC_SIGNUPS_ENABLED: ${PUBLIC_SIGNUPS_ENABLED:-true}
+      NEXT_PUBLIC_PUBLIC_SIGNUPS_ENABLED: ${PUBLIC_SIGNUPS_ENABLED:-true}
       COMPILER_URL: http://compiler:3001
       COLLAB_SECRET: ${COLLAB_SECRET:-change-me-collab-secret}
       # AI: GROQ_API_KEY for hosted Groq (default model openai/gpt-oss-120b); OPENAI_* for BYO / self-host
@@ -124,6 +127,7 @@ services:
         NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
         NEXT_PUBLIC_COLLAB_URL: ${NEXT_PUBLIC_COLLAB_URL:-ws://localhost:1234}
         NEXT_PUBLIC_DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-selfhosted}
+        NEXT_PUBLIC_PUBLIC_SIGNUPS_ENABLED: ${PUBLIC_SIGNUPS_ENABLED:-true}
     entrypoint: ["node", "--experimental-strip-types", "scripts/migrate.ts"]
     environment:
       DATABASE_URL: postgresql://quire:quire@postgres:5432/quire

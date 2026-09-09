@@ -1,5 +1,5 @@
 import React from "react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { DocsShell } from "@/components/docs/docs-shell";
@@ -35,8 +35,11 @@ function renderDocsShell() {
 }
 
 describe("DocsShell", () => {
+  const originalSignups = process.env.NEXT_PUBLIC_PUBLIC_SIGNUPS_ENABLED;
+
   beforeEach(() => {
     useSession.mockReturnValue({ data: null, isPending: false });
+    process.env.NEXT_PUBLIC_PUBLIC_SIGNUPS_ENABLED = "true";
     Object.defineProperty(window, "matchMedia", {
       writable: true,
       value: vi.fn().mockImplementation((query: string) => ({
@@ -50,6 +53,14 @@ describe("DocsShell", () => {
         dispatchEvent: vi.fn(),
       })),
     });
+  });
+
+  afterEach(() => {
+    if (originalSignups === undefined) {
+      delete process.env.NEXT_PUBLIC_PUBLIC_SIGNUPS_ENABLED;
+    } else {
+      process.env.NEXT_PUBLIC_PUBLIC_SIGNUPS_ENABLED = originalSignups;
+    }
   });
 
   it("shows Sign in and Get started when signed out", () => {
@@ -74,6 +85,19 @@ describe("DocsShell", () => {
     expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Sign in" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Get started" })).not.toBeInTheDocument();
+  });
+
+  it("shows self-host CTAs when signups are disabled", () => {
+    process.env.NEXT_PUBLIC_PUBLIC_SIGNUPS_ENABLED = "false";
+
+    renderDocsShell();
+
+    expect(screen.getByRole("link", { name: "Self-host on GitHub" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Configuration guide" })).toHaveAttribute(
+      "href",
+      "/docs/configuration"
+    );
     expect(screen.queryByRole("link", { name: "Get started" })).not.toBeInTheDocument();
   });
 });

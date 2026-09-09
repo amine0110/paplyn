@@ -1,7 +1,9 @@
 import { isGithubAuthEnabled, isGoogleAuthEnabled, isOrcidAuthEnabled } from "@/lib/auth-providers";
+import { config } from "@/lib/config";
 import { resolveInternalNextPath } from "@/lib/internal-path";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
+import { SignupClosedPage } from "./signup-closed";
 import { SignupPageClient } from "./signup-form";
 
 // Runtime env vars (GOOGLE/GITHUB client id+secret) must be read per request, not at Docker build.
@@ -16,6 +18,10 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
   if (session?.user) {
     const { next } = await searchParams;
     redirect(resolveInternalNextPath(next));
+  }
+
+  if (!config.publicSignupsEnabled) {
+    return <SignupClosedPage />;
   }
 
   return (

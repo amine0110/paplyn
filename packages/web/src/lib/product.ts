@@ -33,6 +33,9 @@ export const BRAND_TRUSTED_ORIGINS = [
 /** Internal npm / Docker scope. Not shown in the UI. */
 export const PACKAGE_SCOPE = "paplyn";
 
+/** Open-source repository for self-hosting instructions and source. */
+export const GITHUB_REPO_URL = "https://github.com/amine0110/paplyn";
+
 const TAGLINE = "Collaborative LaTeX";
 
 const SHORT_DESCRIPTION =
@@ -60,11 +63,15 @@ export const PRODUCT = {
   headlineLine2: "Compile with confidence.",
 
   /** Sentence fragment after product name: "{name} is a modern LaTeX workspace..." */
-  landingLead: `is a modern LaTeX workspace for researchers and students. Real-time collaboration, instant PDF preview, and AI assistance — hosted or self-hosted.`,
+  landingLead: `is an open-source LaTeX workspace for researchers and students. Real-time collaboration, instant PDF preview, and AI assistance — deploy your own instance with Docker.`,
 
-  /** SaaS offering label on landing */
-  get hostedEditionName() {
-    return `${PRODUCT_NAME} Cloud`;
+  /** Shown when PUBLIC_SIGNUPS_ENABLED=false on a private deployment */
+  privateInstanceMessage:
+    "This instance is private. Deploy your own Paplyn from the open-source repository on GitHub.",
+
+  /** Multi-tenant mode label on landing (for operators, not a public cloud signup) */
+  get multiTenantEditionName() {
+    return "Multi-tenant (SaaS mode)";
   },
 
   get selfHostBlurb() {
