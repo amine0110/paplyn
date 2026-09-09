@@ -6,6 +6,8 @@ Collaborative LaTeX for researchers and students. Write, compile, and share docu
 
 **This repository is for running your own Paplyn instance.** Clone it, configure your environment, and deploy with Docker — there is no public cloud signup here.
 
+**Website:** [amine0110.github.io/paplyn](https://amine0110.github.io/paplyn/) — static landing page (GitHub Pages from `/docs` on `main`).
+
 The public product name is **Paplyn**. Source: [amine0110/paplyn](https://github.com/amine0110/paplyn) on GitHub; internal npm and Docker identifiers use the `@paplyn` scope.
 
 Product name, tagline, and UI copy are defined in [`packages/web/src/lib/product.ts`](packages/web/src/lib/product.ts). Override the public name with `PRODUCT_NAME` or `NEXT_PUBLIC_PRODUCT_NAME` if needed.
