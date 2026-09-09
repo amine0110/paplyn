@@ -11,6 +11,12 @@ import {
 import { clearReportRateLimitStores } from "@/lib/user-reports-rate-limit";
 
 const originalEnv = { ...process.env };
+const TEST_DATABASE_ID = "a1b2c3d4e5f6478990abcdef12345678";
+
+function enableUserReportsEnv() {
+  process.env.NOTION_USER_REPORTS_TOKEN = "secret";
+  process.env.NOTION_USER_REPORTS_DATABASE_ID = TEST_DATABASE_ID;
+}
 
 vi.mock("@/lib/session", () => ({
   getSession: vi.fn(async () => null),
@@ -51,7 +57,7 @@ describe("POST /api/user-reports", () => {
   });
 
   it("rejects honeypot submissions", async () => {
-    process.env.NOTION_USER_REPORTS_TOKEN = "secret";
+    enableUserReportsEnv();
     const response = await POST(
       makeRequest({
         title: "Bug",
@@ -63,7 +69,7 @@ describe("POST /api/user-reports", () => {
   });
 
   it("rejects missing CSRF token", async () => {
-    process.env.NOTION_USER_REPORTS_TOKEN = "secret";
+    enableUserReportsEnv();
     const request = new NextRequest("http://localhost:3000/api/user-reports", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -74,7 +80,7 @@ describe("POST /api/user-reports", () => {
   });
 
   it("accepts valid submissions when configured", async () => {
-    process.env.NOTION_USER_REPORTS_TOKEN = "secret";
+    enableUserReportsEnv();
     const response = await POST(
       makeRequest({
         title: "Compile failed",
@@ -89,7 +95,7 @@ describe("POST /api/user-reports", () => {
   });
 
   it("accepts auto-detected error reports without turnstile", async () => {
-    process.env.NOTION_USER_REPORTS_TOKEN = "secret";
+    enableUserReportsEnv();
     const { verifyTurnstileToken } = await import("@/lib/user-reports-turnstile");
     vi.mocked(verifyTurnstileToken).mockClear();
 
@@ -108,7 +114,7 @@ describe("POST /api/user-reports", () => {
   });
 
   it("passes signed-in session email and defaults page to /report", async () => {
-    process.env.NOTION_USER_REPORTS_TOKEN = "secret";
+    enableUserReportsEnv();
     vi.mocked(getSession).mockResolvedValueOnce({
       user: {
         id: "user-1",
@@ -152,6 +158,7 @@ describe("POST /api/user-reports", () => {
   it("returns 503 when reports are not configured", async () => {
     delete process.env.NOTION_USER_REPORTS_TOKEN;
     delete process.env.NOTION_TOKEN;
+    delete process.env.NOTION_USER_REPORTS_DATABASE_ID;
     const response = await POST(
       makeRequest({
         title: "Bug",

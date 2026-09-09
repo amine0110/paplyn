@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Self-hosting configuration guide at `/docs/configuration`
+- `SECURITY.md` and gitleaks secret scanning in CI
+
+### Changed
+- Open-source prep: removed production Notion database defaults, personal emails from tests, and personal SMTP placeholder
+
 ### Changed
 
 - Internal npm workspace scope renamed from `@quire` to `@paplyn` (root package `paplyn`, `@paplyn/web`, `@paplyn/collab`, `@paplyn/compiler`). Postgres credentials and production compiler image name unchanged.
@@ -67,5 +74,5 @@ Initial release. Merged work through PR #29.
 - SyncTeX reverse lookup Y coordinate mapping
 - Deploy build after SyncTeX integration
 
-[Unreleased]: https://github.com/amine0110/plicum/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/amine0110/plicum/releases/tag/v0.1.0
+[Unreleased]: https://github.com/amine0110/paplyn/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/amine0110/paplyn/releases/tag/v0.1.0

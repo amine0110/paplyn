@@ -15,6 +15,9 @@ const hasDeployConfigFiles = DEPLOY_CONFIG_FILES.every((relativePath) =>
   existsSync(join(REPO_ROOT, relativePath)),
 );
 
+/** Paplyn.com user-reports inbox — must not be a default in source or compose. */
+const PRODUCTION_USER_REPORTS_DB_ID = "b700d0bff26d432b93fb506d64c8f099";
+
 function readSrc(relativePath: string): string {
   return readFileSync(join(ROOT, relativePath), "utf8");
 }
@@ -23,23 +26,34 @@ function readRepoFile(relativePath: string): string {
   return readFileSync(join(REPO_ROOT, relativePath), "utf8");
 }
 
-const USER_REPORTS_DB_ID = "b700d0bff26d432b93fb506d64c8f099";
-const INTERNAL_TRACKER_ID = "b41c2d1b-4c9a-4468-a159-eefdebe9890e";
-
 describe("PAP-30 user reports deploy gate", () => {
   it("reads Notion credentials from runtime env helpers", () => {
     const config = readSrc("lib/user-reports-config.ts");
     expect(config).toContain("process.env.NOTION_USER_REPORTS_TOKEN");
     expect(config).toContain("process.env.NOTION_TOKEN");
+    expect(config).toContain("process.env.NOTION_USER_REPORTS_DATABASE_ID");
     expect(config).toContain("isUserReportsEnabled");
-    expect(config).toContain(USER_REPORTS_DB_ID);
-    expect(config).toContain(INTERNAL_TRACKER_ID);
+    expect(config).toContain("PAP_INTERNAL_TRACKER_COLLECTION");
+    expect(config).not.toMatch(/export const USER_REPORTS_DATABASE_ID\s*=/);
   });
 
-  it("writes only to the public inbox database id in the Notion client", () => {
+  it("does not hardcode the production user-reports database id as a default", () => {
+    const config = readSrc("lib/user-reports-config.ts");
+    expect(config).not.toContain(PRODUCTION_USER_REPORTS_DB_ID);
+
+    if (hasDeployConfigFiles) {
+      for (const relativePath of DEPLOY_CONFIG_FILES) {
+        const file = readRepoFile(relativePath);
+        expect(file).not.toContain(PRODUCTION_USER_REPORTS_DB_ID);
+        expect(file).not.toMatch(new RegExp(`:-${PRODUCTION_USER_REPORTS_DB_ID}`));
+      }
+    }
+  });
+
+  it("writes only to the configured database id in the Notion client", () => {
     const notion = readSrc("lib/notion-user-reports.ts");
-    expect(notion).toContain("USER_REPORTS_DATABASE_ID");
-    expect(notion).not.toContain(`database_id: ${INTERNAL_TRACKER_ID}`);
+    expect(notion).toContain("getNotionUserReportsDatabaseId");
+    expect(notion).toContain("PAP_INTERNAL_TRACKER_COLLECTION");
     expect(notion).toContain("https://api.notion.com/v1/pages");
     expect(notion).toContain("Notion-Version");
     expect(notion).toContain('"What happened"');

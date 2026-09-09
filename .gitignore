@@ -5,8 +5,14 @@ dist/
 *.log
 .env
 .env.local
+.env.production
+.env.staging
 .env.*.local
 coverage/
 .DS_Store
 *.tsbuildinfo
 drizzle/meta/
+*.pem
+*.key
+id_rsa*
+id_ed25519*

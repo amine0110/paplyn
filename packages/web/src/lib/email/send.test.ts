@@ -92,7 +92,7 @@ describe("sendPlicumEmail", () => {
     );
     expect(sendMail).toHaveBeenCalledWith(
       expect.objectContaining({
-        from: "Paplyn <hello.paplyn@gmail.com>",
+        from: "Paplyn <noreply@example.com>",
         to: "guest@example.com",
         subject: "Invite",
       })

@@ -2,7 +2,6 @@ import {
   getNotionUserReportsDatabaseId,
   getNotionUserReportsToken,
   PAP_INTERNAL_TRACKER_COLLECTION,
-  USER_REPORTS_DATABASE_ID,
 } from "@/lib/user-reports-config";
 import type { SanitizedUserReport } from "@/lib/user-reports-validation";
 import { buildReportPageBody } from "@/lib/user-reports-validation";
@@ -48,13 +47,14 @@ export async function createNotionUserReport(
     return { ok: false, error: "User reports are not configured", status: 503 };
   }
 
-  const databaseId = getNotionUserReportsDatabaseId().replace(/-/g, "");
-  const normalizedInternal = PAP_INTERNAL_TRACKER_COLLECTION.replace(/-/g, "");
-  if (databaseId === normalizedInternal) {
+  const configuredId = getNotionUserReportsDatabaseId();
+  if (!configuredId) {
     return { ok: false, error: "Invalid reports database configuration", status: 500 };
   }
 
-  if (databaseId !== USER_REPORTS_DATABASE_ID) {
+  const databaseId = configuredId.replace(/-/g, "");
+  const normalizedInternal = PAP_INTERNAL_TRACKER_COLLECTION.replace(/-/g, "");
+  if (databaseId === normalizedInternal) {
     return { ok: false, error: "Invalid reports database configuration", status: 500 };
   }
 
@@ -62,7 +62,7 @@ export async function createNotionUserReport(
   const bodyBlocks = bodyText.split("\n").map((line) => paragraphBlock(line));
 
   const payload = {
-    parent: { database_id: USER_REPORTS_DATABASE_ID },
+    parent: { database_id: configuredId },
     properties: {
       Name: {
         title: chunkRichText(report.title),

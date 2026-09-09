@@ -16,12 +16,14 @@ describe("GET /api/user-reports/csrf", () => {
   it("returns 503 when reports are not configured", async () => {
     delete process.env.NOTION_USER_REPORTS_TOKEN;
     delete process.env.NOTION_TOKEN;
+    delete process.env.NOTION_USER_REPORTS_DATABASE_ID;
     const response = await GET();
     expect(response.status).toBe(503);
   });
 
   it("mints a CSRF cookie and token when configured", async () => {
     process.env.NOTION_USER_REPORTS_TOKEN = "secret";
+    process.env.NOTION_USER_REPORTS_DATABASE_ID = "a1b2c3d4e5f6478990abcdef12345678";
     const response = await GET();
     expect(response.status).toBe(200);
 

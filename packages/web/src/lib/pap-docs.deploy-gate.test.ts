@@ -19,12 +19,17 @@ describe("Paplyn docs deploy gate", () => {
     const slugs = getAllDocSlugs();
     expect(slugs).toContain("zotero");
     expect(slugs).toContain("orcid");
+    expect(slugs).toContain("configuration");
 
     const zotero = getDocBySlug("zotero");
     expect(zotero?.content).toContain("https://www.zotero.org/settings/keys");
 
     const orcid = getDocBySlug("orcid");
     expect(orcid?.content).toContain("/api/auth/callback/orcid");
+
+    const configuration = getDocBySlug("configuration");
+    expect(configuration?.section).toBe("Self-hosting");
+    expect(configuration?.content).toContain("BETTER_AUTH_SECRET");
   });
 
   it("links Settings Zotero and landing footer to docs", () => {

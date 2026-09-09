@@ -27,7 +27,7 @@ Run tests before opening a pull request. Add or update tests when changing behav
 
 - Branch from `main`.
 - Keep changes focused — one logical change per PR when possible.
-- Do not commit secrets, `.env` files, or deployment credentials.
+- Do not commit secrets, `.env` files, or deployment credentials. See [SECURITY.md](SECURITY.md) for how to report vulnerabilities privately.
 - Update [CHANGELOG.md](CHANGELOG.md) under `[Unreleased]` for user-visible changes.
 - Ensure `pnpm test` passes.
 

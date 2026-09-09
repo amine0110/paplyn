@@ -36,14 +36,14 @@ describe("OAuth session isolation deploy gate", () => {
     expect(helper).not.toMatch(/!primary\.verified/);
   });
 
-  it("pickGithubPrimaryEmail ignores mohammed@pycad.co when primary is amine1996", () => {
+  it("pickGithubPrimaryEmail ignores verified secondaries when a primary exists", () => {
     expect(
       pickGithubPrimaryEmail([
-        { email: "mohammed@pycad.co", primary: false, verified: true },
-        { email: "mokhtari.amine1996@gmail.com", primary: true, verified: true },
+        { email: "other@example.com", primary: false, verified: true },
+        { email: "user@example.com", primary: true, verified: true },
       ]),
     ).toEqual({
-      email: "mokhtari.amine1996@gmail.com",
+      email: "user@example.com",
       verified: true,
     });
   });
