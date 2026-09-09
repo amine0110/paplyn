@@ -6,6 +6,8 @@ import { signOutAndLeave } from "@/lib/auth-redirect";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
 import { CHROME_LINK, CHROME_NAV_LINK_PAD } from "@/lib/chrome-interactive";
+import { isPublicSignupsEnabled } from "@/lib/config";
+import { SelfHostCta } from "@/components/self-host-cta";
 
 type ChromeSessionActionsVariant = "nav" | "docs";
 
@@ -39,6 +41,12 @@ export function ChromeSessionActions({ variant = "nav" }: { variant?: ChromeSess
         </Button>
       </>
     );
+  }
+
+  const signupsEnabled = isPublicSignupsEnabled();
+
+  if (!signupsEnabled) {
+    return <SelfHostCta size="sm" variant={variant} />;
   }
 
   if (variant === "docs") {

@@ -14,6 +14,8 @@ import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { GitHubSignInButton } from "@/components/auth/github-sign-in-button";
 import { OrcidSignInButton } from "@/components/auth/orcid-sign-in-button";
 import { buildSocialOAuthErrorCallbackURL, OAUTH_ERROR_MESSAGE, ORCID_NO_EMAIL_ERROR_MESSAGE } from "@/lib/auth-social";
+import { isPublicSignupsEnabled } from "@/lib/config";
+import { PrivateInstanceNotice } from "@/components/private-instance-notice";
 import { resolveInternalNextPath } from "@/lib/internal-path";
 
 type LoginFormProps = {
@@ -115,19 +117,25 @@ function LoginForm({ googleEnabled, githubEnabled, orcidEnabled }: LoginFormProp
             {loading ? "Signing in..." : "Sign in"}
           </Button>
         </form>
-        <p className="text-sm text-ink-muted text-center mt-6">
-          No account?{" "}
-          <Link
-            href={
-              callbackURL !== "/dashboard"
-                ? `/signup?next=${encodeURIComponent(callbackURL)}`
-                : "/signup"
-            }
-            className="text-navy hover:underline"
-          >
-            Create one
-          </Link>
-        </p>
+        {isPublicSignupsEnabled() ? (
+          <p className="text-sm text-ink-muted text-center mt-6">
+            No account?{" "}
+            <Link
+              href={
+                callbackURL !== "/dashboard"
+                  ? `/signup?next=${encodeURIComponent(callbackURL)}`
+                  : "/signup"
+              }
+              className="text-navy hover:underline"
+            >
+              Create one
+            </Link>
+          </p>
+        ) : (
+          <div className="mt-6">
+            <PrivateInstanceNotice />
+          </div>
+        )}
       </div>
     </div>
   );
