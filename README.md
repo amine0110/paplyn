@@ -2,6 +2,8 @@
 
 Collaborative LaTeX for researchers and students. Write, compile, and share documents in real time.
 
+**Website:** [amine0110.github.io/paplyn](https://amine0110.github.io/paplyn/) — static landing page (GitHub Pages from `/docs` on `main`). **There is no hosted cloud**; run your own instance via Docker.
+
 **Live:** [paplyn.com](https://paplyn.com) (formerly Plicum / plicum.com — legacy domain redirects to paplyn.com)
 
 The public product name is **Paplyn**. This repository is [amine0110/paplyn](https://github.com/amine0110/paplyn) on GitHub; internal npm and Docker identifiers use the `@paplyn` scope.

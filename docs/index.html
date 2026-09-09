@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Paplyn — Collaborative LaTeX, self-host yours</title>
+    <meta
+      name="description"
+      content="Paplyn is a modern collaborative LaTeX workspace. Self-host with Docker — free, open source, no hosted cloud."
+    />
+    <meta name="theme-color" content="#2d6a6a" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container">
+        <a class="brand" href="./">
+          <span class="brand-mark" aria-hidden="true"></span>
+          Paplyn
+        </a>
+        <nav class="nav-links" aria-label="Primary">
+          <a href="#features">Features</a>
+          <a href="#self-host">Self-host</a>
+          <a href="https://github.com/amine0110/paplyn" rel="noopener noreferrer">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="container">
+          <div class="hero-card">
+            <img
+              class="hero-banner"
+              src="assets/banner.png"
+              alt="Paplyn — Collaborative LaTeX, self-host yours"
+              width="1200"
+              height="400"
+            />
+            <div class="hero-body">
+              <h1>Collaborative LaTeX — self-host yours</h1>
+              <p class="hero-tagline">
+                Write, compile, and share research documents in real time. Run Paplyn on your own
+                infrastructure with Docker — always free, fully open source.
+              </p>
+              <div class="hero-cta">
+                <a
+                  class="btn btn-primary"
+                  href="https://github.com/amine0110/paplyn"
+                  rel="noopener noreferrer"
+                >
+                  View on GitHub
+                </a>
+                <a
+                  class="btn btn-secondary"
+                  href="https://github.com/amine0110/paplyn/blob/main/packages/web/content/docs/configuration.md"
+                  rel="noopener noreferrer"
+                >
+                  Configuration guide
+                </a>
+              </div>
+              <p class="notice" role="note">
+                <strong>There is no hosted cloud.</strong> Paplyn is self-hosted only — you run your
+                own instance on your server or laptop. No VPS subscription from us, no managed SaaS.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="features">
+        <div class="container">
+          <div class="section-header">
+            <h2>Everything you need to write LaTeX together</h2>
+            <p>
+              A full manuscript studio in one stack: editor, compiler, collaboration, and optional AI
+              — designed for researchers and students.
+            </p>
+          </div>
+          <div class="feature-grid">
+            <article class="feature-card">
+              <div class="feature-icon" aria-hidden="true">⌨</div>
+              <h3>Multi-file editor</h3>
+              <p>
+                CodeMirror 6 with syntax highlighting, autocomplete, search, go-to-line, and word count
+                across your project tree.
+              </p>
+            </article>
+            <article class="feature-card">
+              <div class="feature-icon" aria-hidden="true">📄</div>
+              <h3>PDF compile &amp; preview</h3>
+              <p>
+                pdfLaTeX, XeLaTeX, or LuaLaTeX with BibTeX/Biber passes, compile logs, and jump-to-error
+                diagnostics.
+              </p>
+            </article>
+            <article class="feature-card">
+              <div class="feature-icon" aria-hidden="true">👥</div>
+              <h3>Real-time collaboration</h3>
+              <p>
+                Yjs shared editing with presence indicators, email invites, and room state persisted to
+                PostgreSQL.
+              </p>
+            </article>
+            <article class="feature-card">
+              <div class="feature-icon" aria-hidden="true">✦</div>
+              <h3>AI assistant</h3>
+              <p>
+                Optional OpenAI-compatible provider for drafting, fixing compile errors, and literature
+                search — bring your own API key.
+              </p>
+            </article>
+            <article class="feature-card">
+              <div class="feature-icon" aria-hidden="true">↔</div>
+              <h3>SyncTeX</h3>
+              <p>
+                Click in the PDF preview to jump to the matching source line, and navigate back from
+                source to PDF.
+              </p>
+            </article>
+            <article class="feature-card">
+              <div class="feature-icon" aria-hidden="true">📚</div>
+              <h3>Templates</h3>
+              <p>
+                Start from blank article, IEEE conference, thesis chapter, or Beamer slides — plus
+                Overleaf-style zip import.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="why">
+        <div class="container">
+          <div class="section-header">
+            <h2>Why Paplyn?</h2>
+            <p>Own your toolchain, your data, and your collaboration stack.</p>
+          </div>
+          <div class="why-panel">
+            <ul class="why-list">
+              <li>
+                <span
+                  ><strong>Self-hosted by design.</strong> One Docker Compose stack on your machine or
+                  server — no dependency on a third-party cloud editor.</span
+                >
+              </li>
+              <li>
+                <span
+                  ><strong>Open source (MIT).</strong> Inspect, fork, and adapt the codebase. Star the
+                  repo to follow releases and contribute back.</span
+                >
+              </li>
+              <li>
+                <span
+                  ><strong>Research-ready workflow.</strong> Multi-file projects, version history,
+                  sharing with roles, Zotero/DOI integrations, and a calm paper-inspired UI for long
+                  writing sessions.</span
+                >
+              </li>
+              <li>
+                <span
+                  ><strong>Free to run.</strong> GitHub Pages for this site, Docker on your hardware —
+                  no Paplyn subscription, no surprise bills.</span
+                >
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="self-host">
+        <div class="container">
+          <div class="section-header">
+            <h2>Self-host in minutes</h2>
+            <p>
+              Clone the repository, configure secrets, and start the stack. The first registered user
+              becomes admin.
+            </p>
+          </div>
+          <div class="quickstart">
+            <div class="quickstart-header">
+              <h3>Docker Compose quickstart</h3>
+              <p>
+                See
+                <a
+                  href="https://github.com/amine0110/paplyn/blob/main/packages/web/content/docs/configuration.md"
+                  rel="noopener noreferrer"
+                  >Configuration</a
+                >
+                for every environment variable, API key, and production URL.
+              </p>
+            </div>
+            <pre><code>git clone https://github.com/amine0110/paplyn.git
+cd paplyn
+cp .env.example .env
+# Set BETTER_AUTH_SECRET, COLLAB_SECRET, and URLs — see configuration guide
+
+docker compose up --build</code></pre>
+            <div class="quickstart-footer">
+              Open <code>http://localhost:3000</code>, create an account, and start a project. For
+              production behind a reverse proxy, use
+              <code>docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d</code>.
+              Full details in the
+              <a href="https://github.com/amine0110/paplyn#self-host-quickstart-docker" rel="noopener noreferrer">README</a>.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="cta-band" aria-labelledby="cta-heading">
+        <div class="container">
+          <div class="cta-card">
+            <h2 id="cta-heading">Ready to run your own instance?</h2>
+            <p>
+              Paplyn lives on GitHub. Star or fork the repository, read the configuration guide, and
+              deploy on your terms.
+            </p>
+            <div class="hero-cta">
+              <a
+                class="btn btn-primary"
+                href="https://github.com/amine0110/paplyn"
+                rel="noopener noreferrer"
+              >
+                View on GitHub
+              </a>
+              <a
+                class="btn btn-secondary"
+                href="https://github.com/amine0110/paplyn/stargazers"
+                rel="noopener noreferrer"
+              >
+                Star the repo
+              </a>
+              <a
+                class="btn btn-secondary"
+                href="https://github.com/amine0110/paplyn/fork"
+                rel="noopener noreferrer"
+              >
+                Fork
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <span>Paplyn — Collaborative LaTeX. MIT License.</span>
+        <div class="footer-links">
+          <a href="https://github.com/amine0110/paplyn" rel="noopener noreferrer">Repository</a>
+          <a
+            href="https://github.com/amine0110/paplyn/blob/main/packages/web/content/docs/configuration.md"
+            rel="noopener noreferrer"
+            >Configuration</a
+          >
+          <a href="https://github.com/amine0110/paplyn/blob/main/LICENSE" rel="noopener noreferrer"
+            >License</a
+          >
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>
