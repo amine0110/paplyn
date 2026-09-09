@@ -12,6 +12,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/packages/web/node_modules ./packages/web/node_modules
 COPY packages/web ./packages/web
 COPY package.json pnpm-workspace.yaml ./
+# Needed by pap-54-secrets.deploy-gate.test.ts during image build
+COPY .env.example ./
 ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_APP_URL
 ARG NEXT_PUBLIC_COLLAB_URL
