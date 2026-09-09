@@ -1,10 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createNotionUserReport } from "@/lib/notion-user-reports";
-import {
-  PAP_INTERNAL_TRACKER_COLLECTION,
-  USER_REPORTS_DATABASE_ID,
-} from "@/lib/user-reports-config";
+import { PAP_INTERNAL_TRACKER_COLLECTION } from "@/lib/user-reports-config";
 
+const TEST_DATABASE_ID = "a1b2c3d4e5f6478990abcdef12345678";
 const originalEnv = { ...process.env };
 
 function restoreEnv() {
@@ -17,9 +15,9 @@ describe("createNotionUserReport", () => {
     vi.restoreAllMocks();
   });
 
-  it("posts to the public inbox database with plain-text properties", async () => {
+  it("posts to the configured inbox database with plain-text properties", async () => {
     process.env.NOTION_USER_REPORTS_TOKEN = "secret-token";
-    process.env.NOTION_USER_REPORTS_DATABASE_ID = USER_REPORTS_DATABASE_ID;
+    process.env.NOTION_USER_REPORTS_DATABASE_ID = TEST_DATABASE_ID;
 
     const fetchMock = vi.fn(async () => ({
       ok: true,
@@ -48,7 +46,7 @@ describe("createNotionUserReport", () => {
     expect(options.method).toBe("POST");
 
     const payload = JSON.parse(String(options.body));
-    expect(payload.parent.database_id).toBe(USER_REPORTS_DATABASE_ID);
+    expect(payload.parent.database_id).toBe(TEST_DATABASE_ID);
     expect(payload.parent.database_id).not.toBe(PAP_INTERNAL_TRACKER_COLLECTION);
     expect(payload.properties.Name.title[0].text.content).toBe("Compile failed");
     expect(payload.properties["What happened"].rich_text[0].text.content).toBe("No PDF output");
@@ -64,7 +62,7 @@ describe("createNotionUserReport", () => {
 
   it("writes empty Steps rich_text when steps are omitted", async () => {
     process.env.NOTION_USER_REPORTS_TOKEN = "secret-token";
-    process.env.NOTION_USER_REPORTS_DATABASE_ID = USER_REPORTS_DATABASE_ID;
+    process.env.NOTION_USER_REPORTS_DATABASE_ID = TEST_DATABASE_ID;
 
     const fetchMock = vi.fn(async () => ({
       ok: true,
@@ -132,5 +130,28 @@ describe("createNotionUserReport", () => {
     if (!result.ok) {
       expect(result.status).toBe(503);
     }
+  });
+
+  it("returns invalid configuration when database id is missing", async () => {
+    process.env.NOTION_USER_REPORTS_TOKEN = "secret-token";
+    delete process.env.NOTION_USER_REPORTS_DATABASE_ID;
+
+    const fetchMock = vi.fn();
+    const result = await createNotionUserReport(
+      {
+        title: "Test",
+        whatHappened: "Broken",
+        steps: "",
+        email: null,
+        page: "",
+        source: "Report page",
+        signedIn: false,
+        receivedDate: "2026-08-26",
+      },
+      fetchMock as typeof fetch,
+    );
+
+    expect(result.ok).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

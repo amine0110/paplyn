@@ -1,7 +1,8 @@
-/** Public Notion database id for Paplyn user reports (PAP-30 inbox). */
-export const USER_REPORTS_DATABASE_ID = "b700d0bff26d432b93fb506d64c8f099";
-
-/** Internal PAP tracker — never insert user reports here. */
+/**
+ * Internal PAP engineering tracker — never insert user reports here.
+ * Kept as a blocklist constant so a misconfigured env cannot route public
+ * submissions into the private tracker database.
+ */
 export const PAP_INTERNAL_TRACKER_COLLECTION = "b41c2d1b-4c9a-4468-a159-eefdebe9890e";
 
 export function getNotionUserReportsToken(): string | null {
@@ -11,12 +12,11 @@ export function getNotionUserReportsToken(): string | null {
 }
 
 export function getNotionUserReportsDatabaseId(): string {
-  const configured = process.env.NOTION_USER_REPORTS_DATABASE_ID?.trim();
-  return configured || USER_REPORTS_DATABASE_ID;
+  return process.env.NOTION_USER_REPORTS_DATABASE_ID?.trim() || "";
 }
 
 export function isUserReportsEnabled(): boolean {
-  return getNotionUserReportsToken() !== null;
+  return getNotionUserReportsToken() !== null && getNotionUserReportsDatabaseId() !== "";
 }
 
 export function isTurnstileConfigured(): boolean {

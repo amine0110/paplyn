@@ -7,7 +7,8 @@ const DOCS_DIR = join(process.cwd(), "content/docs");
 
 const SECTION_ORDER: Record<string, number> = {
   "Get started": 0,
-  Integrations: 1,
+  "Self-hosting": 1,
+  Integrations: 2,
 };
 
 function sectionOrder(section: string): number {

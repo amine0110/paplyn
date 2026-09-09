@@ -19,6 +19,8 @@ Paplyn runs in two modes, controlled by `DEPLOYMENT_MODE` and `NEXT_PUBLIC_DEPLO
 
 Both modes share the same codebase and feature set. Self-hosting is the supported path for running from this repository.
 
+**Configuration guide:** When self-hosting, see the in-app docs at [`/docs/configuration`](packages/web/content/docs/configuration.md) (or open **Docs → Configuration** after starting the app) for every environment variable, API key, and URL.
+
 ## Features
 
 - **Multi-file LaTeX editor** — CodeMirror 6 with syntax highlighting, autocomplete, search/replace, go-to-line, and word count
@@ -38,7 +40,7 @@ Both modes share the same codebase and feature set. Self-hosting is the supporte
 git clone https://github.com/amine0110/paplyn.git
 cd paplyn
 cp .env.example .env
-# Set BETTER_AUTH_SECRET and COLLAB_SECRET to random strings (32+ chars)
+# Set BETTER_AUTH_SECRET, COLLAB_SECRET, and URLs — see /docs/configuration
 
 docker compose up --build
 ```
@@ -123,7 +125,7 @@ Set `COMPILER_URL=http://localhost:3001` in `.env`.
 
 ## Environment variables
 
-See [`.env.example`](.env.example) for the full list. Key variables:
+See [`.env.example`](.env.example) for the full list and [`/docs/configuration`](packages/web/content/docs/configuration.md) for a self-hosting walkthrough. Key variables:
 
 | Variable | Description |
 |----------|-------------|

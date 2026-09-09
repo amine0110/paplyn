@@ -48,13 +48,15 @@ describe("sendPlicumEmail", () => {
     expect(isSmtpConfigured()).toBe(false);
   });
 
-  it("isSmtpConfigured is true when user and pass are set", () => {
+  it("isSmtpConfigured is true when host, user, and pass are set", () => {
+    process.env.SMTP_HOST = "smtp.mail.example.com";
     process.env.SMTP_USER = "hello@example.com";
     process.env.SMTP_PASS = "secret-pass";
     expect(isSmtpConfigured()).toBe(true);
   });
 
   it("regression: does not report not-configured when SMTP credentials are present", async () => {
+    process.env.SMTP_HOST = "smtp.mail.example.com";
     process.env.SMTP_USER = "hello@example.com";
     process.env.SMTP_PASS = "secret-pass";
     sendMail.mockResolvedValue({ messageId: "msg-1" });
@@ -71,8 +73,10 @@ describe("sendPlicumEmail", () => {
   });
 
   it("sends when SMTP is configured", async () => {
-    process.env.SMTP_USER = "hello@example.com";
-    process.env.SMTP_PASS = "secret-pass";
+    process.env.SMTP_HOST = "smtp.mail.example.com";
+    process.env.SMTP_PORT = "587";
+    process.env.SMTP_USER = "paplyn-mailer";
+    process.env.SMTP_PASS = "fake-smtp-password";
     sendMail.mockResolvedValue({ messageId: "msg-1" });
 
     const result = await sendPlicumEmail({
@@ -85,14 +89,14 @@ describe("sendPlicumEmail", () => {
     expect(result).toEqual({ sent: true });
     expect(createTransport).toHaveBeenCalledWith(
       expect.objectContaining({
-        host: "smtp.gmail.com",
+        host: "smtp.mail.example.com",
         port: 587,
-        auth: { user: "hello@example.com", pass: "secret-pass" },
+        auth: { user: "paplyn-mailer", pass: "fake-smtp-password" },
       })
     );
     expect(sendMail).toHaveBeenCalledWith(
       expect.objectContaining({
-        from: "Paplyn <hello.paplyn@gmail.com>",
+        from: "Paplyn <noreply@example.com>",
         to: "guest@example.com",
         subject: "Invite",
       })
@@ -100,6 +104,7 @@ describe("sendPlicumEmail", () => {
   });
 
   it("returns send-failed with redacted error when transport throws", async () => {
+    process.env.SMTP_HOST = "smtp.mail.example.com";
     process.env.SMTP_USER = "hello@example.com";
     process.env.SMTP_PASS = "secret-pass";
     sendMail.mockRejectedValue(new Error("Invalid login: secret-pass rejected"));

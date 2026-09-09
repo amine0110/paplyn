@@ -5,19 +5,19 @@ describe("pickGithubPrimaryEmail", () => {
   it("returns the primary email and ignores verified secondaries", () => {
     const result = pickGithubPrimaryEmail([
       {
-        email: "mohammed@pycad.co",
+        email: "other@example.com",
         primary: false,
         verified: true,
       },
       {
-        email: "mokhtari.amine1996@gmail.com",
+        email: "user@example.com",
         primary: true,
         verified: true,
       },
     ]);
 
     expect(result).toEqual({
-      email: "mokhtari.amine1996@gmail.com",
+      email: "user@example.com",
       verified: true,
     });
   });
@@ -25,8 +25,8 @@ describe("pickGithubPrimaryEmail", () => {
   it("does not fall back to the first verified email when no primary exists", () => {
     expect(
       pickGithubPrimaryEmail([
-        { email: "mohammed@pycad.co", primary: false, verified: true },
         { email: "other@example.com", primary: false, verified: true },
+        { email: "another@example.com", primary: false, verified: true },
       ]),
     ).toBeNull();
   });
@@ -40,10 +40,10 @@ describe("pickGithubPrimaryEmail", () => {
   it("normalizes the primary email to lowercase", () => {
     expect(
       pickGithubPrimaryEmail([
-        { email: "Mokhtari.Amine1996@Gmail.com", primary: true, verified: true },
+        { email: "User@Example.com", primary: true, verified: true },
       ]),
     ).toEqual({
-      email: "mokhtari.amine1996@gmail.com",
+      email: "user@example.com",
       verified: true,
     });
   });
